@@ -22,6 +22,8 @@ extension HighlightRangeDto: @unchecked Sendable {}
 extension SearchMode: @unchecked Sendable {}
 extension HistorySortMode: @unchecked Sendable {}
 extension PinArrangement: @unchecked Sendable {}
+extension RetentionPolicyDto: @unchecked Sendable {}
+extension CleanupReportDto: @unchecked Sendable {}
 
 extension HistoryItemSummaryDto {
     /// Backward-compatible initializer for tests without explicit highlights.
@@ -207,6 +209,31 @@ public actor CoreClient {
     /// Sets the maximum number of unpinned items retained before eviction.
     public func setMaxUnpinned(limit: UInt32) {
         handle.setMaxUnpinned(limit: limit)
+    }
+
+    /// Configures the multi-dimensional history retention policy (count, age, size).
+    public func setRetentionPolicy(policy: RetentionPolicyDto) {
+        handle.setRetentionPolicy(policy: policy)
+    }
+
+    /// Queries the currently configured retention policy.
+    public func getRetentionPolicy() -> RetentionPolicyDto {
+        return handle.getRetentionPolicy()
+    }
+
+    /// Manually triggers retention policy enforcement across the database.
+    public func enforceRetention(policy: RetentionPolicyDto? = nil) throws -> CleanupReportDto {
+        return try handle.enforceRetention(policy: policy)
+    }
+
+    /// Flushes WAL pages back into the main database and truncates the WAL file.
+    public func checkpointWal() throws -> UInt32 {
+        return try handle.checkpointWal()
+    }
+
+    /// Reclaims unused freelist disk pages.
+    public func vacuumDatabase() throws {
+        try handle.vacuumDatabase()
     }
 
     /// Queries current storage usage statistics.

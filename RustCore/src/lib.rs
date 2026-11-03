@@ -14,18 +14,20 @@ pub use domain::dto::{
     HistoryItemSummaryDTO, IngestResultDTO, RawCapture, RawRepresentation, StorageStatsDTO,
 };
 pub use domain::{
-    fuzzy_match, score_item, uti, CanonicalUrl, ContentKind, HexColor, HighlightRangeDTO,
-    HistoryItem, HistorySortMode, PinArrangement, Representation, SearchMode,
+    fuzzy_match, score_item, uti, CanonicalUrl, CleanupReport, CleanupReportDTO, ContentKind,
+    HexColor, HighlightRangeDTO, HistoryItem, HistorySortMode, PinArrangement, Representation,
+    RetentionPolicy, RetentionPolicyDTO, SearchMode,
 };
 pub use error::CoreError;
 pub use storage::{
     clear_all_history, clear_unpinned_history, delete_item_by_id, enforce_retention_limit,
-    fetch_payload, find_by_content_hash, find_by_id, get_storage_stats, ingest_clipboard_item,
-    insert_item, list_history_page, list_history_page_with_options, load_representations,
-    open_database, open_in_memory, query_available_utis, rebuild_search_index, run_migrations,
-    sanitize_fts5_query, search_history_page, search_history_page_with_options, set_pin_status,
-    update_recopy, verify_database_integrity, verify_search_index_integrity, DatabaseConfig,
-    HistoryItemSummary, IngestOutcome, StorageStats,
+    enforce_retention_policy, fetch_payload, find_by_content_hash, find_by_id, get_storage_stats,
+    ingest_clipboard_item, ingest_clipboard_item_with_policy, insert_item, list_history_page,
+    list_history_page_with_options, load_representations, open_database, open_in_memory,
+    query_available_utis, rebuild_search_index, run_migrations, sanitize_fts5_query,
+    search_history_page, search_history_page_with_options, set_pin_status, update_recopy,
+    verify_database_integrity, verify_search_index_integrity, DatabaseConfig, HistoryItemSummary,
+    IngestOutcome, StorageStats,
 };
 
 // Setup UniFFI scaffolding for procedural macro bindings
@@ -36,7 +38,7 @@ uniffi::setup_scaffolding!();
 pub struct MimraCoreHandle {
     db_path: Option<PathBuf>,
     conn: Mutex<rusqlite::Connection>,
-    max_unpinned: std::sync::atomic::AtomicUsize,
+    retention_policy: Mutex<RetentionPolicy>,
 }
 
 #[uniffi::export]
@@ -51,7 +53,11 @@ impl MimraCoreHandle {
         Ok(Arc::new(Self {
             db_path: Some(path),
             conn: Mutex::new(conn),
-            max_unpinned: std::sync::atomic::AtomicUsize::new(200),
+            retention_policy: Mutex::new(RetentionPolicy {
+                max_count: Some(200),
+                max_age_days: None,
+                max_size_bytes: None,
+            }),
         }))
     }
 
@@ -64,13 +70,87 @@ impl MimraCoreHandle {
         Ok(Arc::new(Self {
             db_path: None,
             conn: Mutex::new(conn),
-            max_unpinned: std::sync::atomic::AtomicUsize::new(200),
+            retention_policy: Mutex::new(RetentionPolicy {
+                max_count: Some(200),
+                max_age_days: None,
+                max_size_bytes: None,
+            }),
         }))
     }
 
     pub fn set_max_unpinned(&self, limit: u32) {
-        self.max_unpinned
-            .store(limit as usize, std::sync::atomic::Ordering::SeqCst);
+        if let Ok(mut lock) = self.retention_policy.lock() {
+            lock.max_count = Some(limit as usize);
+        }
+    }
+
+    pub fn set_retention_policy(&self, policy: RetentionPolicyDTO) {
+        if let Ok(mut lock) = self.retention_policy.lock() {
+            *lock = policy.into();
+        }
+    }
+
+    pub fn get_retention_policy(&self) -> RetentionPolicyDTO {
+        self.retention_policy
+            .lock()
+            .map(|p| (*p).into())
+            .unwrap_or(RetentionPolicyDTO {
+                max_count: Some(200),
+                max_age_days: None,
+                max_size_bytes: None,
+            })
+    }
+
+    pub fn enforce_retention(
+        &self,
+        policy: Option<RetentionPolicyDTO>,
+    ) -> Result<CleanupReportDTO, CoreError> {
+        let effective_policy: RetentionPolicy = match policy {
+            Some(p) => p.into(),
+            None => self
+                .retention_policy
+                .lock()
+                .map(|p| *p)
+                .unwrap_or(RetentionPolicy {
+                    max_count: Some(200),
+                    max_age_days: None,
+                    max_size_bytes: None,
+                }),
+        };
+
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+
+        let mut conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        let tx = conn.transaction()?;
+        let report = enforce_retention_policy(&tx, &effective_policy, now_ms)?;
+        tx.commit()?;
+
+        Ok(report.into())
+    }
+
+    pub fn checkpoint_wal(&self) -> Result<u32, CoreError> {
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        let pages: u32 =
+            conn.query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |row| row.get(2))?;
+        Ok(pages)
+    }
+
+    pub fn vacuum_database(&self) -> Result<(), CoreError> {
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        conn.execute_batch("VACUUM;")?;
+        Ok(())
     }
 
     pub fn ingest(&self, capture: RawCapture) -> Result<IngestResultDTO, CoreError> {
@@ -85,12 +165,21 @@ impl MimraCoreHandle {
             capture.timestamp_ms,
         )?;
 
-        let max_unpinned = self.max_unpinned.load(std::sync::atomic::Ordering::SeqCst);
+        let policy = self
+            .retention_policy
+            .lock()
+            .map(|p| *p)
+            .unwrap_or(RetentionPolicy {
+                max_count: Some(200),
+                max_age_days: None,
+                max_size_bytes: None,
+            });
+
         let mut conn = self.conn.lock().map_err(|e| CoreError::Internal {
             message: format!("Failed to acquire database lock: {e}"),
         })?;
 
-        let outcome = ingest_clipboard_item(&mut conn, item, max_unpinned)?;
+        let outcome = ingest_clipboard_item_with_policy(&mut conn, item, &policy)?;
         match outcome {
             IngestOutcome::NewItem(new_item) => Ok(IngestResultDTO {
                 item_id: new_item.id.to_string(),

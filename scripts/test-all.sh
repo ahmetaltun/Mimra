@@ -549,7 +549,29 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 /tmp/mimra_sorting_highlight_test_runner
 rm -f /tmp/mimra_sorting_highlight_test_runner
 
-echo -e "\n=== 30. Building Native macOS App (Mimra.app) via Xcode ==="
+echo -e "\n=== 30. Running History Limit, Retention & Pin Protection Tests (P4-05 / T-HIST-01, T-HIST-03, T-HIST-05) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/tests/history_limit_tests.swift" \
+    -o /tmp/mimra_history_limit_test_runner
+
+/tmp/mimra_history_limit_test_runner
+rm -f /tmp/mimra_history_limit_test_runner
+
+echo -e "\n=== 31. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \
     -scheme Mimra \

@@ -5,6 +5,7 @@
 // ==============================================================================
 
 use crate::domain::content::{ContentKind, Representation};
+use crate::domain::dto::{CleanupReport, RetentionPolicy};
 use crate::domain::item::HistoryItem;
 use crate::error::CoreError;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
@@ -386,46 +387,154 @@ pub fn update_recopy_and_merge(
     Ok(())
 }
 
-/// Evicts the oldest unpinned items if the total unpinned count exceeds `max_unpinned`.
-/// Pinned items are NEVER evicted.
-/// Returns the number of evicted items.
-pub fn enforce_retention_limit(tx: &Transaction, max_unpinned: usize) -> Result<usize, CoreError> {
-    let unpinned_count: usize = tx.query_row(
+/// Evicts unpinned items based on age, count, and byte size policies within an atomic transaction.
+/// Pinned items are NEVER evicted under any retention policy.
+pub fn enforce_retention_policy(
+    tx: &Transaction,
+    policy: &RetentionPolicy,
+    now_ms: i64,
+) -> Result<CleanupReport, CoreError> {
+    let initial_bytes: u64 = tx.query_row(
+        "SELECT COALESCE(SUM(byte_size), 0) FROM history_items WHERE is_pinned = 0;",
+        [],
+        |row| row.get::<_, i64>(0).map(|b| b as u64),
+    )?;
+
+    let mut evicted_by_age = 0;
+    let mut evicted_by_count = 0;
+    let mut evicted_by_size = 0;
+
+    // 1. Age-based eviction (cutoff by days)
+    if let Some(days) = policy.max_age_days {
+        if days > 0 {
+            let cutoff_ms = now_ms - (days as i64 * 86_400_000);
+            evicted_by_age = tx.execute(
+                "DELETE FROM history_items
+                 WHERE is_pinned = 0 AND last_copied_at_ms < ?1;",
+                params![cutoff_ms],
+            )?;
+        }
+    }
+
+    // 2. Count-based eviction
+    if let Some(max_count) = policy.max_count {
+        let unpinned_count: usize = tx.query_row(
+            "SELECT COUNT(*) FROM history_items WHERE is_pinned = 0;",
+            [],
+            |row| row.get(0),
+        )?;
+
+        if unpinned_count > max_count {
+            let excess = unpinned_count - max_count;
+            evicted_by_count = tx.execute(
+                "DELETE FROM history_items
+                 WHERE id IN (
+                     SELECT id FROM history_items
+                     WHERE is_pinned = 0
+                     ORDER BY last_copied_at_ms ASC
+                     LIMIT ?1
+                 );",
+                params![excess as i64],
+            )?;
+        }
+    }
+
+    // 3. Payload size-based eviction
+    if let Some(max_bytes) = policy.max_size_bytes {
+        let current_bytes: u64 = tx.query_row(
+            "SELECT COALESCE(SUM(byte_size), 0) FROM history_items WHERE is_pinned = 0;",
+            [],
+            |row| row.get::<_, i64>(0).map(|b| b as u64),
+        )?;
+
+        if current_bytes > max_bytes {
+            let mut stmt = tx.prepare(
+                "SELECT id, byte_size FROM history_items
+                 WHERE is_pinned = 0
+                 ORDER BY last_copied_at_ms ASC;",
+            )?;
+
+            let rows = stmt.query_map([], |row| {
+                let id_str: String = row.get(0)?;
+                let b_size: i64 = row.get(1)?;
+                Ok((id_str, b_size as u64))
+            })?;
+
+            let mut to_delete = Vec::new();
+            let mut running_size = current_bytes;
+            for r in rows {
+                let (id, b_size) = r?;
+                to_delete.push(id);
+                running_size = running_size.saturating_sub(b_size);
+                if running_size <= max_bytes {
+                    break;
+                }
+            }
+
+            drop(stmt);
+
+            for id in to_delete {
+                evicted_by_size +=
+                    tx.execute("DELETE FROM history_items WHERE id = ?1;", params![id])?;
+            }
+        }
+    }
+
+    let final_bytes: u64 = tx.query_row(
+        "SELECT COALESCE(SUM(byte_size), 0) FROM history_items WHERE is_pinned = 0;",
+        [],
+        |row| row.get::<_, i64>(0).map(|b| b as u64),
+    )?;
+
+    let remaining_unpinned: usize = tx.query_row(
         "SELECT COUNT(*) FROM history_items WHERE is_pinned = 0;",
         [],
         |row| row.get(0),
     )?;
 
-    if unpinned_count <= max_unpinned {
-        return Ok(0);
-    }
-
-    let excess = unpinned_count - max_unpinned;
-
-    // Delete the oldest unpinned items. Cascading delete removes representations and triggers remove FTS rows.
-    let deleted = tx.execute(
-        "DELETE FROM history_items
-         WHERE id IN (
-             SELECT id FROM history_items
-             WHERE is_pinned = 0
-             ORDER BY last_copied_at_ms ASC
-             LIMIT ?1
-         );",
-        params![excess as i64],
+    let remaining_pinned: usize = tx.query_row(
+        "SELECT COUNT(*) FROM history_items WHERE is_pinned = 1;",
+        [],
+        |row| row.get(0),
     )?;
 
-    Ok(deleted)
+    let total_evicted = evicted_by_age + evicted_by_count + evicted_by_size;
+    let freed_bytes = initial_bytes.saturating_sub(final_bytes);
+
+    Ok(CleanupReport {
+        evicted_by_count,
+        evicted_by_age,
+        evicted_by_size,
+        total_evicted,
+        remaining_unpinned,
+        remaining_pinned,
+        freed_bytes,
+    })
 }
 
-/// Ingests a new or duplicate item atomically within a single transaction:
-/// - If exact content exists: updates recopy timestamp/count and preserves pins.
-/// - If new content: inserts item and representations.
-/// - Enforces unpinned capacity limit (evicts oldest unpinned).
-pub fn ingest_clipboard_item(
+/// Evicts the oldest unpinned items if the total unpinned count exceeds `max_unpinned`.
+/// Pinned items are NEVER evicted.
+/// Returns the number of evicted items.
+pub fn enforce_retention_limit(tx: &Transaction, max_unpinned: usize) -> Result<usize, CoreError> {
+    let report = enforce_retention_policy(
+        tx,
+        &RetentionPolicy {
+            max_count: Some(max_unpinned),
+            max_age_days: None,
+            max_size_bytes: None,
+        },
+        0,
+    )?;
+    Ok(report.total_evicted)
+}
+
+/// Ingests a new or duplicate item atomically within a single transaction using the provided retention policy.
+pub fn ingest_clipboard_item_with_policy(
     conn: &mut Connection,
     item: HistoryItem,
-    max_unpinned: usize,
+    policy: &RetentionPolicy,
 ) -> Result<IngestOutcome, CoreError> {
+    let now_ms = item.last_copied_at_ms;
     let tx = conn.transaction()?;
 
     // 1. Check if identical content hash exists
@@ -439,10 +548,30 @@ pub fn ingest_clipboard_item(
     insert_item(&tx, &item)?;
 
     // 3. Enforce capacity limit on unpinned items
-    enforce_retention_limit(&tx, max_unpinned)?;
+    enforce_retention_policy(&tx, policy, now_ms)?;
 
     tx.commit()?;
     Ok(IngestOutcome::NewItem(item))
+}
+
+/// Ingests a new or duplicate item atomically within a single transaction:
+/// - If exact content exists: updates recopy timestamp/count and preserves pins.
+/// - If new content: inserts item and representations.
+/// - Enforces unpinned capacity limit (evicts oldest unpinned).
+pub fn ingest_clipboard_item(
+    conn: &mut Connection,
+    item: HistoryItem,
+    max_unpinned: usize,
+) -> Result<IngestOutcome, CoreError> {
+    ingest_clipboard_item_with_policy(
+        conn,
+        item,
+        &RetentionPolicy {
+            max_count: Some(max_unpinned),
+            max_age_days: None,
+            max_size_bytes: None,
+        },
+    )
 }
 
 /// Summary DTO for displaying an item in UI list rows without loading large binary payloads into memory.

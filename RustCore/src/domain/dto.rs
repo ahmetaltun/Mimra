@@ -138,3 +138,82 @@ pub enum PinArrangement {
     /// Pinned items are mixed inline with unpinned items based solely on the active sort order.
     Inline,
 }
+
+/// Configuration policy for historical data retention (P4-05).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, uniffi::Record,
+)]
+pub struct RetentionPolicyDTO {
+    /// Maximum number of unpinned items retained in history (None = unlimited).
+    pub max_count: Option<u32>,
+    /// Maximum age in days for unpinned items (None = unlimited).
+    pub max_age_days: Option<u32>,
+    /// Maximum total byte size for unpinned item payloads (None = unlimited).
+    pub max_size_bytes: Option<u64>,
+}
+
+/// Internal domain representation of retention policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RetentionPolicy {
+    pub max_count: Option<usize>,
+    pub max_age_days: Option<u32>,
+    pub max_size_bytes: Option<u64>,
+}
+
+impl From<RetentionPolicyDTO> for RetentionPolicy {
+    fn from(dto: RetentionPolicyDTO) -> Self {
+        Self {
+            max_count: dto.max_count.map(|c| c as usize),
+            max_age_days: dto.max_age_days,
+            max_size_bytes: dto.max_size_bytes,
+        }
+    }
+}
+
+impl From<RetentionPolicy> for RetentionPolicyDTO {
+    fn from(p: RetentionPolicy) -> Self {
+        Self {
+            max_count: p.max_count.map(|c| c as u32),
+            max_age_days: p.max_age_days,
+            max_size_bytes: p.max_size_bytes,
+        }
+    }
+}
+
+/// Statistics detailing the outcome of a retention enforcement or cleanup cycle.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, uniffi::Record)]
+pub struct CleanupReportDTO {
+    pub evicted_by_count: u64,
+    pub evicted_by_age: u64,
+    pub evicted_by_size: u64,
+    pub total_evicted: u64,
+    pub remaining_unpinned: u64,
+    pub remaining_pinned: u64,
+    pub freed_bytes: u64,
+}
+
+/// Internal domain representation of cleanup report.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CleanupReport {
+    pub evicted_by_count: usize,
+    pub evicted_by_age: usize,
+    pub evicted_by_size: usize,
+    pub total_evicted: usize,
+    pub remaining_unpinned: usize,
+    pub remaining_pinned: usize,
+    pub freed_bytes: u64,
+}
+
+impl From<CleanupReport> for CleanupReportDTO {
+    fn from(r: CleanupReport) -> Self {
+        Self {
+            evicted_by_count: r.evicted_by_count as u64,
+            evicted_by_age: r.evicted_by_age as u64,
+            evicted_by_size: r.evicted_by_size as u64,
+            total_evicted: r.total_evicted as u64,
+            remaining_unpinned: r.remaining_unpinned as u64,
+            remaining_pinned: r.remaining_pinned as u64,
+            freed_bytes: r.freed_bytes,
+        }
+    }
+}

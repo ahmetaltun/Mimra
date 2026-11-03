@@ -864,4 +864,45 @@ Users require tailored organization and visual cues when browsing and searching 
 * **Positive:** Complete elimination of spurious selection jumps during background copies or deletions; user preference support for pin positioning and highlight styling; resilient keyboard navigation with standard Page Up/Down and Option-Delete; 100% verified across 62 Rust unit tests and 30 Swift integration verification suites.
 * **Negative:** Tracking selection by ID adds a linear scan (`firstIndex(where:)`) over the current page (up to 100 items), completing in < 5 microseconds on Apple Silicon.
 
+---
+
+## ADR-029: Multi-Dimensional Retention Policies (Count, Age, Size), Guaranteed Pin Preservation, and 50k-Event Churn Verification
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Unbounded local clipboard storage risks disk bloat, memory exhaustion, and slow FTS5 search performance (`F-025`, `F-052`, `F-053`, `T-HIST-01`, `T-HIST-03`, `T-HIST-05`). A production-grade clipboard manager storage engine must satisfy:
+1. **Multi-Dimensional Retention:** Support item count caps (`max_count`), age limits (`max_age_days`), and storage byte budgets (`max_size_bytes`).
+2. **Ironclad Pin Preservation:** Pinned items must NEVER be evicted by count, age, or size retention limits, nor by `clear_unpinned()`. Only an explicit `clear_all()` or specific item deletion may delete pinned items.
+3. **Atomic Transactional Cleanup:** Inserts, duplicate resolution, and retention eviction must occur inside a single atomic SQLite transaction with zero orphan records in `item_representations` (via `ON DELETE CASCADE`) or in `search_fts` (via transactional `AFTER DELETE` triggers).
+4. **Stress Verification (DoD):** Verify zero foreign key violations, zero FTS orphans, and 100% database integrity under a heavy 50,000-event churn workload.
+
+### Decision
+1. **Domain & DTO Types:**
+   - Defined `RetentionPolicyDTO` (`max_count`, `max_age_days`, `max_size_bytes`) and `CleanupReportDTO` (`evicted_by_count`, `evicted_by_age`, `evicted_by_size`, `total_evicted`, `remaining_unpinned`, `remaining_pinned`, `freed_bytes`) in `RustCore/src/domain/dto.rs`.
+2. **Unified Retention Pipeline (`enforce_retention_policy`):**
+   - Implemented in `RustCore/src/storage/repository.rs` executing inside an active transaction:
+     - Age filter: `DELETE FROM history_items WHERE is_pinned = 0 AND last_copied_at_ms < ?1`.
+     - Count filter: Computes excess unpinned items and deletes the oldest unpinned rows.
+     - Size budget filter: Queries oldest unpinned items ordered by `last_copied_at_ms ASC` and deletes until cumulative byte size falls below budget.
+   - Pinned immunity: Every deletion query strictly enforces `is_pinned = 0`.
+3. **UniFFI CoreClient Methods:**
+   - Added `set_retention_policy`, `get_retention_policy`, `enforce_retention`, `checkpoint_wal`, and `vacuum_database` across `MimraCoreHandle` and `CoreClient`.
+4. **50,000-Event Stress Churn Test (`T-HIST-05`):**
+   - Implemented in `RustCore/src/storage/mod.rs` executing 50,000 events (fresh unique captures, duplicate recopies, pin updates, midway `clear_unpinned`, and interleaved retention sweeps).
+   - Verifies:
+     - 0 foreign key violations (`PRAGMA foreign_key_check`).
+     - 0 orphaned `item_representations` rows.
+     - 0 orphaned `search_fts` rows (`verify_search_index_integrity`).
+     - 100% survival of all pinned anchor items.
+     - Strict upper bounds on remaining unpinned item counts and byte size.
+     - Database integrity passes `PRAGMA integrity_check`.
+
+### Consequences
+* **Positive:** Complete protection against unbounded disk usage; robust pin preservation guarantees; zero orphaned blobs or search rows; sub-7 second execution for 50k churn events on Apple Silicon.
+* **Negative:** Measuring total payload size during size-budget eviction requires a `SUM(byte_size)` query across unpinned rows, indexed and completing in < 100 microseconds.
+
+
 

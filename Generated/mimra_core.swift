@@ -537,15 +537,21 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     
     func checkSearchIndexIntegrity() throws  -> Bool
     
+    func checkpointWal() throws  -> UInt32
+    
     func clearAll() throws  -> UInt64
     
     func clearUnpinned() throws  -> UInt64
     
     func deleteItem(itemId: String) throws  -> Bool
     
+    func enforceRetention(policy: RetentionPolicyDto?) throws  -> CleanupReportDto
+    
     func fetchPayload(itemId: String, uti: String) throws  -> Data?
     
     func getItemRepresentations(itemId: String) throws  -> [RawRepresentation]
+    
+    func getRetentionPolicy()  -> RetentionPolicyDto
     
     func getStats() throws  -> StorageStatsDto
     
@@ -564,6 +570,10 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     func setMaxUnpinned(limit: UInt32) 
     
     func setPin(itemId: String, isPinned: Bool, pinKey: String?, pinOrder: UInt32?) throws 
+    
+    func setRetentionPolicy(policy: RetentionPolicyDto) 
+    
+    func vacuumDatabase() throws 
     
 }
 
@@ -642,6 +652,13 @@ open func checkSearchIndexIntegrity()throws  -> Bool {
 })
 }
     
+open func checkpointWal()throws  -> UInt32 {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_checkpoint_wal(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
 open func clearAll()throws  -> UInt64 {
     return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_clear_all(self.uniffiClonePointer(),$0
@@ -664,6 +681,14 @@ open func deleteItem(itemId: String)throws  -> Bool {
 })
 }
     
+open func enforceRetention(policy: RetentionPolicyDto?)throws  -> CleanupReportDto {
+    return try  FfiConverterTypeCleanupReportDTO.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_enforce_retention(self.uniffiClonePointer(),
+        FfiConverterOptionTypeRetentionPolicyDTO.lower(policy),$0
+    )
+})
+}
+    
 open func fetchPayload(itemId: String, uti: String)throws  -> Data? {
     return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_fetch_payload(self.uniffiClonePointer(),
@@ -677,6 +702,13 @@ open func getItemRepresentations(itemId: String)throws  -> [RawRepresentation] {
     return try  FfiConverterSequenceTypeRawRepresentation.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_get_item_representations(self.uniffiClonePointer(),
         FfiConverterString.lower(itemId),$0
+    )
+})
+}
+    
+open func getRetentionPolicy() -> RetentionPolicyDto {
+    return try!  FfiConverterTypeRetentionPolicyDTO.lift(try! rustCall() {
+    uniffi_mimra_core_fn_method_mimracorehandle_get_retention_policy(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -763,6 +795,19 @@ open func setPin(itemId: String, isPinned: Bool, pinKey: String?, pinOrder: UInt
 }
 }
     
+open func setRetentionPolicy(policy: RetentionPolicyDto) {try! rustCall() {
+    uniffi_mimra_core_fn_method_mimracorehandle_set_retention_policy(self.uniffiClonePointer(),
+        FfiConverterTypeRetentionPolicyDTO.lower(policy),$0
+    )
+}
+}
+    
+open func vacuumDatabase()throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_vacuum_database(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
 
 }
 
@@ -815,6 +860,115 @@ public func FfiConverterTypeMimraCoreHandle_lift(_ pointer: UnsafeMutableRawPoin
 #endif
 public func FfiConverterTypeMimraCoreHandle_lower(_ value: MimraCoreHandle) -> UnsafeMutableRawPointer {
     return FfiConverterTypeMimraCoreHandle.lower(value)
+}
+
+
+/**
+ * Statistics detailing the outcome of a retention enforcement or cleanup cycle.
+ */
+public struct CleanupReportDto {
+    public var evictedByCount: UInt64
+    public var evictedByAge: UInt64
+    public var evictedBySize: UInt64
+    public var totalEvicted: UInt64
+    public var remainingUnpinned: UInt64
+    public var remainingPinned: UInt64
+    public var freedBytes: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(evictedByCount: UInt64, evictedByAge: UInt64, evictedBySize: UInt64, totalEvicted: UInt64, remainingUnpinned: UInt64, remainingPinned: UInt64, freedBytes: UInt64) {
+        self.evictedByCount = evictedByCount
+        self.evictedByAge = evictedByAge
+        self.evictedBySize = evictedBySize
+        self.totalEvicted = totalEvicted
+        self.remainingUnpinned = remainingUnpinned
+        self.remainingPinned = remainingPinned
+        self.freedBytes = freedBytes
+    }
+}
+
+
+
+extension CleanupReportDto: Equatable, Hashable {
+    public static func ==(lhs: CleanupReportDto, rhs: CleanupReportDto) -> Bool {
+        if lhs.evictedByCount != rhs.evictedByCount {
+            return false
+        }
+        if lhs.evictedByAge != rhs.evictedByAge {
+            return false
+        }
+        if lhs.evictedBySize != rhs.evictedBySize {
+            return false
+        }
+        if lhs.totalEvicted != rhs.totalEvicted {
+            return false
+        }
+        if lhs.remainingUnpinned != rhs.remainingUnpinned {
+            return false
+        }
+        if lhs.remainingPinned != rhs.remainingPinned {
+            return false
+        }
+        if lhs.freedBytes != rhs.freedBytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(evictedByCount)
+        hasher.combine(evictedByAge)
+        hasher.combine(evictedBySize)
+        hasher.combine(totalEvicted)
+        hasher.combine(remainingUnpinned)
+        hasher.combine(remainingPinned)
+        hasher.combine(freedBytes)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCleanupReportDTO: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CleanupReportDto {
+        return
+            try CleanupReportDto(
+                evictedByCount: FfiConverterUInt64.read(from: &buf), 
+                evictedByAge: FfiConverterUInt64.read(from: &buf), 
+                evictedBySize: FfiConverterUInt64.read(from: &buf), 
+                totalEvicted: FfiConverterUInt64.read(from: &buf), 
+                remainingUnpinned: FfiConverterUInt64.read(from: &buf), 
+                remainingPinned: FfiConverterUInt64.read(from: &buf), 
+                freedBytes: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CleanupReportDto, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.evictedByCount, into: &buf)
+        FfiConverterUInt64.write(value.evictedByAge, into: &buf)
+        FfiConverterUInt64.write(value.evictedBySize, into: &buf)
+        FfiConverterUInt64.write(value.totalEvicted, into: &buf)
+        FfiConverterUInt64.write(value.remainingUnpinned, into: &buf)
+        FfiConverterUInt64.write(value.remainingPinned, into: &buf)
+        FfiConverterUInt64.write(value.freedBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCleanupReportDTO_lift(_ buf: RustBuffer) throws -> CleanupReportDto {
+    return try FfiConverterTypeCleanupReportDTO.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCleanupReportDTO_lower(_ value: CleanupReportDto) -> RustBuffer {
+    return FfiConverterTypeCleanupReportDTO.lower(value)
 }
 
 
@@ -1309,6 +1463,101 @@ public func FfiConverterTypeRawRepresentation_lower(_ value: RawRepresentation) 
 
 
 /**
+ * Configuration policy for historical data retention (P4-05).
+ */
+public struct RetentionPolicyDto {
+    /**
+     * Maximum number of unpinned items retained in history (None = unlimited).
+     */
+    public var maxCount: UInt32?
+    /**
+     * Maximum age in days for unpinned items (None = unlimited).
+     */
+    public var maxAgeDays: UInt32?
+    /**
+     * Maximum total byte size for unpinned item payloads (None = unlimited).
+     */
+    public var maxSizeBytes: UInt64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Maximum number of unpinned items retained in history (None = unlimited).
+         */maxCount: UInt32?, 
+        /**
+         * Maximum age in days for unpinned items (None = unlimited).
+         */maxAgeDays: UInt32?, 
+        /**
+         * Maximum total byte size for unpinned item payloads (None = unlimited).
+         */maxSizeBytes: UInt64?) {
+        self.maxCount = maxCount
+        self.maxAgeDays = maxAgeDays
+        self.maxSizeBytes = maxSizeBytes
+    }
+}
+
+
+
+extension RetentionPolicyDto: Equatable, Hashable {
+    public static func ==(lhs: RetentionPolicyDto, rhs: RetentionPolicyDto) -> Bool {
+        if lhs.maxCount != rhs.maxCount {
+            return false
+        }
+        if lhs.maxAgeDays != rhs.maxAgeDays {
+            return false
+        }
+        if lhs.maxSizeBytes != rhs.maxSizeBytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(maxCount)
+        hasher.combine(maxAgeDays)
+        hasher.combine(maxSizeBytes)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRetentionPolicyDTO: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RetentionPolicyDto {
+        return
+            try RetentionPolicyDto(
+                maxCount: FfiConverterOptionUInt32.read(from: &buf), 
+                maxAgeDays: FfiConverterOptionUInt32.read(from: &buf), 
+                maxSizeBytes: FfiConverterOptionUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RetentionPolicyDto, into buf: inout [UInt8]) {
+        FfiConverterOptionUInt32.write(value.maxCount, into: &buf)
+        FfiConverterOptionUInt32.write(value.maxAgeDays, into: &buf)
+        FfiConverterOptionUInt64.write(value.maxSizeBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRetentionPolicyDTO_lift(_ buf: RustBuffer) throws -> RetentionPolicyDto {
+    return try FfiConverterTypeRetentionPolicyDTO.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRetentionPolicyDTO_lower(_ value: RetentionPolicyDto) -> RustBuffer {
+    return FfiConverterTypeRetentionPolicyDTO.lower(value)
+}
+
+
+/**
  * High-level metrics describing database utilization.
  */
 public struct StorageStatsDto {
@@ -1785,6 +2034,30 @@ fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
+    typealias SwiftType = UInt64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
     typealias SwiftType = String?
 
@@ -1825,6 +2098,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterData.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeRetentionPolicyDTO: FfiConverterRustBuffer {
+    typealias SwiftType = RetentionPolicyDto?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeRetentionPolicyDTO.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeRetentionPolicyDTO.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -1977,6 +2274,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_mimra_core_checksum_method_mimracorehandle_check_search_index_integrity() != 16171) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_checkpoint_wal() != 19696) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_clear_all() != 51368) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -1986,10 +2286,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_mimra_core_checksum_method_mimracorehandle_delete_item() != 11708) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_enforce_retention() != 9758) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_fetch_payload() != 41638) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_get_item_representations() != 306) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_get_retention_policy() != 4741) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_get_stats() != 27469) {
@@ -2017,6 +2323,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_set_pin() != 63648) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_set_retention_policy() != 15700) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_vacuum_database() != 14185) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_constructor_mimracorehandle_open() != 14580) {

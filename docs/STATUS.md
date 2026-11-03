@@ -102,13 +102,13 @@
 | **P4-02** | Fuzzy/mixed mode: deterministic ranker plus recency boosts, Unicode-aware highlight ranges | Completed | `RustCore/src/domain/search.rs`, `RustCore/src/storage/search.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/UI/Panel/FloatingPanelView.swift` (`tests/fuzzy_search_tests.swift`, `T-SRCH-01`, `F-019`, `F-048`) |
 | **P4-03** | Exact/regex modes: configurable modes, Rust bounded regex and error feedback; cancel stale search | Completed | `RustCore/src/domain/search.rs`, `RustCore/src/storage/search.rs`, `RustCore/src/error.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift` (`tests/regex_search_tests.swift`, `T-SRCH-02`, `F-048`) |
 | **P4-04** | Sorting/highlights: pinned arrangement, recency, relevance and highlight styles | Completed | `RustCore/src/storage/repository.rs`, `RustCore/src/storage/search.rs`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/sorting_highlight_tests.swift`, `T-UI-03`, `T-KEY-03`, `F-019`, `F-024`) |
-| **P4-05** | History limit: count/age/size retention and clear, preserve pins | Pending | Scheduled next (`T-HIST-03`, `T-HIST-05`, `F-025`) |
-| **P4-06** | Storage UI: DB size/limits/types/clear-unpinned/clear-all and confirmation | Pending | Scheduled (`T-HIST-01`, `F-025`) |
+| **P4-05** | History limit: count/age/size retention and clear, preserve pins | Completed | `RustCore/src/storage/repository.rs`, `RustCore/src/domain/dto.rs`, `RustCore/src/lib.rs`, `Mimra/Bridge/CoreClient.swift` (`tests/history_limit_tests.swift`, `T-HIST-01`, `T-HIST-03`, `T-HIST-05`, `F-025`, `F-052`, `F-053`) |
+| **P4-06** | Storage UI: DB size/limits/types/clear-unpinned/clear-all and confirmation | Pending | Scheduled next (`T-HIST-01`, `F-025`) |
 | **P4-07** | Failure recovery: low disk, corrupt db, bad migration, full capacity, relaunch and backup recoverability | Pending | Scheduled (`T-DB-01`) |
 
 ---
 
 ## 8. Current Blockers & Risks
 
-* **None.** Gate G4 Tasks P4-01, P4-02, P4-03, and P4-04 are 100% complete and verified across Rust, Swift, and Xcode.
-* **Next Task:** P4-05 (History limit: count/age/size retention and clear, preserve pins, `T-HIST-03`, `T-HIST-05`, `F-025`).
+* **None.** Gate G4 Tasks P4-01, P4-02, P4-03, P4-04, and P4-05 are 100% complete and verified across Rust, Swift, and Xcode.
+* **Next Task:** P4-06 (Storage UI: DB size/limits/types/clear-unpinned/clear-all and confirmation, `T-HIST-01`, `F-025`).
