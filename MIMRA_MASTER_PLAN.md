@@ -574,22 +574,22 @@ All settings changes persist atomically and update relevant components without r
 
 ### PHASE 5 — Pins, cycling and advanced keyboard operations (G4/G5)
 
-- [ ] **P5-01 Pins:** pin/unpin, stable pinned section and shortcuts, eviction protection. **DoD:** pin survives restart/full history/clear unpinned.
-- [ ] **P5-02 Pin shortcut assignment:** enforce unique bindings and reserved key conflicts; permit punctuation keys in 2.8. **DoD:** non-US layout and `[];'./-=\\` test corpus.
-- [ ] **P5-03 Pin reorder:** drag-and-drop persistence, keyboard accessibility alternative. **DoD:** deterministic order after relaunch.
-- [ ] **P5-04 Edit pin:** editable text representation in preview; safe update of search index and retained pin ID. **DoD:** edited item copy/paste uses new content; no unrelated representation corruption.
-- [ ] **P5-05 Quick pick:** 1–9 with modifiers for copy/paste/plain; capacity/boundary cases. **DoD:** matches selected visible order.
-- [ ] **P5-06 Cycle mode:** repeat summon key while holding modifiers, release commits; cancel on Escape/focus loss. **DoD:** no conflict with pin key/IME/other apps.
-- [ ] **P5-07 Nav semantics:** Page Up/Down, selection following delete, pinned-only row, separator consistency. **DoD:** snapshot and keyboard tests.
+- [x] **P5-01 Pins:** pin/unpin, stable pinned section and shortcuts, eviction protection. **DoD:** pin survives restart/full history/clear unpinned.
+- [x] **P5-02 Pin shortcut assignment:** enforce unique bindings and reserved key conflicts; permit punctuation keys in 2.8. **DoD:** non-US layout and `[];'./-=\\` test corpus.
+- [x] **P5-03 Pin reorder:** drag-and-drop persistence, keyboard accessibility alternative. **DoD:** deterministic order after relaunch.
+- [x] **P5-04 Edit pin:** editable text representation in preview; safe update of search index and retained pin ID. **DoD:** edited item copy/paste uses new content; no unrelated representation corruption.
+- [x] **P5-05 Quick pick:** 1–9 with modifiers for copy/paste/plain; capacity/boundary cases. **DoD:** matches selected visible order.
+- [x] **P5-06 Cycle mode:** repeat summon key while holding modifiers, release commits; cancel on Escape/focus loss. **DoD:** no conflict with pin key/IME/other apps.
+- [x] **P5-07 Nav semantics:** Page Up/Down, selection following delete, pinned-only row, separator consistency. **DoD:** snapshot and keyboard tests.
 
 **Phase 5 exit:** all high-frequency keyboard/pin workflows are usable without touching the mouse.
 
 ### PHASE 6 — Preview + on-device OCR (G5)
 
-- [ ] **P6-01 Slideout preview:** text/image panel attached to history, width and bounds; close doesn't intercept mouse. **DoD:** layout survives monitor changes and quick toggles.
-- [ ] **P6-02 Preview shortcuts/settings:** Control-Space toggle; auto-open/delay; only local shortcut, not global registration. **DoD:** keyboard shortcut works inside panel only.
-- [ ] **P6-03 Text preview:** native efficient `NSTextView` for long content and accessibility selection. **DoD:** 1 MB text scrollable without UI freeze.
-- [ ] **P6-04 Image preview:** aspect ratio, HEIC, dimensions and image-byte size; cached scaling. **DoD:** no image decoded repeatedly on each row render.
+- [x] **P6-01 Slideout preview:** text/image panel attached to history, width and bounds; close doesn't intercept mouse. **DoD:** layout survives monitor changes and quick toggles.
+- [x] **P6-02 Preview shortcuts/settings:** Control-Space toggle; auto-open/delay; only local shortcut, not global registration. **DoD:** keyboard shortcut works inside panel only.
+- [x] **P6-03 Text preview:** native efficient `NSTextView` for long content and accessibility selection. **DoD:** 1 MB text scrollable without UI freeze.
+- [x] **P6-04 Image preview:** aspect ratio, HEIC, dimensions and image-byte size; cached scaling. **DoD:** no image decoded repeatedly on each row render.
 - [ ] **P6-05 OCR service:** Vision recognition on background queue, automatic language detection where supported. **DoD:** synthetic test image in 2 languages indexed; clean cancellation.
 - [ ] **P6-06 OCR results:** searchable image text, copy OCR button, loading/failed states; no network call. **DoD:** can find an image by embedded text and copy extracted text.
 - [ ] **P6-07 Race protection:** delete/clear while OCR pending; stale callbacks must never resurrect deleted items. **DoD:** stress test 1,000 rapid changes + dismissals.

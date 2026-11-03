@@ -550,6 +550,8 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     
     func deleteItem(itemId: String) throws  -> Bool
     
+    func editPinnedItemText(itemId: String, newText: String) throws  -> HistoryItemSummaryDto
+    
     func enforceRetention(policy: RetentionPolicyDto?) throws  -> CleanupReportDto
     
     func fetchPayload(itemId: String, uti: String) throws  -> Data?
@@ -573,6 +575,8 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     
     func rebuildSearchIndex() throws 
     
+    func reorderPins(orderedIds: [String]) throws 
+    
     /**
      * Restores the active handle's database in-place from a verified backup file using SQLite Online Backup API.
      */
@@ -588,7 +592,11 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     
     func setRetentionPolicy(policy: RetentionPolicyDto) 
     
+    func togglePin(itemId: String) throws  -> Bool
+    
     func vacuumDatabase() throws 
+    
+    func validatePinKey(key: String) throws  -> String
     
     /**
      * Verifies both B-Tree table integrity, foreign keys, and FTS5 search index synchronization.
@@ -719,6 +727,15 @@ open func deleteItem(itemId: String)throws  -> Bool {
 })
 }
     
+open func editPinnedItemText(itemId: String, newText: String)throws  -> HistoryItemSummaryDto {
+    return try  FfiConverterTypeHistoryItemSummaryDTO.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_edit_pinned_item_text(self.uniffiClonePointer(),
+        FfiConverterString.lower(itemId),
+        FfiConverterString.lower(newText),$0
+    )
+})
+}
+    
 open func enforceRetention(policy: RetentionPolicyDto?)throws  -> CleanupReportDto {
     return try  FfiConverterTypeCleanupReportDTO.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_enforce_retention(self.uniffiClonePointer(),
@@ -802,6 +819,13 @@ open func rebuildSearchIndex()throws  {try rustCallWithError(FfiConverterTypeCor
 }
 }
     
+open func reorderPins(orderedIds: [String])throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_reorder_pins(self.uniffiClonePointer(),
+        FfiConverterSequenceString.lower(orderedIds),$0
+    )
+}
+}
+    
     /**
      * Restores the active handle's database in-place from a verified backup file using SQLite Online Backup API.
      */
@@ -860,10 +884,26 @@ open func setRetentionPolicy(policy: RetentionPolicyDto) {try! rustCall() {
 }
 }
     
+open func togglePin(itemId: String)throws  -> Bool {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_toggle_pin(self.uniffiClonePointer(),
+        FfiConverterString.lower(itemId),$0
+    )
+})
+}
+    
 open func vacuumDatabase()throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_vacuum_database(self.uniffiClonePointer(),$0
     )
 }
+}
+    
+open func validatePinKey(key: String)throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_validate_pin_key(self.uniffiClonePointer(),
+        FfiConverterString.lower(key),$0
+    )
+})
 }
     
     /**
@@ -1824,6 +1864,8 @@ public enum CoreError {
     )
     case InvalidInput(details: String
     )
+    case PinKeyConflict(key: String, details: String
+    )
     case InvalidRegex(pattern: String, errorMessage: String
     )
     case Internal(message: String
@@ -1867,11 +1909,15 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
         case 8: return .InvalidInput(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 9: return .InvalidRegex(
+        case 9: return .PinKeyConflict(
+            key: try FfiConverterString.read(from: &buf), 
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 10: return .InvalidRegex(
             pattern: try FfiConverterString.read(from: &buf), 
             errorMessage: try FfiConverterString.read(from: &buf)
             )
-        case 10: return .Internal(
+        case 11: return .Internal(
             message: try FfiConverterString.read(from: &buf)
             )
 
@@ -1926,14 +1972,20 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
             FfiConverterString.write(details, into: &buf)
             
         
-        case let .InvalidRegex(pattern,errorMessage):
+        case let .PinKeyConflict(key,details):
             writeInt(&buf, Int32(9))
+            FfiConverterString.write(key, into: &buf)
+            FfiConverterString.write(details, into: &buf)
+            
+        
+        case let .InvalidRegex(pattern,errorMessage):
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(pattern, into: &buf)
             FfiConverterString.write(errorMessage, into: &buf)
             
         
         case let .Internal(message):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(11))
             FfiConverterString.write(message, into: &buf)
             
         }
@@ -2508,6 +2560,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_mimra_core_checksum_method_mimracorehandle_delete_item() != 11708) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_edit_pinned_item_text() != 16162) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_enforce_retention() != 9758) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2538,6 +2593,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_mimra_core_checksum_method_mimracorehandle_rebuild_search_index() != 2150) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_reorder_pins() != 24157) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_restore_from_backup() != 34048) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2556,7 +2614,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_mimra_core_checksum_method_mimracorehandle_set_retention_policy() != 15700) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_toggle_pin() != 22350) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_vacuum_database() != 14185) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_validate_pin_key() != 2224) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_verify_integrity() != 52870) {

@@ -67,6 +67,24 @@ public final class HotkeyManager {
     private let state = CarbonHotKeyState()
     private var actions: [UInt32: HotkeyAction] = [:]
 
+    public private(set) var summonKeyCode: UInt32 = UInt32(kVK_ANSI_C)
+    public private(set) var summonCarbonModifiers: UInt32 = UInt32(cmdKey | shiftKey)
+
+    /// Converts Carbon modifier bitmask into AppKit NSEvent.ModifierFlags.
+    public static func carbonModifiersToNSEventModifierFlags(_ carbonMods: UInt32) -> NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        if (carbonMods & UInt32(cmdKey)) != 0 { flags.insert(.command) }
+        if (carbonMods & UInt32(shiftKey)) != 0 { flags.insert(.shift) }
+        if (carbonMods & UInt32(optionKey)) != 0 { flags.insert(.option) }
+        if (carbonMods & UInt32(controlKey)) != 0 { flags.insert(.control) }
+        return flags
+    }
+
+    /// AppKit ModifierFlags representation of registered summon modifiers.
+    public var summonModifierFlags: NSEvent.ModifierFlags {
+        HotkeyManager.carbonModifiersToNSEventModifierFlags(summonCarbonModifiers)
+    }
+
     public init() {
         installCarbonHandler()
     }
@@ -103,6 +121,8 @@ public final class HotkeyManager {
         modifiers: UInt32 = UInt32(cmdKey | shiftKey),
         action: @escaping HotkeyAction
     ) -> Bool {
+        self.summonKeyCode = keyCode
+        self.summonCarbonModifiers = modifiers
         return registerHotkey(id: HotkeyManager.summonHotKeyId, keyCode: keyCode, modifiers: modifiers, action: action)
     }
 

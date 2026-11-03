@@ -34,6 +34,9 @@ pub enum CoreError {
     #[error("Invalid input: {details}")]
     InvalidInput { details: String },
 
+    #[error("Pin shortcut key conflict: '{key}' is already assigned or reserved ({details})")]
+    PinKeyConflict { key: String, details: String },
+
     #[error("Invalid regular expression '{pattern}': {error_message}")]
     InvalidRegex {
         pattern: String,

@@ -10,6 +10,7 @@ use crate::domain::item::HistoryItem;
 use crate::error::CoreError;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use std::str::FromStr;
+use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 
 /// Result of an ingestion operation.
@@ -802,6 +803,48 @@ pub fn clear_all_history(conn: &Connection) -> Result<usize, CoreError> {
     Ok(deleted)
 }
 
+/// Validates and normalizes a requested pin shortcut key (P5-02 / F-024, T-PIN-01).
+/// Permitted: ASCII letters, digits, punctuation/symbols (`[];'./-=\` corpus), and non-US Unicode symbols.
+/// Rejected: Empty, multi-character, control characters, and reserved key 'p' (Option-P).
+pub fn validate_pin_key(key: &str) -> Result<String, CoreError> {
+    let trimmed = key.trim();
+    if trimmed.is_empty() {
+        return Err(CoreError::InvalidInput {
+            details: "Pin shortcut key cannot be empty or whitespace".to_string(),
+        });
+    }
+
+    let chars: Vec<char> = trimmed.chars().collect();
+    if chars.len() != 1 {
+        return Err(CoreError::InvalidInput {
+            details: format!(
+                "Pin shortcut key must be a single character, got {} characters ('{}')",
+                chars.len(),
+                key
+            ),
+        });
+    }
+
+    let c = chars[0];
+
+    // Check reserved keys
+    if c == 'p' || c == 'P' {
+        return Err(CoreError::PinKeyConflict {
+            key: key.to_string(),
+            details: "Key 'P' is reserved for toggling Pin/Unpin (Option-P)".to_string(),
+        });
+    }
+
+    if c.is_control() {
+        return Err(CoreError::InvalidInput {
+            details: "Control characters cannot be used as pin shortcut keys".to_string(),
+        });
+    }
+
+    // Normalize to lowercase for case-insensitive keyboard matching
+    Ok(c.to_lowercase().to_string())
+}
+
 /// Sets or unsets the pinned status, ordering, and shortcut key for an item.
 pub fn set_pin_status(
     conn: &Connection,
@@ -810,6 +853,34 @@ pub fn set_pin_status(
     pin_key: Option<String>,
     pin_order: Option<u32>,
 ) -> Result<(), CoreError> {
+    let (key_param, order_param) = if is_pinned {
+        if let Some(ref raw_key) = pin_key {
+            let normalized_key = validate_pin_key(raw_key)?;
+
+            // Case-insensitive duplicate check across other items
+            let existing_title: Option<String> = conn
+                .query_row(
+                    "SELECT title FROM history_items WHERE LOWER(pin_key) = LOWER(?1) AND id != ?2;",
+                    params![normalized_key, item_id.to_string()],
+                    |r| r.get(0),
+                )
+                .optional()?;
+
+            if let Some(title) = existing_title {
+                return Err(CoreError::PinKeyConflict {
+                    key: normalized_key,
+                    details: format!("Key is already assigned to item '{title}'"),
+                });
+            }
+
+            (Some(normalized_key), pin_order)
+        } else {
+            (None, pin_order)
+        }
+    } else {
+        (None, None)
+    };
+
     let affected = conn.execute(
         "UPDATE history_items
          SET is_pinned = ?1,
@@ -818,8 +889,8 @@ pub fn set_pin_status(
          WHERE id = ?4;",
         params![
             if is_pinned { 1 } else { 0 },
-            pin_key,
-            pin_order,
+            key_param,
+            order_param,
             item_id.to_string(),
         ],
     )?;
@@ -831,6 +902,317 @@ pub fn set_pin_status(
     }
 
     Ok(())
+}
+
+/// Toggles the pinned status of an item.
+/// If unpinned, pins the item and assigns it the next pin_order.
+/// If pinned, unpins the item and clears pin_key and pin_order.
+/// Returns the new is_pinned boolean status.
+pub fn toggle_pin_status(conn: &Connection, item_id: &Uuid) -> Result<bool, CoreError> {
+    let is_pinned: i64 = conn
+        .query_row(
+            "SELECT is_pinned FROM history_items WHERE id = ?1;",
+            params![item_id.to_string()],
+            |r| r.get(0),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => CoreError::ItemNotFound {
+                id: item_id.to_string(),
+            },
+            other => CoreError::from(other),
+        })?;
+
+    let currently_pinned = is_pinned != 0;
+    let next_pinned = !currently_pinned;
+
+    if next_pinned {
+        let max_order: Option<u32> = conn
+            .query_row(
+                "SELECT MAX(pin_order) FROM history_items WHERE is_pinned = 1;",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(None);
+        let next_order = max_order.map(|o| o + 1).unwrap_or(0);
+        set_pin_status(conn, item_id, true, None, Some(next_order))?;
+    } else {
+        set_pin_status(conn, item_id, false, None, None)?;
+    }
+
+    Ok(next_pinned)
+}
+
+/// Atomically reorders pinned items according to the provided list of item UUIDs (P5-03 / F-046, T-PIN-03).
+/// Updates `pin_order` sequentially from 0 to N-1 for each item in `ordered_item_ids`.
+/// Preserves each item's existing `pin_key` and other representations.
+/// Fails if any ID does not exist or is not pinned.
+pub fn reorder_pins(conn: &mut Connection, ordered_item_ids: &[Uuid]) -> Result<(), CoreError> {
+    if ordered_item_ids.is_empty() {
+        return Ok(());
+    }
+
+    // Check for duplicate IDs in the request
+    let mut seen = std::collections::HashSet::new();
+    for id in ordered_item_ids {
+        if !seen.insert(id) {
+            return Err(CoreError::InvalidInput {
+                details: format!("Cannot reorder pins: duplicate item id '{id}' provided"),
+            });
+        }
+    }
+
+    let tx = conn.transaction()?;
+
+    for (index, id) in ordered_item_ids.iter().enumerate() {
+        let is_pinned: Option<i64> = tx
+            .query_row(
+                "SELECT is_pinned FROM history_items WHERE id = ?1;",
+                params![id.to_string()],
+                |r| r.get(0),
+            )
+            .optional()?;
+
+        match is_pinned {
+            Some(p) if p != 0 => {
+                tx.execute(
+                    "UPDATE history_items SET pin_order = ?1 WHERE id = ?2;",
+                    params![index as u32, id.to_string()],
+                )?;
+            }
+            Some(_) => {
+                return Err(CoreError::InvalidInput {
+                    details: format!("Item '{id}' cannot be reordered because it is not pinned"),
+                });
+            }
+            None => {
+                return Err(CoreError::ItemNotFound { id: id.to_string() });
+            }
+        }
+    }
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Edits the text content of an existing pinned item (P5-04 / F-045, T-PIN-02).
+///
+/// Updates the item's plain text (and compatible HTML) representations,
+/// recalculates content hash, title, and search text, triggers an atomic FTS5 index update,
+/// and preserves the item's stable UUID, pinned state, pin_order, pin_key, and any unrelated representations.
+///
+/// Fails if the item does not exist (`CoreError::ItemNotFound`), if the item is not pinned (`CoreError::InvalidInput`),
+/// or if `new_text` is empty (`CoreError::InvalidInput`).
+pub fn edit_pinned_item_text(
+    conn: &mut Connection,
+    item_id: &Uuid,
+    new_text: &str,
+) -> Result<HistoryItemSummary, CoreError> {
+    let nfc_text: String = new_text.nfc().collect();
+    let trimmed = nfc_text.trim();
+    if trimmed.is_empty() {
+        return Err(CoreError::InvalidInput {
+            details: "Pinned item text cannot be empty.".to_string(),
+        });
+    }
+
+    let tx = conn.transaction()?;
+
+    type PinnedItemMetadataRow = (
+        i64,
+        Option<u32>,
+        Option<String>,
+        Option<String>,
+        i64,
+        i64,
+        u32,
+        i64,
+    );
+
+    // 1. Verify item exists and is pinned
+    let row: Option<PinnedItemMetadataRow> = tx
+        .query_row(
+            "SELECT is_pinned, pin_order, pin_key, source_bundle_id, first_copied_at_ms, last_copied_at_ms, copy_count, created_at_ms
+             FROM history_items WHERE id = ?1;",
+            params![item_id.to_string()],
+            |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                    r.get(7)?,
+                ))
+            },
+        )
+        .optional()?;
+
+    let (
+        is_pinned,
+        pin_order,
+        pin_key,
+        source_bundle_id,
+        first_copied_at_ms,
+        last_copied_at_ms,
+        copy_count,
+        _created_at_ms,
+    ) = match row {
+        Some(r) => r,
+        None => {
+            return Err(CoreError::ItemNotFound {
+                id: item_id.to_string(),
+            })
+        }
+    };
+
+    if is_pinned == 0 {
+        return Err(CoreError::InvalidInput {
+            details: format!("Item '{item_id}' cannot be edited because it is not pinned."),
+        });
+    }
+
+    // 2. Fetch existing representations
+    let existing_reps: Vec<Representation> = {
+        let mut stmt = tx.prepare(
+            "SELECT group_index, uti, payload FROM item_representations WHERE item_id = ?1 ORDER BY group_index ASC, id ASC;",
+        )?;
+        let reps = stmt
+            .query_map(params![item_id.to_string()], |r| {
+                let group_index: u32 = r.get(0)?;
+                let uti: String = r.get(1)?;
+                let payload: Vec<u8> = r.get(2)?;
+                Ok(Representation {
+                    group_index,
+                    uti,
+                    payload,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        reps
+    };
+
+    // 3. Mutate text representations while preserving unrelated representations
+    let mut updated_reps = Vec::with_capacity(existing_reps.len().max(1));
+    let mut found_plain_text = false;
+
+    let escaped_html = trimmed
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;");
+    let synthetic_html = format!("<meta charset='utf-8'><p>{}</p>", escaped_html).into_bytes();
+
+    for rep in existing_reps {
+        if rep.group_index == 0 {
+            if rep.uti == crate::domain::content::uti::UTF8_PLAIN_TEXT
+                || rep.uti == "public.plain-text"
+                || rep.uti == "NSStringPboardType"
+                || rep.uti == "public.text"
+            {
+                found_plain_text = true;
+                updated_reps.push(Representation {
+                    group_index: 0,
+                    uti: rep.uti,
+                    payload: trimmed.as_bytes().to_vec(),
+                });
+            } else if rep.uti == crate::domain::content::uti::HTML {
+                // Update HTML representation to match the new text content
+                updated_reps.push(Representation {
+                    group_index: 0,
+                    uti: rep.uti,
+                    payload: synthetic_html.clone(),
+                });
+            } else if rep.uti == crate::domain::content::uti::RTF
+                || rep.uti == crate::domain::content::uti::RTFD
+            {
+                // Drop stale RTF so pasteboard consumers fall back to clean updated plain text / HTML
+                continue;
+            } else {
+                // Unrelated metadata representation in group 0 (e.g. org.nspasteboard.source, public.url-name, etc.)
+                updated_reps.push(rep);
+            }
+        } else {
+            // Unrelated representation in another group (e.g. attached file URLs or secondary pasteboard items)
+            updated_reps.push(rep);
+        }
+    }
+
+    if !found_plain_text {
+        updated_reps.insert(
+            0,
+            Representation {
+                group_index: 0,
+                uti: crate::domain::content::uti::UTF8_PLAIN_TEXT.to_string(),
+                payload: trimmed.as_bytes().to_vec(),
+            },
+        );
+    }
+
+    // 4. Overwrite item_representations for this item
+    tx.execute(
+        "DELETE FROM item_representations WHERE item_id = ?1;",
+        params![item_id.to_string()],
+    )?;
+    for rep in &updated_reps {
+        tx.execute(
+            "INSERT INTO item_representations (item_id, group_index, uti, payload) VALUES (?1, ?2, ?3, ?4);",
+            params![item_id.to_string(), rep.group_index, rep.uti, rep.payload],
+        )?;
+    }
+
+    // 5. Recompute content hash, kind, title, search text, and total byte size
+    let byte_size: u64 = updated_reps.iter().map(|r| r.payload.len() as u64).sum();
+    let content_hash = HistoryItem::calculate_content_hash(&updated_reps);
+    let content_kind = HistoryItem::derive_content_kind(&updated_reps);
+    let (title, search_text) = HistoryItem::derive_text_fields(&updated_reps, content_kind);
+
+    // 6. Update history_items row (FTS5 trigger automatically reindexes title and search_text)
+    tx.execute(
+        "UPDATE history_items
+         SET content_kind = ?1,
+             title = ?2,
+             search_text = ?3,
+             content_hash = ?4,
+             byte_size = ?5
+         WHERE id = ?6;",
+        params![
+            content_kind.to_string(),
+            title,
+            search_text,
+            content_hash.as_slice(),
+            byte_size as i64,
+            item_id.to_string(),
+        ],
+    )?;
+
+    tx.commit()?;
+
+    let available_utis = query_available_utis(conn, item_id)?;
+    let snippet = if search_text.len() > 120 {
+        format!("{}...", &search_text[..120])
+    } else {
+        search_text.clone()
+    };
+
+    Ok(HistoryItemSummary {
+        id: *item_id,
+        content_kind,
+        title,
+        snippet,
+        is_pinned: true,
+        pin_order,
+        pin_key,
+        source_bundle_id,
+        first_copied_at_ms,
+        last_copied_at_ms,
+        copy_count,
+        byte_size,
+        available_utis,
+        title_highlights: Vec::new(),
+        snippet_highlights: Vec::new(),
+    })
 }
 
 /// Computes current storage metrics: item counts, representation counts, and database size.

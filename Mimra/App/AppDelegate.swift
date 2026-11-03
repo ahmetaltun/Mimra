@@ -54,10 +54,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let panelCoord = PanelCoordinator(coreClient: client)
             self.panelCoordinator = panelCoord
 
-            // 4. Initialize Hotkey Manager and Register Shift-Command-C (F-017, F-023)
+            // 4. Initialize Hotkey Manager and Register Shift-Command-C (F-017, F-023, F-031)
             let hotkey = HotkeyManager()
+            panelCoord.summonKeyCode = hotkey.summonKeyCode
+            panelCoord.summonModifiers = hotkey.summonModifierFlags
+
             hotkey.registerSummonHotkey { [weak panelCoord] in
-                panelCoord?.toggle()
+                panelCoord?.handleSummonHotkey()
             }
             self.hotkeyManager = hotkey
 

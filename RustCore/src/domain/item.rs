@@ -267,7 +267,7 @@ impl HistoryItem {
     }
 
     /// Helper to classify content kind from representations.
-    fn derive_content_kind(reps: &[Representation]) -> ContentKind {
+    pub(crate) fn derive_content_kind(reps: &[Representation]) -> ContentKind {
         let has_text = reps.iter().any(|r| r.is_plain_text());
         let has_rich = reps.iter().any(|r| r.is_rich_text());
         let has_image = reps.iter().any(|r| r.is_image());
@@ -293,7 +293,10 @@ impl HistoryItem {
     }
 
     /// Helper to derive title and search text from representations.
-    fn derive_text_fields(reps: &[Representation], kind: ContentKind) -> (String, String) {
+    pub(crate) fn derive_text_fields(
+        reps: &[Representation],
+        kind: ContentKind,
+    ) -> (String, String) {
         // 1. Check for file URLs first if classified as FileUrls (P3-03)
         if kind == ContentKind::FileUrls {
             let file_urls: Vec<String> = reps

@@ -22,14 +22,15 @@ pub use domain::{
 pub use error::CoreError;
 pub use storage::{
     attempt_salvage_corrupted_database, backup_database, clear_all_history, clear_unpinned_history,
-    delete_item_by_id, enforce_retention_limit, enforce_retention_policy, fetch_payload,
-    find_by_content_hash, find_by_id, get_storage_stats, ingest_clipboard_item,
+    delete_item_by_id, edit_pinned_item_text, enforce_retention_limit, enforce_retention_policy,
+    fetch_payload, find_by_content_hash, find_by_id, get_storage_stats, ingest_clipboard_item,
     ingest_clipboard_item_with_policy, insert_item, list_history_page,
     list_history_page_with_options, load_representations, open_database, open_database_resilient,
     open_in_memory, quarantine_corrupted_database, query_available_utis, rebuild_search_index,
-    restore_database_from_backup, run_migrations, sanitize_fts5_query, search_history_page,
-    search_history_page_with_options, set_pin_status, update_recopy, verify_database_integrity,
-    verify_search_index_integrity, DatabaseConfig, HistoryItemSummary, IngestOutcome, StorageStats,
+    reorder_pins, restore_database_from_backup, run_migrations, sanitize_fts5_query,
+    search_history_page, search_history_page_with_options, set_pin_status, toggle_pin_status,
+    update_recopy, validate_pin_key, verify_database_integrity, verify_search_index_integrity,
+    DatabaseConfig, HistoryItemSummary, IngestOutcome, StorageStats,
 };
 
 // Setup UniFFI scaffolding for procedural macro bindings
@@ -375,6 +376,55 @@ impl MimraCoreHandle {
         })?;
 
         set_pin_status(&conn, &id, is_pinned, pin_key, pin_order)
+    }
+
+    pub fn toggle_pin(&self, item_id: String) -> Result<bool, CoreError> {
+        let id = Uuid::parse_str(&item_id).map_err(|e| CoreError::InvalidInput {
+            details: format!("Invalid UUID '{item_id}': {e}"),
+        })?;
+
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        toggle_pin_status(&conn, &id)
+    }
+
+    pub fn validate_pin_key(&self, key: String) -> Result<String, CoreError> {
+        validate_pin_key(&key)
+    }
+
+    pub fn reorder_pins(&self, ordered_ids: Vec<String>) -> Result<(), CoreError> {
+        let mut parsed_ids = Vec::with_capacity(ordered_ids.len());
+        for id_str in ordered_ids {
+            let id = Uuid::parse_str(&id_str).map_err(|e| CoreError::InvalidInput {
+                details: format!("Invalid UUID '{id_str}': {e}"),
+            })?;
+            parsed_ids.push(id);
+        }
+
+        let mut conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        reorder_pins(&mut conn, &parsed_ids)
+    }
+
+    pub fn edit_pinned_item_text(
+        &self,
+        item_id: String,
+        new_text: String,
+    ) -> Result<HistoryItemSummaryDTO, CoreError> {
+        let id = Uuid::parse_str(&item_id).map_err(|e| CoreError::InvalidInput {
+            details: format!("Invalid UUID '{item_id}': {e}"),
+        })?;
+
+        let mut conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        let summary = edit_pinned_item_text(&mut conn, &id, &new_text)?;
+        Ok(HistoryItemSummaryDTO::from(summary))
     }
 
     pub fn get_stats(&self) -> Result<StorageStatsDTO, CoreError> {

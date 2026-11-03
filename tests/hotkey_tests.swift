@@ -25,6 +25,8 @@ struct HotkeyTests {
 
         assert(registered, "FAIL: registerSummonHotkey should return true")
         assert(manager.isSummonRegistered, "FAIL: isSummonRegistered should be true")
+        assert(manager.summonKeyCode == UInt32(kVK_ANSI_C), "FAIL: summonKeyCode should be kVK_ANSI_C")
+        assert(manager.summonModifierFlags.contains([.command, .shift]), "FAIL: summonModifierFlags should contain command and shift")
         print("✓ T-KEY-02: Default summon hotkey (Shift-Command-C) registered successfully via Carbon")
 
         // 2. Test programmatic dispatch of summon hotkey

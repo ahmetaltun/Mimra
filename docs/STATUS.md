@@ -1,6 +1,6 @@
 # Mimra — Project Status & Roadmap Tracker
 
-> **Active Milestone:** Gate G3 — Complete Data Types (Phase 3)  
+> **Active Milestone:** Gate G5 — Core Feature Parity
 > **Last Updated:** 2026-11-03  
 > **Target Environment:** macOS 15.0+ (`aarch64-apple-darwin`), Apple Silicon only
 
@@ -42,8 +42,8 @@
 | **G1** | Safe Capture Engine | **COMPLETED** | Privacy filters, text capture, persistence, zero secret-marker leaks |
 | **G2** | Reliable Copy / Paste | **COMPLETED** | NSPanel popup, focus restoration, global shortcut, accessibility fallback |
 | **G3** | Complete Data Types | **COMPLETED** | RTF, HTML, PNG/JPEG/HEIC, file URLs, URLs/colors, attribution, dedupe hardening, type settings |
-| **G4** | History Power Features | IN PROGRESS | Fuzzy/regex search, pinning, retention cleanup, settings UI |
-| **G5** | Core Feature Parity | PENDING | Slideout preview, OCR, cycle summon, VoiceOver, localization |
+| **G4** | History Power Features | **COMPLETED** | Fuzzy/regex search, pinning, retention cleanup, settings UI |
+| **G5** | Core Feature Parity | IN PROGRESS | Slideout preview, OCR, cycle summon, VoiceOver, localization |
 | **G6** | Release Hardening | PENDING | Leaks, benchmarks, fuzzing, notarized arm64 distribution |
 | **G7** | Mimra Differentiators | PENDING | Privacy profiles, secret heuristics, encrypted vault (SQLCipher) |
 
@@ -108,7 +108,35 @@
 
 ---
 
-## 8. Current Blockers & Risks
+## 8. Phase 5 Task Tracker (Gate G4/G5)
 
-* **None.** Gate G4 is 100% complete! All tasks P4-01 through P4-07 are implemented and verified across Rust, Swift, and Xcode.
-* **Next Task:** P5-01 (Pins: pin/unpin, stable pinned section and shortcuts, eviction protection, `F-020`, `F-053`, `T-KEY-01`).
+| Task ID | Description | Status | Verification / Artifact |
+|---|---|---|---|
+| **P5-01** | Pins: pin/unpin, stable pinned section and shortcuts, eviction protection | Completed | `RustCore/src/storage/repository.rs`, `RustCore/src/lib.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift` (`tests/pin_tests.swift`, `T-PIN-01`, `T-HIST-03`, `T-KEY-01`, `F-020`, `F-024`, `F-036`, `F-053`) |
+| **P5-02** | Pin shortcut assignment: enforce unique bindings and reserved key conflicts; permit punctuation keys in 2.8 | Completed | `RustCore/src/storage/repository.rs`, `RustCore/src/error.rs`, `RustCore/src/lib.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift` (`tests/pin_shortcut_assignment_tests.swift`, `T-PIN-01`, `F-024`) |
+| **P5-03** | Pin reorder: drag-and-drop persistence, keyboard accessibility alternative | Completed | `RustCore/src/storage/repository.rs`, `RustCore/src/lib.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift` (`tests/pin_reorder_tests.swift`, `T-PIN-03`, `F-046`) |
+| **P5-04** | Edit pin: editable text representation in preview; safe update of search index and retained pin ID | Completed | `RustCore/src/storage/repository.rs`, `RustCore/src/lib.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift` (`tests/pin_edit_tests.swift`, `T-PIN-02`, `F-045`) |
+| **P5-05** | Quick pick: 1–9 with modifiers for copy/paste/plain; capacity/boundary cases | Completed | `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift` (`tests/quick_pick_tests.swift`, `T-KEY-01`, `F-022`) |
+| **P5-06** | Cycle mode: repeat summon key while holding modifiers, release commits; cancel on Escape/focus loss | Completed | `Mimra/macOS/HotkeyManager.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/App/AppDelegate.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/cycle_mode_tests.swift`, `T-KEY-02`, `T-KEY-04`, `F-023`, `F-031`) |
+| **P5-07** | Nav semantics: Page Up/Down, selection following delete, pinned-only row, separator consistency | Completed | `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/UI/Panel/FloatingPanel.swift` (`tests/nav_semantics_tests.swift`, `T-KEY-03`, `T-UI-10`, `F-030`, `F-036`) |
+
+---
+
+## 9. Phase 6 Task Tracker (Gate G5)
+
+| Task ID | Description | Status | Verification / Artifact |
+|---|---|---|---|
+| **P6-01** | Slideout preview: text/image panel attached to history, width and bounds; close doesn't intercept mouse | Completed | `Mimra/UI/Preview/PreviewBoundsCalculator.swift`, `Mimra/UI/Preview/PreviewPanel.swift`, `Mimra/UI/Preview/PreviewContainerView.swift`, `Mimra/UI/Preview/PreviewCoordinator.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/PanelViewModel.swift` (`tests/preview_panel_tests.swift`, `T-PREV-01`, `F-039`) |
+| **P6-02** | Preview shortcuts/settings: Control-Space toggle; auto-open/delay; only local shortcut, not global registration | Completed | `Mimra/UI/Preview/PreviewCoordinator.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/preview_settings_tests.swift`, `T-PREV-02`, `F-040`) |
+| **P6-03** | Text preview: native efficient `NSTextView` for long content and accessibility selection | Completed | `Mimra/UI/Preview/NativeTextPreviewView.swift`, `Mimra/UI/Preview/PreviewContainerView.swift` (`tests/text_preview_tests.swift`, `T-PREV-03`, `F-041`) |
+| **P6-04** | Image preview: aspect ratio, HEIC, dimensions and image-byte size; cached scaling | Completed | `Mimra/UI/Preview/ImagePreviewService.swift`, `Mimra/UI/Preview/ImagePreviewView.swift`, `Mimra/UI/Preview/PreviewContainerView.swift` (`tests/image_preview_tests.swift`, `T-PREV-04`, `F-042`) |
+| **P6-05** | OCR service: Vision recognition on background queue, automatic language detection | Pending | In queue (`T-OCR-01`, `F-043`) |
+| **P6-06** | OCR results: searchable image text, copy OCR button, loading/failed states; no network call | Pending | In queue (`T-OCR-02`, `F-044`) |
+| **P6-07** | Race protection: delete/clear while OCR pending; stale callbacks must never resurrect deleted items | Pending | In queue (`T-PREV-02`, `F-040`) |
+
+---
+
+## 10. Current Blockers & Risks
+
+* **None.** Task P6-04 (Image preview: aspect ratio, HEIC, dimensions and image-byte size; cached scaling) is COMPLETED! All Rust unit tests, 43 Swift integration test suites, and the native arm64 Xcode build pass cleanly.
+* **Next Task:** P6-05 (OCR service: Vision recognition on background queue, automatic language detection where supported. DoD: synthetic test image in 2 languages indexed; clean cancellation. `T-OCR-01`, `F-043`).

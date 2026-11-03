@@ -6,6 +6,7 @@
 // ==============================================================================
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 public struct FloatingPanelView: View {
@@ -88,13 +89,73 @@ public struct FloatingPanelView: View {
                         ScrollView {
                             LazyVStack(spacing: 2) {
                                 ForEach(Array(viewModel.filteredItems.enumerated()), id: \.element.id) { index, item in
+                                    // Section Header for top section when mixed pinned & unpinned items exist (P5-07 / F-036, T-UI-10)
+                                    if index == 0 && viewModel.hasMixedPinnedAndUnpinned {
+                                        if viewModel.pinArrangement == .top && item.isPinned {
+                                            HStack {
+                                                Text("PINNED")
+                                                    .font(.system(size: 9, weight: .bold))
+                                                    .foregroundColor(.secondary.opacity(0.65))
+                                                    .padding(.leading, 8)
+                                                Spacer()
+                                            }
+                                            .padding(.top, 2)
+                                            .padding(.bottom, 2)
+                                        } else if viewModel.pinArrangement == .bottom && !item.isPinned {
+                                            HStack {
+                                                Text("HISTORY")
+                                                    .font(.system(size: 9, weight: .bold))
+                                                    .foregroundColor(.secondary.opacity(0.65))
+                                                    .padding(.leading, 8)
+                                                Spacer()
+                                            }
+                                            .padding(.top, 2)
+                                            .padding(.bottom, 2)
+                                        }
+                                    }
+
                                     PanelItemRow(
                                         item: item,
                                         shortcutIndex: index < 9 ? (index + 1) : nil,
                                         isSelected: index == viewModel.selectedIndex,
-                                        coreClient: viewModel.coreClient
+                                        coreClient: viewModel.coreClient,
+                                        onTogglePin: {
+                                            Task {
+                                                _ = await viewModel.togglePin(for: item)
+                                            }
+                                        },
+                                        onSetPinKey: { newKey in
+                                            Task {
+                                                _ = await viewModel.setPinKey(for: item, key: newKey)
+                                            }
+                                        },
+                                        onMovePinUp: {
+                                            Task {
+                                                _ = await viewModel.movePinUp(item: item)
+                                            }
+                                        },
+                                        onMovePinDown: {
+                                            Task {
+                                                _ = await viewModel.movePinDown(item: item)
+                                            }
+                                        },
+                                        onEditPin: {
+                                            Task {
+                                                await viewModel.startEditing(item: item)
+                                            }
+                                        },
+                                        onCommit: { mode, forcePaste in
+                                            viewModel.selectIndex(index, fromHover: false)
+                                            viewModel.commitSelection(mode: mode, forcePaste: forcePaste)
+                                        },
+                                        onDelete: {
+                                            Task {
+                                                _ = await viewModel.deleteItem(itemId: item.id)
+                                            }
+                                        }
                                     )
                                     .id(item.id)
+                                    .modifier(PinDragAndDropModifier(item: item, viewModel: viewModel))
                                     .onHover { isHovered in
                                         if isHovered {
                                             viewModel.selectIndex(index, fromHover: true)
@@ -103,6 +164,37 @@ public struct FloatingPanelView: View {
                                     .onTapGesture {
                                         viewModel.selectIndex(index, fromHover: false)
                                         viewModel.commitSelection()
+                                    }
+
+                                    // Stable section divider separating pinned items from history (P5-01 / F-036)
+                                    if viewModel.pinArrangement == .top && item.isPinned && (index + 1 < viewModel.filteredItems.count) && !viewModel.filteredItems[index + 1].isPinned {
+                                        HStack {
+                                            Text("HISTORY")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundColor(.secondary.opacity(0.65))
+                                                .padding(.leading, 8)
+                                            Spacer()
+                                        }
+                                        .padding(.top, 4)
+                                        .padding(.bottom, 2)
+                                        Divider()
+                                            .opacity(0.25)
+                                            .padding(.horizontal, 6)
+                                            .padding(.bottom, 2)
+                                    } else if viewModel.pinArrangement == .bottom && !item.isPinned && (index + 1 < viewModel.filteredItems.count) && viewModel.filteredItems[index + 1].isPinned {
+                                        HStack {
+                                            Text("PINNED")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundColor(.secondary.opacity(0.65))
+                                                .padding(.leading, 8)
+                                            Spacer()
+                                        }
+                                        .padding(.top, 4)
+                                        .padding(.bottom, 2)
+                                        Divider()
+                                            .opacity(0.25)
+                                            .padding(.horizontal, 6)
+                                            .padding(.bottom, 2)
                                     }
                                 }
                             }
@@ -143,6 +235,9 @@ public struct FloatingPanelView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+        )
+        .overlay(
+            PinEditorOverlay(viewModel: viewModel)
         )
         .task {
             // Apply persisted sorting & pin arrangement preferences
@@ -209,6 +304,134 @@ struct PanelSearchBar: View {
     }
 }
 
+// MARK: - In-Preview Pin Text Editor Overlay (P5-04 / F-045, T-PIN-02)
+
+struct PinEditorOverlay: View {
+    @ObservedObject var viewModel: PanelViewModel
+    @FocusState private var isTextEditorFocused: Bool
+
+    var body: some View {
+        if let item = viewModel.editingPinItem {
+            ZStack {
+                Color.black.opacity(0.35)
+                    .edgesIgnoringSafeArea(.all)
+                    .onTapGesture {
+                        viewModel.cancelEditing()
+                    }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    // Header
+                    HStack {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(.orange)
+                        Text("Edit Pinned Item")
+                            .font(.system(size: 13, weight: .semibold))
+                        if let pinKey = item.pinKey, !pinKey.isEmpty {
+                            Text("⌥\(pinKey.uppercased())")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.orange)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color.orange.opacity(0.15))
+                                .cornerRadius(3)
+                        }
+                        Spacer()
+                        Button {
+                            viewModel.cancelEditing()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 14))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Cancel editing (Esc)")
+                    }
+
+                    // Text Editor
+                    TextEditor(text: $viewModel.editingPinText)
+                        .font(.system(size: 12, design: .monospaced))
+                        .focused($isTextEditorFocused)
+                        .padding(6)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                        )
+                        .frame(minHeight: 120, maxHeight: 220)
+
+                    // Footer actions
+                    HStack {
+                        Text("\(viewModel.editingPinText.count) characters")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        Button("Cancel") {
+                            viewModel.cancelEditing()
+                        }
+                        .buttonStyle(.bordered)
+                        .keyboardShortcut(.cancelAction)
+
+                        Button("Save Changes") {
+                            Task {
+                                _ = await viewModel.commitEditing()
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(viewModel.editingPinText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+                .padding(14)
+                .background(.ultraThinMaterial)
+                .background(Color(NSColor.windowBackgroundColor).opacity(0.95))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 5)
+                .padding(16)
+                .task {
+                    isTextEditorFocused = true
+                }
+            }
+            .transition(.opacity)
+        }
+    }
+}
+
+// MARK: - Pin Drag and Drop Reordering Modifier (P5-03 / F-046)
+
+struct PinDragAndDropModifier: ViewModifier {
+    let item: HistoryItemSummaryDto
+    @ObservedObject var viewModel: PanelViewModel
+
+    func body(content: Content) -> some View {
+        if item.isPinned {
+            content
+                .onDrag {
+                    NSItemProvider(object: item.id as NSString)
+                }
+                .onDrop(of: [UTType.text], isTargeted: nil) { providers in
+                    guard let provider = providers.first else { return false }
+                    _ = provider.loadObject(ofClass: NSString.self) { string, _ in
+                        if let sourceId = string as? String {
+                            Task { @MainActor in
+                                _ = await viewModel.movePin(sourceId: sourceId, targetId: item.id)
+                            }
+                        }
+                    }
+                    return true
+                }
+        } else {
+            content
+        }
+    }
+}
+
 // MARK: - History Item Row Component
 
 struct PanelItemRow: View {
@@ -216,6 +439,13 @@ struct PanelItemRow: View {
     let shortcutIndex: Int?
     let isSelected: Bool
     var coreClient: CoreClient? = nil
+    var onTogglePin: (() -> Void)? = nil
+    var onSetPinKey: ((String?) -> Void)? = nil
+    var onMovePinUp: (() -> Void)? = nil
+    var onMovePinDown: (() -> Void)? = nil
+    var onEditPin: (() -> Void)? = nil
+    var onCommit: ((PasteMode, Bool?) -> Void)? = nil
+    var onDelete: (() -> Void)? = nil
 
     @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
     @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
@@ -268,9 +498,25 @@ struct PanelItemRow: View {
                     }
 
                     if item.isPinned {
-                        Image(systemName: "pin.fill")
-                            .font(.system(size: 9))
-                            .foregroundColor(.orange)
+                        Button {
+                            onTogglePin?()
+                        } label: {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 9))
+                                .foregroundColor(.orange)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Unpin item (⌥P)")
+                    } else if isHovered {
+                        Button {
+                            onTogglePin?()
+                        } label: {
+                            Image(systemName: "pin")
+                                .font(.system(size: 9))
+                                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Pin item (⌥P)")
                     }
 
                     if item.contentKind == "file_urls" && isFileVanished(path: item.snippet) {
@@ -314,15 +560,26 @@ struct PanelItemRow: View {
                             .help(bundleId)
                     }
 
-                    // Quick-pick shortcut badge (⌘1 - ⌘9)
-                    if let key = shortcutIndex {
-                        Text("⌘\(key)")
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(isSelected ? Color.white.opacity(0.15) : Color.primary.opacity(0.06))
-                            .cornerRadius(4)
+                    // Pinned shortcut badge (⌥KEY) and/or Quick-pick shortcut badge (⌘1 - ⌘9) (P5-05 / F-022)
+                    HStack(spacing: 3) {
+                        if let pinKey = item.pinKey, !pinKey.isEmpty {
+                            Text("⌥\(pinKey.uppercased())")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundColor(isSelected ? .white.opacity(0.9) : .orange)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(isSelected ? Color.white.opacity(0.18) : Color.orange.opacity(0.12))
+                                .cornerRadius(4)
+                        }
+                        if let key = shortcutIndex {
+                            Text("⌘\(key)")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(isSelected ? Color.white.opacity(0.15) : Color.primary.opacity(0.06))
+                                .cornerRadius(4)
+                        }
                     }
                 }
 
@@ -347,6 +604,48 @@ struct PanelItemRow: View {
         .contentShape(Rectangle())
         .onHover { hovering in
             self.isHovered = hovering
+        }
+        .contextMenu {
+            Button(item.isPinned ? "Unpin Item (⌥P)" : "Pin Item (⌥P)") {
+                onTogglePin?()
+            }
+            if item.isPinned, let key = item.pinKey, !key.isEmpty {
+                Button("Remove Shortcut (⌥\(key.uppercased()))") {
+                    onSetPinKey?(nil)
+                }
+            }
+            if item.isPinned {
+                Divider()
+                Button("Edit Pin Content... (⌘E)") {
+                    onEditPin?()
+                }
+                Button("Move Pin Up (⌥⌘↑)") {
+                    onMovePinUp?()
+                }
+                Button("Move Pin Down (⌥⌘↓)") {
+                    onMovePinDown?()
+                }
+            }
+            Divider()
+            Button("Copy to Clipboard") {
+                onCommit?(.original, false)
+            }
+            Button("Paste as Plain Text (⇧↵)") {
+                onCommit?(.plainText, nil)
+            }
+            Divider()
+            Button("Delete Item (⌥⌫)", role: .destructive) {
+                onDelete?()
+            }
+        }
+        .accessibilityAction(named: "Edit Pin Content") {
+            onEditPin?()
+        }
+        .accessibilityAction(named: "Move Pin Up") {
+            onMovePinUp?()
+        }
+        .accessibilityAction(named: "Move Pin Down") {
+            onMovePinDown?()
         }
     }
 

@@ -30,7 +30,13 @@ public final class PanelViewModel: ObservableObject {
         }
     }
     @Published public var items: [HistoryItemSummaryDto] = []
-    @Published public var selectedIndex: Int = 0
+    @Published public var selectedIndex: Int = 0 {
+        didSet {
+            if oldValue != selectedIndex {
+                onSelectionChanged?(selectedItem)
+            }
+        }
+    }
     @Published public var selectedItemId: String?
     @Published public var isLoading: Bool = false
     @Published public var stats: StorageStatsDto?
@@ -43,6 +49,11 @@ public final class PanelViewModel: ObservableObject {
         }
     }
     @Published public var regexErrorMessage: String?
+
+    /// Currently active item being edited in preview, or nil if no item is being edited (P5-04 / F-045).
+    @Published public var editingPinItem: HistoryItemSummaryDto? = nil
+    /// Working text for active pin editing.
+    @Published public var editingPinText: String = ""
 
     /// Active sort mode for history items (recency, copy count, or first copied).
     @Published public var sortMode: HistorySortMode = .recency
@@ -62,6 +73,7 @@ public final class PanelViewModel: ObservableObject {
     public var onCommitItem: ((HistoryItemSummaryDto, PasteMode, Bool?) -> Void)?
     public var onDismiss: (() -> Void)?
     public var onOpenSettings: (() -> Void)?
+    public var onSelectionChanged: ((HistoryItemSummaryDto?) -> Void)?
 
     public init(coreClient: CoreClient) {
         self.coreClient = coreClient
@@ -77,6 +89,21 @@ public final class PanelViewModel: ObservableObject {
             item.title.lowercased().contains(query) ||
             item.snippet.lowercased().contains(query)
         }
+    }
+
+    /// Returns true if any displayed item is pinned.
+    public var hasPinnedItems: Bool {
+        filteredItems.contains(where: { $0.isPinned })
+    }
+
+    /// Returns true if any displayed item is unpinned.
+    public var hasUnpinnedItems: Bool {
+        filteredItems.contains(where: { !$0.isPinned })
+    }
+
+    /// Returns true if the displayed list contains both pinned and unpinned items (F-036 / T-UI-10).
+    public var hasMixedPinnedAndUnpinned: Bool {
+        hasPinnedItems && hasUnpinnedItems
     }
 
     /// Currently highlighted item in the filtered list.
@@ -179,15 +206,18 @@ public final class PanelViewModel: ObservableObject {
     }
 
     /// Quick-pick shortcut selection (1-9).
-    public func quickPick(number: Int, mode: PasteMode = .original, forcePaste: Bool? = nil) {
-        guard number >= 1 && number <= 9 else { return }
+    /// Maps directly to the visible filtered order (Definition of Done: P5-05 / F-022, T-KEY-01).
+    /// Returns true if an item was successfully picked and committed, false if out of bounds or invalid.
+    @discardableResult
+    public func quickPick(number: Int, mode: PasteMode = .original, forcePaste: Bool? = nil) -> Bool {
+        guard number >= 1 && number <= 9 else { return false }
         let targetIndex = number - 1
         let list = filteredItems
-        if targetIndex < list.count {
-            selectedIndex = targetIndex
-            selectedItemId = list[targetIndex].id
-            commitSelection(mode: mode, forcePaste: forcePaste)
-        }
+        guard targetIndex < list.count else { return false }
+        selectedIndex = targetIndex
+        selectedItemId = list[targetIndex].id
+        commitSelection(mode: mode, forcePaste: forcePaste)
+        return true
     }
 
     /// Commits the currently selected item (triggers paste or copy action).
@@ -201,6 +231,252 @@ public final class PanelViewModel: ObservableObject {
     public func deleteSelectedItem() async -> Bool {
         guard let item = selectedItem else { return false }
         return await deleteItem(itemId: item.id)
+    }
+
+    /// Toggles the pin status of the currently selected item while preserving selection stability (P5-01 / F-020, F-024).
+    public func togglePinSelectedItem() async -> Bool {
+        guard let item = selectedItem else { return false }
+        return await togglePin(for: item)
+    }
+
+    /// Toggles the pin status for an item while preserving selection stability (P5-01 / F-020, F-024).
+    public func togglePin(for item: HistoryItemSummaryDto) async -> Bool {
+        do {
+            _ = try await coreClient.togglePin(itemId: item.id)
+
+            // Refresh items list while preserving selection on item.id
+            let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                let loaded = try await coreClient.listPageWithSort(
+                    sortMode: self.sortMode,
+                    pinArrangement: self.pinArrangement,
+                    limit: 100,
+                    offset: 0
+                )
+                applyItemsPreservingSelection(loaded)
+            } else {
+                let effectiveMode = searchMode == .fuzzy && (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") && trimmed.count >= 2)
+                    ? SearchMode.exact
+                    : searchMode
+                let results = try await coreClient.searchPageWithOptions(
+                    query: trimmed,
+                    mode: effectiveMode,
+                    sortByRelevance: self.searchByRelevance,
+                    pinArrangement: self.pinArrangement,
+                    limit: 100,
+                    offset: 0
+                )
+                applyItemsPreservingSelection(results)
+            }
+
+            let loadedStats = try await coreClient.getStats()
+            self.stats = loadedStats
+            return true
+        } catch {
+            self.errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Reorders pinned items in SQLite storage according to the given array of UUIDs (P5-03 / F-046, T-PIN-03).
+    public func reorderPins(orderedIds: [String]) async -> Bool {
+        do {
+            try await coreClient.reorderPins(orderedIds: orderedIds)
+
+            // Reload data while preserving active selection
+            let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                let loaded = try await coreClient.listPageWithSort(
+                    sortMode: self.sortMode,
+                    pinArrangement: self.pinArrangement,
+                    limit: 100,
+                    offset: 0
+                )
+                applyItemsPreservingSelection(loaded)
+            } else {
+                let effectiveMode = searchMode == .fuzzy && (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") && trimmed.count >= 2)
+                    ? SearchMode.exact
+                    : searchMode
+                let results = try await coreClient.searchPageWithOptions(
+                    query: trimmed,
+                    mode: effectiveMode,
+                    sortByRelevance: self.searchByRelevance,
+                    pinArrangement: self.pinArrangement,
+                    limit: 100,
+                    offset: 0
+                )
+                applyItemsPreservingSelection(results)
+            }
+            return true
+        } catch {
+            self.errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Moves a pinned item from source ID position to target ID position (Drag & Drop, P5-03 / F-046).
+    public func movePin(sourceId: String, targetId: String) async -> Bool {
+        guard sourceId != targetId else { return true }
+        var pinned = items.filter { $0.isPinned }
+        guard let fromIndex = pinned.firstIndex(where: { $0.id == sourceId }),
+              let toIndex = pinned.firstIndex(where: { $0.id == targetId }) else {
+            return false
+        }
+
+        let movedItem = pinned.remove(at: fromIndex)
+        pinned.insert(movedItem, at: toIndex)
+
+        return await reorderPins(orderedIds: pinned.map { $0.id })
+    }
+
+    /// Moves the currently selected pinned item UP one position (Keyboard ⌥⌘↑ alternative, P5-03 / F-046).
+    public func moveSelectedPinUp() async -> Bool {
+        guard let item = selectedItem, item.isPinned else { return false }
+        return await movePinUp(item: item)
+    }
+
+    /// Moves the currently selected pinned item DOWN one position (Keyboard ⌥⌘↓ alternative, P5-03 / F-046).
+    public func moveSelectedPinDown() async -> Bool {
+        guard let item = selectedItem, item.isPinned else { return false }
+        return await movePinDown(item: item)
+    }
+
+    /// Moves a specific pinned item UP one position among pinned items (P5-03 / F-046).
+    public func movePinUp(item: HistoryItemSummaryDto) async -> Bool {
+        guard item.isPinned else { return false }
+        var pinned = items.filter { $0.isPinned }
+        guard let currentIndex = pinned.firstIndex(where: { $0.id == item.id }), currentIndex > 0 else {
+            return false
+        }
+
+        pinned.swapAt(currentIndex, currentIndex - 1)
+        return await reorderPins(orderedIds: pinned.map { $0.id })
+    }
+
+    /// Moves a specific pinned item DOWN one position among pinned items (P5-03 / F-046).
+    public func movePinDown(item: HistoryItemSummaryDto) async -> Bool {
+        guard item.isPinned else { return false }
+        var pinned = items.filter { $0.isPinned }
+        guard let currentIndex = pinned.firstIndex(where: { $0.id == item.id }), currentIndex < pinned.count - 1 else {
+            return false
+        }
+
+        pinned.swapAt(currentIndex, currentIndex + 1)
+        return await reorderPins(orderedIds: pinned.map { $0.id })
+    }
+
+    /// Sets or removes a custom pin shortcut key for an item (P5-02 / F-024, T-PIN-01).
+    /// Enforces single-character punctuation/symbol/alphanumeric rules and detects conflicts.
+    public func setPinKey(for item: HistoryItemSummaryDto, key: String?) async -> Bool {
+        do {
+            try await coreClient.setPin(
+                itemId: item.id,
+                isPinned: true,
+                pinKey: key,
+                pinOrder: item.pinOrder
+            )
+
+            // Refresh items list while preserving active selection
+            let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                let loaded = try await coreClient.listPageWithSort(
+                    sortMode: self.sortMode,
+                    pinArrangement: self.pinArrangement,
+                    limit: 100,
+                    offset: 0
+                )
+                applyItemsPreservingSelection(loaded)
+            } else {
+                let effectiveMode = searchMode == .fuzzy && (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") && trimmed.count >= 2)
+                    ? SearchMode.exact
+                    : searchMode
+                let results = try await coreClient.searchPageWithOptions(
+                    query: trimmed,
+                    mode: effectiveMode,
+                    sortByRelevance: self.searchByRelevance,
+                    pinArrangement: self.pinArrangement,
+                    limit: 100,
+                    offset: 0
+                )
+                applyItemsPreservingSelection(results)
+            }
+            return true
+        } catch {
+            self.errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Prepares a pinned item for editing by fetching its full plain-text payload (P5-04 / F-045, T-PIN-02).
+    public func startEditing(item: HistoryItemSummaryDto) async {
+        guard item.isPinned else { return }
+        if let payloadData = try? await coreClient.fetchPayload(itemId: item.id, uti: "public.utf8-plain-text"),
+           let fullText = String(data: payloadData, encoding: .utf8) {
+            self.editingPinText = fullText
+        } else {
+            self.editingPinText = item.snippet.isEmpty ? item.title : item.snippet
+        }
+        self.editingPinItem = item
+    }
+
+    /// Cancels active pin editing without saving changes.
+    public func cancelEditing() {
+        self.editingPinItem = nil
+        self.editingPinText = ""
+    }
+
+    /// Commits the edited pin text to SQLite storage and FTS5 search index (P5-04 / F-045, T-PIN-02).
+    public func commitEditing() async -> Bool {
+        guard let item = editingPinItem else { return false }
+        let trimmed = editingPinText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            self.errorMessage = "Pinned item text cannot be empty."
+            return false
+        }
+
+        let success = await editPinText(item: item, newText: trimmed)
+        if success {
+            self.editingPinItem = nil
+            self.editingPinText = ""
+        }
+        return success
+    }
+
+    /// Edits the text content of a pinned item in SQLite storage and updates live search views (P5-04 / F-045, T-PIN-02).
+    public func editPinText(item: HistoryItemSummaryDto, newText: String) async -> Bool {
+        guard item.isPinned else { return false }
+        do {
+            _ = try await coreClient.editPinnedItemText(itemId: item.id, newText: newText)
+
+            // Refresh items list to re-query with new content and updated FTS index
+            let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                let loaded = try await coreClient.listPageWithSort(
+                    sortMode: self.sortMode,
+                    pinArrangement: self.pinArrangement,
+                    limit: 100,
+                    offset: 0
+                )
+                applyItemsPreservingSelection(loaded)
+            } else {
+                let effectiveMode = searchMode == .fuzzy && (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") && trimmed.count >= 2)
+                    ? SearchMode.exact
+                    : searchMode
+                let results = try await coreClient.searchPageWithOptions(
+                    query: trimmed,
+                    mode: effectiveMode,
+                    sortByRelevance: self.searchByRelevance,
+                    pinArrangement: self.pinArrangement,
+                    limit: 100,
+                    offset: 0
+                )
+                applyItemsPreservingSelection(results)
+            }
+            return true
+        } catch {
+            self.errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     /// Deletes an item by UUID from SQLite storage while maintaining selection stability (T-KEY-03).

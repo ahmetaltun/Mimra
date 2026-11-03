@@ -17,11 +17,12 @@ pub use recovery::{
     quarantine_corrupted_database, restore_database_from_backup,
 };
 pub use repository::{
-    clear_all_history, clear_unpinned_history, delete_item_by_id, enforce_retention_limit,
-    enforce_retention_policy, fetch_payload, find_by_content_hash, find_by_id, get_storage_stats,
-    ingest_clipboard_item, ingest_clipboard_item_with_policy, insert_item, list_history_page,
-    list_history_page_with_options, load_representations, query_available_utis, set_pin_status,
-    update_recopy, update_recopy_and_merge, HistoryItemSummary, IngestOutcome, StorageStats,
+    clear_all_history, clear_unpinned_history, delete_item_by_id, edit_pinned_item_text,
+    enforce_retention_limit, enforce_retention_policy, fetch_payload, find_by_content_hash,
+    find_by_id, get_storage_stats, ingest_clipboard_item, ingest_clipboard_item_with_policy,
+    insert_item, list_history_page, list_history_page_with_options, load_representations,
+    query_available_utis, reorder_pins, set_pin_status, toggle_pin_status, update_recopy,
+    update_recopy_and_merge, validate_pin_key, HistoryItemSummary, IngestOutcome, StorageStats,
 };
 pub use search::{
     rebuild_search_index, sanitize_fts5_query, search_history_page,
@@ -882,6 +883,224 @@ fn test_list_history_page_ordering_and_pins() {
 }
 
 #[test]
+fn test_toggle_pin_status_and_pin_key_uniqueness() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    let rep1 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Item 1 Content".to_vec()).unwrap();
+    let item1 = HistoryItem::new(vec![rep1], None, 1000).unwrap();
+    let id1 = item1.id;
+    ingest_clipboard_item(&mut conn, item1, 200).unwrap();
+
+    let rep2 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Item 2 Content".to_vec()).unwrap();
+    let item2 = HistoryItem::new(vec![rep2], None, 2000).unwrap();
+    let id2 = item2.id;
+    ingest_clipboard_item(&mut conn, item2, 200).unwrap();
+
+    // 1. Initial state: both unpinned
+    assert!(!find_by_id(&conn, &id1).unwrap().unwrap().is_pinned);
+    assert!(!find_by_id(&conn, &id2).unwrap().unwrap().is_pinned);
+
+    // 2. Toggle pin on Item 1 -> becomes pinned with pin_order = 0
+    let pinned1 = toggle_pin_status(&conn, &id1).unwrap();
+    assert!(pinned1);
+    let queried1 = find_by_id(&conn, &id1).unwrap().unwrap();
+    assert!(queried1.is_pinned);
+    assert_eq!(queried1.pin_order, Some(0));
+
+    // 3. Toggle pin on Item 2 -> becomes pinned with pin_order = 1
+    let pinned2 = toggle_pin_status(&conn, &id2).unwrap();
+    assert!(pinned2);
+    let queried2 = find_by_id(&conn, &id2).unwrap().unwrap();
+    assert!(queried2.is_pinned);
+    assert_eq!(queried2.pin_order, Some(1));
+
+    // 4. Test unique pin_key constraint
+    set_pin_status(&conn, &id1, true, Some("1".to_string()), Some(0)).unwrap();
+    let duplicate_key_res = set_pin_status(&conn, &id2, true, Some("1".to_string()), Some(1));
+    assert!(
+        duplicate_key_res.is_err(),
+        "Assigning duplicate pin_key must violate unique constraint"
+    );
+
+    // 5. Unpin Item 1 -> cleans up pin_key and pin_order
+    let unpinned1 = toggle_pin_status(&conn, &id1).unwrap();
+    assert!(!unpinned1);
+    let queried1_unpinned = find_by_id(&conn, &id1).unwrap().unwrap();
+    assert!(!queried1_unpinned.is_pinned);
+    assert_eq!(queried1_unpinned.pin_order, None);
+    assert_eq!(queried1_unpinned.pin_key, None);
+
+    // 6. Now assigning "1" to Item 2 succeeds because Item 1 released it
+    set_pin_status(&conn, &id2, true, Some("1".to_string()), Some(1)).unwrap();
+    let queried2_updated = find_by_id(&conn, &id2).unwrap().unwrap();
+    assert_eq!(queried2_updated.pin_key, Some("1".to_string()));
+}
+
+#[test]
+fn test_pin_key_punctuation_and_reserved_conflicts() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+    use crate::error::CoreError;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    let rep1 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Punctuation Pin".to_vec()).unwrap();
+    let item1 = HistoryItem::new(vec![rep1], None, 1000).unwrap();
+    let id1 = item1.id;
+    ingest_clipboard_item(&mut conn, item1, 200).unwrap();
+
+    let rep2 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Conflict Pin".to_vec()).unwrap();
+    let item2 = HistoryItem::new(vec![rep2], None, 2000).unwrap();
+    let id2 = item2.id;
+    ingest_clipboard_item(&mut conn, item2, 200).unwrap();
+
+    // 1. Reserved Key 'p' / 'P' rejection (Option-P toggle collision safeguard)
+    let p_res = set_pin_status(&conn, &id1, true, Some("p".to_string()), Some(0));
+    assert!(matches!(p_res, Err(CoreError::PinKeyConflict { .. })));
+    let p_upper_res = set_pin_status(&conn, &id1, true, Some("P".to_string()), Some(0));
+    assert!(matches!(p_upper_res, Err(CoreError::PinKeyConflict { .. })));
+
+    // 2. Invalid inputs: empty string, whitespace, multi-character
+    assert!(matches!(
+        set_pin_status(&conn, &id1, true, Some("".to_string()), Some(0)),
+        Err(CoreError::InvalidInput { .. })
+    ));
+    assert!(matches!(
+        set_pin_status(&conn, &id1, true, Some("   ".to_string()), Some(0)),
+        Err(CoreError::InvalidInput { .. })
+    ));
+    assert!(matches!(
+        set_pin_status(&conn, &id1, true, Some("ab".to_string()), Some(0)),
+        Err(CoreError::InvalidInput { .. })
+    ));
+
+    // 3. DoD Punctuation test corpus: [];'./-=\
+    let punctuation_corpus = vec!["[", "]", ";", "'", ".", "/", "-", "=", "\\"];
+    for (idx, &punct) in punctuation_corpus.iter().enumerate() {
+        let valid = validate_pin_key(punct).expect("Punctuation key must be valid");
+        assert_eq!(valid, punct);
+
+        set_pin_status(&conn, &id1, true, Some(punct.to_string()), Some(idx as u32))
+            .expect("Assigning punctuation key must succeed");
+
+        let saved = find_by_id(&conn, &id1).unwrap().unwrap();
+        assert_eq!(saved.pin_key, Some(punct.to_string()));
+    }
+
+    // 4. Non-US keyboard layout test corpus: German, French, Spanish, Nordic, Turkish
+    let non_us_corpus = vec!["ä", "ö", "ü", "ß", "é", "è", "ç", "ñ", "å", "ş"];
+    for (idx, &non_us_char) in non_us_corpus.iter().enumerate() {
+        let valid = validate_pin_key(non_us_char).expect("Non-US key must be valid");
+        assert_eq!(valid, non_us_char.to_lowercase());
+
+        set_pin_status(
+            &conn,
+            &id1,
+            true,
+            Some(non_us_char.to_string()),
+            Some(idx as u32),
+        )
+        .expect("Assigning non-US key must succeed");
+
+        let saved = find_by_id(&conn, &id1).unwrap().unwrap();
+        assert_eq!(saved.pin_key, Some(non_us_char.to_lowercase()));
+    }
+
+    // 5. Case-insensitive collision detection
+    set_pin_status(&conn, &id1, true, Some(";".to_string()), Some(0)).unwrap();
+    let conflict_res = set_pin_status(&conn, &id2, true, Some(";".to_string()), Some(1));
+    assert!(matches!(
+        conflict_res,
+        Err(CoreError::PinKeyConflict { key, .. }) if key == ";"
+    ));
+
+    set_pin_status(&conn, &id1, true, Some("k".to_string()), Some(0)).unwrap();
+    let case_conflict = set_pin_status(&conn, &id2, true, Some("K".to_string()), Some(1));
+    assert!(matches!(
+        case_conflict,
+        Err(CoreError::PinKeyConflict { key, .. }) if key == "k"
+    ));
+}
+
+#[test]
+fn test_reorder_pins_persistence_and_shortcuts() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+    use crate::error::CoreError;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    // 1. Ingest 3 pinned items with custom shortcuts
+    let rep1 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Pin One".to_vec()).unwrap();
+    let mut item1 = HistoryItem::new(vec![rep1], None, 1000).unwrap();
+    item1.is_pinned = true;
+    item1.pin_order = Some(0);
+    item1.pin_key = Some("1".to_string());
+    let id1 = item1.id;
+    ingest_clipboard_item(&mut conn, item1, 200).unwrap();
+
+    let rep2 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Pin Two".to_vec()).unwrap();
+    let mut item2 = HistoryItem::new(vec![rep2], None, 2000).unwrap();
+    item2.is_pinned = true;
+    item2.pin_order = Some(1);
+    item2.pin_key = Some("2".to_string());
+    let id2 = item2.id;
+    ingest_clipboard_item(&mut conn, item2, 200).unwrap();
+
+    let rep3 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Pin Three".to_vec()).unwrap();
+    let mut item3 = HistoryItem::new(vec![rep3], None, 3000).unwrap();
+    item3.is_pinned = true;
+    item3.pin_order = Some(2);
+    item3.pin_key = Some("3".to_string());
+    let id3 = item3.id;
+    ingest_clipboard_item(&mut conn, item3, 200).unwrap();
+
+    // Ingest 1 unpinned item
+    let rep_unpinned =
+        Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Unpinned Item".to_vec()).unwrap();
+    let item_unpinned = HistoryItem::new(vec![rep_unpinned], None, 4000).unwrap();
+    let unpinned_id = item_unpinned.id;
+    ingest_clipboard_item(&mut conn, item_unpinned, 200).unwrap();
+
+    // Verify initial ordering: Pin One, Pin Two, Pin Three
+    let initial_page = list_history_page(&conn, 10, 0).unwrap();
+    assert_eq!(initial_page[0].title, "Pin One");
+    assert_eq!(initial_page[1].title, "Pin Two");
+    assert_eq!(initial_page[2].title, "Pin Three");
+
+    // 2. Reorder pins: reversed order [id3, id1, id2]
+    reorder_pins(&mut conn, &[id3, id1, id2]).expect("Reordering pins must succeed");
+
+    let reordered_page = list_history_page(&conn, 10, 0).unwrap();
+    assert_eq!(reordered_page[0].id, id3);
+    assert_eq!(reordered_page[0].pin_order, Some(0));
+    assert_eq!(reordered_page[0].pin_key, Some("3".to_string()));
+
+    assert_eq!(reordered_page[1].id, id1);
+    assert_eq!(reordered_page[1].pin_order, Some(1));
+    assert_eq!(reordered_page[1].pin_key, Some("1".to_string()));
+
+    assert_eq!(reordered_page[2].id, id2);
+    assert_eq!(reordered_page[2].pin_order, Some(2));
+    assert_eq!(reordered_page[2].pin_key, Some("2".to_string()));
+
+    // 3. Error case: attempting to include unpinned item in reorder
+    let invalid_res = reorder_pins(&mut conn, &[id3, unpinned_id]);
+    assert!(matches!(invalid_res, Err(CoreError::InvalidInput { .. })));
+
+    // 4. Error case: attempting to pass non-existent item
+    let random_id = uuid::Uuid::new_v4();
+    let not_found_res = reorder_pins(&mut conn, &[random_id]);
+    assert!(matches!(not_found_res, Err(CoreError::ItemNotFound { .. })));
+}
+
+#[test]
 fn test_list_history_page_sorting_and_pin_arrangements() {
     use crate::domain::content::{uti, Representation};
     use crate::domain::dto::{HistorySortMode, PinArrangement};
@@ -1347,6 +1566,136 @@ fn test_transaction_kill_and_rollback_zero_orphan_records() {
     assert_eq!(count, 0, "Aborted transaction must leave zero rows");
 
     // Verify FTS5 and FK integrity pass
+    verify_database_integrity(&conn).unwrap();
+    verify_search_index_integrity(&conn).unwrap();
+}
+
+#[test]
+fn test_edit_pinned_item_text_preserves_metadata_and_updates_fts() {
+    use crate::domain::content::Representation;
+    use crate::domain::item::HistoryItem;
+    use crate::error::CoreError;
+    use uuid::Uuid;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    let rep1 = Representation::new(
+        0,
+        crate::domain::content::uti::UTF8_PLAIN_TEXT,
+        b"Initial Pinned Text Content".to_vec(),
+    )
+    .unwrap();
+    let rep2 =
+        Representation::new(0, "org.nspasteboard.source", b"com.apple.Safari".to_vec()).unwrap();
+
+    let item =
+        HistoryItem::new(vec![rep1, rep2], Some("com.apple.Safari".to_string()), 1000).unwrap();
+    let item_id = item.id;
+    ingest_clipboard_item(&mut conn, item, 100).unwrap();
+
+    // Pin item with shortcut 'k' and pin_order 0
+    set_pin_status(&conn, &item_id, true, Some("k".to_string()), Some(0)).unwrap();
+
+    // Verify initial search matches "Initial"
+    let initial_search = search_history_page(
+        &conn,
+        "Initial",
+        crate::domain::search::SearchMode::Exact,
+        10,
+        0,
+    )
+    .unwrap();
+    assert_eq!(initial_search.len(), 1);
+    assert_eq!(initial_search[0].id, item_id);
+
+    // Edit pinned item text
+    let updated_summary =
+        edit_pinned_item_text(&mut conn, &item_id, "Revised Secret Pinned Content").unwrap();
+
+    assert_eq!(updated_summary.id, item_id);
+    assert_eq!(updated_summary.title, "Revised Secret Pinned Content");
+    assert!(updated_summary.is_pinned);
+    assert_eq!(updated_summary.pin_order, Some(0));
+    assert_eq!(updated_summary.pin_key, Some("k".to_string()));
+    assert_eq!(
+        updated_summary.source_bundle_id,
+        Some("com.apple.Safari".to_string())
+    );
+
+    // Verify payload was updated
+    let payload = fetch_payload(
+        &conn,
+        &item_id,
+        crate::domain::content::uti::UTF8_PLAIN_TEXT,
+    )
+    .unwrap()
+    .expect("Payload must exist");
+    assert_eq!(
+        String::from_utf8(payload).unwrap(),
+        "Revised Secret Pinned Content"
+    );
+
+    // Verify unrelated representation (org.nspasteboard.source) was preserved
+    let source_rep_payload = fetch_payload(&conn, &item_id, "org.nspasteboard.source")
+        .unwrap()
+        .expect("Unrelated representation must be preserved");
+    assert_eq!(
+        String::from_utf8(source_rep_payload).unwrap(),
+        "com.apple.Safari"
+    );
+
+    // Verify search index automatically updated: matches "Revised" and "Secret", not "Initial"
+    let new_search = search_history_page(
+        &conn,
+        "Secret",
+        crate::domain::search::SearchMode::Exact,
+        10,
+        0,
+    )
+    .unwrap();
+    assert_eq!(new_search.len(), 1);
+    assert_eq!(new_search[0].id, item_id);
+
+    let old_search = search_history_page(
+        &conn,
+        "Initial",
+        crate::domain::search::SearchMode::Exact,
+        10,
+        0,
+    )
+    .unwrap();
+    assert_eq!(
+        old_search.len(),
+        0,
+        "Old text must no longer be found in FTS"
+    );
+
+    // Negative tests
+    // 1. Empty text rejected
+    let empty_err = edit_pinned_item_text(&mut conn, &item_id, "   ").unwrap_err();
+    assert!(matches!(empty_err, CoreError::InvalidInput { .. }));
+
+    // 2. Unpinned item rejected
+    let unpinned_rep = Representation::new(
+        0,
+        crate::domain::content::uti::UTF8_PLAIN_TEXT,
+        b"Unpinned Item".to_vec(),
+    )
+    .unwrap();
+    let unpinned_item = HistoryItem::new(vec![unpinned_rep], None, 2000).unwrap();
+    let unpinned_id = unpinned_item.id;
+    ingest_clipboard_item(&mut conn, unpinned_item, 100).unwrap();
+
+    let unpinned_err = edit_pinned_item_text(&mut conn, &unpinned_id, "Attempt Edit").unwrap_err();
+    assert!(matches!(unpinned_err, CoreError::InvalidInput { .. }));
+
+    // 3. Non-existent ID rejected
+    let non_existent_id = Uuid::new_v4();
+    let not_found_err =
+        edit_pinned_item_text(&mut conn, &non_existent_id, "Attempt Edit").unwrap_err();
+    assert!(matches!(not_found_err, CoreError::ItemNotFound { .. }));
+
     verify_database_integrity(&conn).unwrap();
     verify_search_index_integrity(&conn).unwrap();
 }

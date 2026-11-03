@@ -39,6 +39,17 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		10000015 /* PanelViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000017 /* PanelViewModel.swift */; };
 		10000016 /* PasteCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000018 /* PasteCoordinator.swift */; };
 		10000017 /* AccessibilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000019 /* AccessibilityService.swift */; };
+		10000018 /* ImageThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000020 /* ImageThumbnailService.swift */; };
+		10000019 /* ColorAndUrlPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000021 /* ColorAndUrlPreview.swift */; };
+		10000020 /* AppIconService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000022 /* AppIconService.swift */; };
+		10000021 /* ClipboardTypeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000023 /* ClipboardTypeConfiguration.swift */; };
+		10000022 /* PreviewBoundsCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000024 /* PreviewBoundsCalculator.swift */; };
+		10000023 /* PreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000025 /* PreviewPanel.swift */; };
+		10000024 /* PreviewContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000026 /* PreviewContainerView.swift */; };
+		10000025 /* PreviewCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000027 /* PreviewCoordinator.swift */; };
+		10000026 /* NativeTextPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000028 /* NativeTextPreviewView.swift */; };
+		10000027 /* ImagePreviewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000029 /* ImagePreviewService.swift */; };
+		10000028 /* ImagePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000030 /* ImagePreviewView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +73,17 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		20000017 /* PanelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelViewModel.swift; sourceTree = "<group>"; };
 		20000018 /* PasteCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteCoordinator.swift; sourceTree = "<group>"; };
 		20000019 /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
+		20000020 /* ImageThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailService.swift; sourceTree = "<group>"; };
+		20000021 /* ColorAndUrlPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorAndUrlPreview.swift; sourceTree = "<group>"; };
+		20000022 /* AppIconService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconService.swift; sourceTree = "<group>"; };
+		20000023 /* ClipboardTypeConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTypeConfiguration.swift; sourceTree = "<group>"; };
+		20000024 /* PreviewBoundsCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewBoundsCalculator.swift; sourceTree = "<group>"; };
+		20000025 /* PreviewPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewPanel.swift; sourceTree = "<group>"; };
+		20000026 /* PreviewContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewContainerView.swift; sourceTree = "<group>"; };
+		20000027 /* PreviewCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewCoordinator.swift; sourceTree = "<group>"; };
+		20000028 /* NativeTextPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTextPreviewView.swift; sourceTree = "<group>"; };
+		20000029 /* ImagePreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreviewService.swift; sourceTree = "<group>"; };
+		20000030 /* ImagePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreviewView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -150,6 +172,9 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				20000016 /* HotkeyManager.swift */,
 				20000018 /* PasteCoordinator.swift */,
 				20000019 /* AccessibilityService.swift */,
+				20000020 /* ImageThumbnailService.swift */,
+				20000022 /* AppIconService.swift */,
+				20000023 /* ClipboardTypeConfiguration.swift */,
 			);
 			path = macOS;
 			sourceTree = "<group>";
@@ -160,6 +185,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				40000009 /* Settings */,
 				40000011 /* History */,
 				40000012 /* Panel */,
+				40000013 /* Preview */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -186,8 +212,23 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				20000014 /* FloatingPanel.swift */,
 				20000015 /* FloatingPanelView.swift */,
 				20000017 /* PanelViewModel.swift */,
+				20000021 /* ColorAndUrlPreview.swift */,
 			);
 			path = Panel;
+			sourceTree = "<group>";
+		};
+		40000013 /* Preview */ = {
+			isa = PBXGroup;
+			children = (
+				20000024 /* PreviewBoundsCalculator.swift */,
+				20000025 /* PreviewPanel.swift */,
+				20000026 /* PreviewContainerView.swift */,
+				20000027 /* PreviewCoordinator.swift */,
+				20000028 /* NativeTextPreviewView.swift */,
+				20000029 /* ImagePreviewService.swift */,
+				20000030 /* ImagePreviewView.swift */,
+			);
+			path = Preview;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -258,6 +299,17 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				10000015 /* PanelViewModel.swift in Sources */,
 				10000016 /* PasteCoordinator.swift in Sources */,
 				10000017 /* AccessibilityService.swift in Sources */,
+				10000018 /* ImageThumbnailService.swift in Sources */,
+				10000019 /* ColorAndUrlPreview.swift in Sources */,
+				10000020 /* AppIconService.swift in Sources */,
+				10000021 /* ClipboardTypeConfiguration.swift in Sources */,
+				10000022 /* PreviewBoundsCalculator.swift in Sources */,
+				10000023 /* PreviewPanel.swift in Sources */,
+				10000024 /* PreviewContainerView.swift in Sources */,
+				10000025 /* PreviewCoordinator.swift in Sources */,
+				10000026 /* NativeTextPreviewView.swift in Sources */,
+				10000027 /* ImagePreviewService.swift in Sources */,
+				10000028 /* ImagePreviewView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

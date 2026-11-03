@@ -409,9 +409,14 @@ public struct SettingsView: View {
     @StateObject private var storageViewModel: StorageSettingsViewModel
 
     @AppStorage("pasteAutomatically") private var pasteAutomatically: Bool = true
+    @AppStorage("cycleModeEnabled") private var cycleModeEnabled: Bool = true
     @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
     @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
     @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
+
+    // Slideout Preview preferences (P6-02 / F-040, T-PREV-02)
+    @AppStorage("previewAutoOpenEnabled") private var previewAutoOpenEnabled: Bool = false
+    @AppStorage("previewDelayMs") private var previewDelayMs: Int = 400
 
     // Search and sorting preferences (P4-04 / F-019, F-024, F-050, F-054)
     @AppStorage("searchHighlightStyle") private var searchHighlightStyleRaw: String = SearchHighlightStyle.bold.rawValue
@@ -465,6 +470,13 @@ public struct SettingsView: View {
                     }
                 }
 
+                Section("Summon & Keyboard Cycling") {
+                    Toggle("Cycle through history with summon key", isOn: $cycleModeEnabled)
+                    Text("Hold the summon shortcut modifier and press the summon key again to cycle through items. Releasing the modifier commits the selection (Quick Switcher).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Engine Core") {
                     LabeledContent("RustCore Engine", value: "v\(engineVersion)")
                     LabeledContent("Deduplication", value: "BLAKE3 Cryptographic Hashing")
@@ -481,6 +493,23 @@ public struct SettingsView: View {
                     Toggle("Show HEX color swatch", isOn: $showColorSwatches)
                     Toggle("Show URL domain badges", isOn: $showUrlPreviews)
                     Toggle("Show source application icon", isOn: $showSourceAppIcon)
+                }
+
+                Section("Slideout Preview") {
+                    Toggle("Open preview automatically on selection", isOn: $previewAutoOpenEnabled)
+
+                    if previewAutoOpenEnabled {
+                        Picker("Auto-Open Delay", selection: $previewDelayMs) {
+                            Text("Fast (200 ms)").tag(200)
+                            Text("Normal (400 ms)").tag(400)
+                            Text("Relaxed (600 ms)").tag(600)
+                            Text("Slow (1000 ms)").tag(1000)
+                        }
+                    }
+
+                    Text("Toggle manually anytime inside history using ⌃Space (Control-Space). Shortcut is strictly local to the history window and never registered globally.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Information") {

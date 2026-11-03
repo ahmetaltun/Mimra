@@ -241,6 +241,27 @@ public actor CoreClient {
         try handle.setPin(itemId: itemId, isPinned: isPinned, pinKey: pinKey, pinOrder: pinOrder)
     }
 
+    /// Atomically reorders pinned items according to the given list of UUID strings (P5-03 / F-046, T-PIN-03).
+    public func reorderPins(orderedIds: [String]) throws {
+        try handle.reorderPins(orderedIds: orderedIds)
+    }
+
+    /// Edits the text content of an existing pinned item, updating its representations and FTS index (P5-04 / F-045, T-PIN-02).
+    public func editPinnedItemText(itemId: String, newText: String) throws -> HistoryItemSummaryDto {
+        return try handle.editPinnedItemText(itemId: itemId, newText: newText)
+    }
+
+    /// Toggles the pin state of an item atomically.
+    /// Returns true if the item is now pinned, false if unpinned.
+    public func togglePin(itemId: String) throws -> Bool {
+        return try handle.togglePin(itemId: itemId)
+    }
+
+    /// Validates and normalizes a candidate pin shortcut key (P5-02 / F-024, T-PIN-01).
+    public func validatePinKey(key: String) throws -> String {
+        return try handle.validatePinKey(key: key)
+    }
+
     /// Sets the maximum number of unpinned items retained before eviction.
     public func setMaxUnpinned(limit: UInt32) {
         handle.setMaxUnpinned(limit: limit)

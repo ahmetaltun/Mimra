@@ -307,6 +307,11 @@ uint64_t uniffi_mimra_core_fn_method_mimracorehandle_clear_unpinned(void*_Nonnul
 int8_t uniffi_mimra_core_fn_method_mimracorehandle_delete_item(void*_Nonnull ptr, RustBuffer item_id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_EDIT_PINNED_ITEM_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_EDIT_PINNED_ITEM_TEXT
+RustBuffer uniffi_mimra_core_fn_method_mimracorehandle_edit_pinned_item_text(void*_Nonnull ptr, RustBuffer item_id, RustBuffer new_text, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_ENFORCE_RETENTION
 #define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_ENFORCE_RETENTION
 RustBuffer uniffi_mimra_core_fn_method_mimracorehandle_enforce_retention(void*_Nonnull ptr, RustBuffer policy, RustCallStatus *_Nonnull out_status
@@ -357,6 +362,11 @@ RustBuffer uniffi_mimra_core_fn_method_mimracorehandle_list_page_with_sort(void*
 void uniffi_mimra_core_fn_method_mimracorehandle_rebuild_search_index(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_REORDER_PINS
+#define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_REORDER_PINS
+void uniffi_mimra_core_fn_method_mimracorehandle_reorder_pins(void*_Nonnull ptr, RustBuffer ordered_ids, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_RESTORE_FROM_BACKUP
 #define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_RESTORE_FROM_BACKUP
 void uniffi_mimra_core_fn_method_mimracorehandle_restore_from_backup(void*_Nonnull ptr, RustBuffer backup_path, RustCallStatus *_Nonnull out_status
@@ -387,9 +397,19 @@ void uniffi_mimra_core_fn_method_mimracorehandle_set_pin(void*_Nonnull ptr, Rust
 void uniffi_mimra_core_fn_method_mimracorehandle_set_retention_policy(void*_Nonnull ptr, RustBuffer policy, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_TOGGLE_PIN
+#define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_TOGGLE_PIN
+int8_t uniffi_mimra_core_fn_method_mimracorehandle_toggle_pin(void*_Nonnull ptr, RustBuffer item_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_VACUUM_DATABASE
 #define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_VACUUM_DATABASE
 void uniffi_mimra_core_fn_method_mimracorehandle_vacuum_database(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_VALIDATE_PIN_KEY
+#define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_VALIDATE_PIN_KEY
+RustBuffer uniffi_mimra_core_fn_method_mimracorehandle_validate_pin_key(void*_Nonnull ptr, RustBuffer key, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_VERIFY_INTEGRITY
@@ -747,6 +767,12 @@ uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_delete_item(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_EDIT_PINNED_ITEM_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_EDIT_PINNED_ITEM_TEXT
+uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_edit_pinned_item_text(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_ENFORCE_RETENTION
 #define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_ENFORCE_RETENTION
 uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_enforce_retention(void
@@ -807,6 +833,12 @@ uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_rebuild_search_index(
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_REORDER_PINS
+#define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_REORDER_PINS
+uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_reorder_pins(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_RESTORE_FROM_BACKUP
 #define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_RESTORE_FROM_BACKUP
 uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_restore_from_backup(void
@@ -843,9 +875,21 @@ uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_set_retention_policy(
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_TOGGLE_PIN
+#define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_TOGGLE_PIN
+uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_toggle_pin(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_VACUUM_DATABASE
 #define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_VACUUM_DATABASE
 uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_vacuum_database(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_VALIDATE_PIN_KEY
+#define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_VALIDATE_PIN_KEY
+uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_validate_pin_key(void
     
 );
 #endif

@@ -11,6 +11,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+PREVIEW_SOURCES=(
+    "$PROJECT_ROOT/Mimra/UI/Preview/PreviewBoundsCalculator.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/PreviewPanel.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/NativeTextPreviewView.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/ImagePreviewService.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/ImagePreviewView.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/PreviewContainerView.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/PreviewCoordinator.swift"
+)
+
 echo "=== 1. Validating Environment ==="
 "$PROJECT_ROOT/scripts/check-env.sh"
 
@@ -122,6 +132,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "${PREVIEW_SOURCES[@]}" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
     "$PROJECT_ROOT/tests/panel_tests.swift" \
     -o /tmp/mimra_panel_test_runner
@@ -157,6 +168,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "${PREVIEW_SOURCES[@]}" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Settings/SettingsView.swift" \
     "$PROJECT_ROOT/Mimra/macOS/StatusBarCoordinator.swift" \
@@ -185,6 +197,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "${PREVIEW_SOURCES[@]}" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
     "$PROJECT_ROOT/tests/search_interaction_tests.swift" \
     -o /tmp/mimra_search_test_runner
@@ -230,6 +243,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "${PREVIEW_SOURCES[@]}" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
     "$PROJECT_ROOT/tests/auto_paste_tests.swift" \
     -o /tmp/mimra_auto_paste_test_runner
@@ -276,6 +290,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "${PREVIEW_SOURCES[@]}" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
     "$PROJECT_ROOT/tests/plain_paste_tests.swift" \
     -o /tmp/mimra_plain_paste_test_runner
@@ -611,7 +626,308 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 /tmp/mimra_failure_recovery_test_runner
 rm -f /tmp/mimra_failure_recovery_test_runner
 
-echo -e "\n=== 33. Building Native macOS App (Mimra.app) via Xcode ==="
+echo -e "\n=== 33. Running Pinning & Keyboard Operations Tests (P5-01 / F-020, F-024, F-053, T-PIN-01, T-HIST-03) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/pin_tests.swift" \
+    -o /tmp/mimra_pin_test_runner
+
+/tmp/mimra_pin_test_runner
+rm -f /tmp/mimra_pin_test_runner
+
+echo -e "\n=== 34. Running Pin Shortcut Assignment & Punctuation Tests (P5-02 / F-024, T-PIN-01) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/pin_shortcut_assignment_tests.swift" \
+    -o /tmp/mimra_pin_shortcut_test_runner
+
+/tmp/mimra_pin_shortcut_test_runner
+rm -f /tmp/mimra_pin_shortcut_test_runner
+
+echo -e "\n=== 35. Running Pin Reordering & Keyboard Accessibility Tests (P5-03 / F-046, T-PIN-03) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/pin_reorder_tests.swift" \
+    -o /tmp/mimra_pin_reorder_test_runner
+
+/tmp/mimra_pin_reorder_test_runner
+rm -f /tmp/mimra_pin_reorder_test_runner
+
+echo -e "\n=== 36. Running Pin Editing & Reindexing Tests (P5-04 / F-045, T-PIN-02) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/pin_edit_tests.swift" \
+    -o /tmp/mimra_pin_edit_test_runner
+
+/tmp/mimra_pin_edit_test_runner
+rm -f /tmp/mimra_pin_edit_test_runner
+
+echo -e "\n=== 37. Running Quick Pick 1-9 & Modifier Tests (P5-05 / F-022, T-KEY-01) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/quick_pick_tests.swift" \
+    -o /tmp/mimra_quick_pick_test_runner
+
+/tmp/mimra_quick_pick_test_runner
+rm -f /tmp/mimra_quick_pick_test_runner
+
+echo -e "\n=== 38. Running Summon-Key Cycle Mode Tests (P5-06 / F-023, F-031, T-KEY-02, T-KEY-04) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/HotkeyManager.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/cycle_mode_tests.swift" \
+    -o /tmp/mimra_cycle_mode_test_runner
+
+/tmp/mimra_cycle_mode_test_runner
+rm -f /tmp/mimra_cycle_mode_test_runner
+
+echo -e "\n=== 39. Running Navigation Semantics & Delete Stability Tests (P5-07 / F-030, F-036, T-KEY-03, T-UI-10) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/HotkeyManager.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/nav_semantics_tests.swift" \
+    -o /tmp/mimra_nav_semantics_test_runner
+
+/tmp/mimra_nav_semantics_test_runner
+rm -f /tmp/mimra_nav_semantics_test_runner
+
+echo -e "\n=== 40. Running Slideout Preview Panel Tests (P6-01 / F-039, T-PREV-01) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/HotkeyManager.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/preview_panel_tests.swift" \
+    -o /tmp/mimra_preview_panel_test_runner
+
+/tmp/mimra_preview_panel_test_runner
+rm -f /tmp/mimra_preview_panel_test_runner
+
+echo -e "\n=== 41. Running Preview Settings & Auto-Open Tests (P6-02 / F-040, T-PREV-02) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/HotkeyManager.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/preview_settings_tests.swift" \
+    -o /tmp/mimra_preview_settings_test_runner
+
+/tmp/mimra_preview_settings_test_runner
+rm -f /tmp/mimra_preview_settings_test_runner
+
+echo -e "\n=== 42. Running Native Text Preview & 1 MB Buffer Tests (P6-03 / F-041, T-PREV-03) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/HotkeyManager.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/text_preview_tests.swift" \
+    -o /tmp/mimra_text_preview_test_runner
+
+/tmp/mimra_text_preview_test_runner
+rm -f /tmp/mimra_text_preview_test_runner
+
+echo -e "\n=== 43. Running Image Preview & Metadata Tests (P6-04 / F-042, T-PREV-04) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/HotkeyManager.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/image_preview_tests.swift" \
+    -o /tmp/mimra_image_preview_test_runner
+
+/tmp/mimra_image_preview_test_runner
+rm -f /tmp/mimra_image_preview_test_runner
+
+echo -e "\n=== 44. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \
     -scheme Mimra \
