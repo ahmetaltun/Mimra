@@ -40,5 +40,5 @@ main
 .idea/
 .vscode/
 
-# Graphify cache
-graphify-out/cache/
+# Graphify
+graphify-out/
