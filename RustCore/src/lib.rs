@@ -6,6 +6,13 @@ pub mod domain;
 pub mod error;
 pub mod storage;
 
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use uuid::Uuid;
+
+pub use domain::dto::{
+    HistoryItemSummaryDTO, IngestResultDTO, RawCapture, RawRepresentation, StorageStatsDTO,
+};
 pub use domain::{uti, ContentKind, HistoryItem, Representation};
 pub use error::CoreError;
 pub use storage::{
@@ -18,6 +25,174 @@ pub use storage::{
 
 // Setup UniFFI scaffolding for procedural macro bindings
 uniffi::setup_scaffolding!();
+
+/// Core handle managing database state and exposed to Swift via UniFFI.
+#[derive(uniffi::Object)]
+pub struct MimraCoreHandle {
+    db_path: Option<PathBuf>,
+    conn: Mutex<rusqlite::Connection>,
+    max_unpinned: std::sync::atomic::AtomicUsize,
+}
+
+#[uniffi::export]
+impl MimraCoreHandle {
+    #[uniffi::constructor]
+    pub fn open(db_path: String) -> Result<Arc<Self>, CoreError> {
+        let path = PathBuf::from(db_path);
+        let mut conn = open_database(&path, &DatabaseConfig::default())?;
+        run_migrations(&mut conn)?;
+        verify_database_integrity(&conn)?;
+
+        Ok(Arc::new(Self {
+            db_path: Some(path),
+            conn: Mutex::new(conn),
+            max_unpinned: std::sync::atomic::AtomicUsize::new(200),
+        }))
+    }
+
+    #[uniffi::constructor]
+    pub fn open_in_memory() -> Result<Arc<Self>, CoreError> {
+        let mut conn = open_in_memory(&DatabaseConfig::default())?;
+        run_migrations(&mut conn)?;
+        verify_database_integrity(&conn)?;
+
+        Ok(Arc::new(Self {
+            db_path: None,
+            conn: Mutex::new(conn),
+            max_unpinned: std::sync::atomic::AtomicUsize::new(200),
+        }))
+    }
+
+    pub fn set_max_unpinned(&self, limit: u32) {
+        self.max_unpinned
+            .store(limit as usize, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn ingest(&self, capture: RawCapture) -> Result<IngestResultDTO, CoreError> {
+        let mut representations = Vec::new();
+        for raw in capture.representations {
+            representations.push(Representation::new(raw.group_index, raw.uti, raw.payload)?);
+        }
+
+        let item = HistoryItem::new(
+            representations,
+            capture.source_bundle_id,
+            capture.timestamp_ms,
+        )?;
+
+        let max_unpinned = self.max_unpinned.load(std::sync::atomic::Ordering::SeqCst);
+        let mut conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        let outcome = ingest_clipboard_item(&mut conn, item, max_unpinned)?;
+        match outcome {
+            IngestOutcome::NewItem(new_item) => Ok(IngestResultDTO {
+                item_id: new_item.id.to_string(),
+                is_duplicate: false,
+                title: new_item.title,
+                copy_count: new_item.copy_count,
+                content_kind: new_item.content_kind.to_string(),
+            }),
+            IngestOutcome::DuplicateUpdated(updated_item) => Ok(IngestResultDTO {
+                item_id: updated_item.id.to_string(),
+                is_duplicate: true,
+                title: updated_item.title,
+                copy_count: updated_item.copy_count,
+                content_kind: updated_item.content_kind.to_string(),
+            }),
+        }
+    }
+
+    pub fn list_page(
+        &self,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<HistoryItemSummaryDTO>, CoreError> {
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        let summaries = list_history_page(&conn, limit as usize, offset as usize)?;
+        Ok(summaries
+            .into_iter()
+            .map(HistoryItemSummaryDTO::from)
+            .collect())
+    }
+
+    pub fn fetch_payload(
+        &self,
+        item_id: String,
+        uti: String,
+    ) -> Result<Option<Vec<u8>>, CoreError> {
+        let id = Uuid::parse_str(&item_id).map_err(|e| CoreError::InvalidInput {
+            details: format!("Invalid UUID '{item_id}': {e}"),
+        })?;
+
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        fetch_payload(&conn, &id, &uti)
+    }
+
+    pub fn delete_item(&self, item_id: String) -> Result<bool, CoreError> {
+        let id = Uuid::parse_str(&item_id).map_err(|e| CoreError::InvalidInput {
+            details: format!("Invalid UUID '{item_id}': {e}"),
+        })?;
+
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        delete_item_by_id(&conn, &id)
+    }
+
+    pub fn clear_unpinned(&self) -> Result<u64, CoreError> {
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        let cleared = clear_unpinned_history(&conn)?;
+        Ok(cleared as u64)
+    }
+
+    pub fn clear_all(&self) -> Result<u64, CoreError> {
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        let cleared = clear_all_history(&conn)?;
+        Ok(cleared as u64)
+    }
+
+    pub fn set_pin(
+        &self,
+        item_id: String,
+        is_pinned: bool,
+        pin_key: Option<String>,
+        pin_order: Option<u32>,
+    ) -> Result<(), CoreError> {
+        let id = Uuid::parse_str(&item_id).map_err(|e| CoreError::InvalidInput {
+            details: format!("Invalid UUID '{item_id}': {e}"),
+        })?;
+
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        set_pin_status(&conn, &id, is_pinned, pin_key, pin_order)
+    }
+
+    pub fn get_stats(&self) -> Result<StorageStatsDTO, CoreError> {
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        let stats = get_storage_stats(&conn, self.db_path.as_deref())?;
+        Ok(StorageStatsDTO::from(stats))
+    }
+}
 
 /// Maximum allowed payload size for a single clipboard item representation (10 MB).
 pub const MAX_PAYLOAD_SIZE_BYTES: u64 = 10 * 1024 * 1024;

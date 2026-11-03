@@ -13,6 +13,11 @@
 		10000004 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000004 /* SettingsView.swift */; };
 		10000005 /* mimra_core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000005 /* mimra_core.swift */; };
 		10000006 /* libmimra_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 20000006 /* libmimra_core.a */; };
+		10000007 /* PrivacyFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000009 /* PrivacyFilter.swift */; };
+		10000008 /* ClipboardProvenance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000010 /* ClipboardProvenance.swift */; };
+		10000009 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000011 /* ClipboardMonitor.swift */; };
+		10000010 /* CoreClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000012 /* CoreClient.swift */; };
+		10000011 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000013 /* HistoryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +30,11 @@
 		20000006 /* libmimra_core.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libmimra_core.a; path = RustCore/target/aarch64-apple-darwin/debug/libmimra_core.a; sourceTree = "<group>"; };
 		20000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		20000008 /* mimra_coreFFI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = mimra_coreFFI.h; path = Generated/mimra_coreFFI.h; sourceTree = "<group>"; };
+		20000009 /* PrivacyFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyFilter.swift; sourceTree = "<group>"; };
+		20000010 /* ClipboardProvenance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardProvenance.swift; sourceTree = "<group>"; };
+		20000011 /* ClipboardMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardMonitor.swift; sourceTree = "<group>"; };
+		20000012 /* CoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreClient.swift; sourceTree = "<group>"; };
+		20000013 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +63,7 @@
 			isa = PBXGroup;
 			children = (
 				40000006 /* App */,
+				40000010 /* Bridge */,
 				40000007 /* macOS */,
 				40000008 /* UI */,
 				20000007 /* Info.plist */,
@@ -94,10 +105,21 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		40000010 /* Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				20000012 /* CoreClient.swift */,
+			);
+			path = Bridge;
+			sourceTree = "<group>";
+		};
 		40000007 /* macOS */ = {
 			isa = PBXGroup;
 			children = (
 				20000003 /* StatusBarCoordinator.swift */,
+				20000009 /* PrivacyFilter.swift */,
+				20000010 /* ClipboardProvenance.swift */,
+				20000011 /* ClipboardMonitor.swift */,
 			);
 			path = macOS;
 			sourceTree = "<group>";
@@ -106,6 +128,7 @@
 			isa = PBXGroup;
 			children = (
 				40000009 /* Settings */,
+				40000011 /* History */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -116,6 +139,14 @@
 				20000004 /* SettingsView.swift */,
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		40000011 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				20000013 /* HistoryView.swift */,
+			);
+			path = History;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -175,6 +206,11 @@
 				10000003 /* StatusBarCoordinator.swift in Sources */,
 				10000004 /* SettingsView.swift in Sources */,
 				10000005 /* mimra_core.swift in Sources */,
+				10000007 /* PrivacyFilter.swift in Sources */,
+				10000008 /* ClipboardProvenance.swift in Sources */,
+				10000009 /* ClipboardMonitor.swift in Sources */,
+				10000010 /* CoreClient.swift in Sources */,
+				10000011 /* HistoryView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

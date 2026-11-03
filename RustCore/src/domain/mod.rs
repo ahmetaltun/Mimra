@@ -3,9 +3,13 @@
 // ==============================================================================
 
 pub mod content;
+pub mod dto;
 pub mod item;
 
 pub use content::{uti, ContentKind, Representation};
+pub use dto::{
+    HistoryItemSummaryDTO, IngestResultDTO, RawCapture, RawRepresentation, StorageStatsDTO,
+};
 pub use item::{HistoryItem, MAX_TITLE_CHARS};
 
 #[cfg(test)]

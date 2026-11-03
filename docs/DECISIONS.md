@@ -186,3 +186,24 @@ Clipboard managers require global hotkey summoning, continuous clipboard observa
 ### Consequences
 * **Positive:** Frictionless initial onboarding (summon works immediately without permissions). Safe fallback for users who deny Accessibility rights.
 * **Negative:** Automatic paste requires user consent in macOS System Settings > Privacy & Security > Accessibility.
+
+---
+
+## ADR-009: Swift 6 Strict Concurrency Isolation via `CoreClient` Actor
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Under Swift 6 with `-strict-concurrency=complete`, passing mutable state or performing synchronous blocking operations across concurrency domains is prohibited. The UniFFI-generated Swift binding wraps Rust objects (`MimraCoreHandle`), which contain an internal thread-safe Rust `Mutex<rusqlite::Connection>`. Calling Rust SQLite queries from `@MainActor` would block UI rendering.
+
+### Decision
+1. Wrap `MimraCoreHandle` within a Swift `actor CoreClient` executing off the main actor.
+2. Mark `MimraCoreHandle` and pure value DTOs (`IngestResultDto`, `HistoryItemSummaryDto`, `StorageStatsDto`, `RawRepresentation`, `RawCapture`) with `@unchecked Sendable` conformance.
+3. `@MainActor` components (`ClipboardMonitor`, `StatusBarCoordinator`, `HistoryView`) communicate with `CoreClient` exclusively via `async`/`await`.
+4. Ensure the SQLite storage directory `~/Library/Application Support/com.mimra.app` is created with POSIX `0700` (`rwx------`) permissions so that only the current user can access the database file.
+
+### Consequences
+* **Positive:** Complete elimination of main thread blocking during database writes, queries, and retention cleanups. Enforces strict zero-leak file permissions.
+* **Negative:** Requires asynchronous calls and task coordination from SwiftUI / AppKit.

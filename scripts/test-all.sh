@@ -2,7 +2,8 @@
 # ==============================================================================
 # Mimra — Comprehensive Verification Test Script
 # Runs environment check, Rust formatting, clippy, unit tests, static library build,
-# binding generation, Swift FFI integration verification, and Xcode app build.
+# binding generation, Swift FFI integration verification, Privacy Filter tests,
+# Provenance tests, Capture Pipeline tests, Persistence Relaunch tests, and Xcode build.
 # ==============================================================================
 
 set -euo pipefail
@@ -40,7 +41,66 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 /tmp/mimra_ffi_spike_runner
 rm -f /tmp/mimra_ffi_spike_runner
 
-echo -e "\n=== 6. Building Native macOS App (Mimra.app) via Xcode ==="
+echo -e "\n=== 6. Running Privacy Filter Tests (T-PRIV-01..06) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/tests/privacy_filter_tests.swift" \
+    -o /tmp/mimra_privacy_filter_test_runner
+
+/tmp/mimra_privacy_filter_test_runner
+rm -f /tmp/mimra_privacy_filter_test_runner
+
+echo -e "\n=== 7. Running Clipboard Provenance Tests (T-CAP-05) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/tests/provenance_tests.swift" \
+    -o /tmp/mimra_provenance_test_runner
+
+/tmp/mimra_provenance_test_runner
+rm -f /tmp/mimra_provenance_test_runner
+
+echo -e "\n=== 8. Running Capture Pipeline & CoreClient Tests (T-CAP-01..03, T-HIST-03) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/tests/capture_pipeline_tests.swift" \
+    -o /tmp/mimra_capture_pipeline_test_runner
+
+/tmp/mimra_capture_pipeline_test_runner
+rm -f /tmp/mimra_capture_pipeline_test_runner
+
+echo -e "\n=== 9. Running Persistence & Cold Relaunch Tests (T-HIST-02, 1,000 items) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/tests/persistence_relaunch_tests.swift" \
+    -o /tmp/mimra_persistence_relaunch_test_runner
+
+/tmp/mimra_persistence_relaunch_test_runner
+rm -f /tmp/mimra_persistence_relaunch_test_runner
+
+echo -e "\n=== 10. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \
     -scheme Mimra \
@@ -49,4 +109,4 @@ xcodebuild -project Mimra.xcodeproj \
     -destination 'platform=macOS,arch=arm64' \
     build
 
-echo -e "\n✓ ALL QUALITY GATES, FFI INTEGRATION, AND NATIVE XCODE BUILDS PASSED!"
+echo -e "\n✓ ALL QUALITY GATES, FFI INTEGRATION, SUITE TESTS, AND NATIVE XCODE BUILDS PASSED!"
