@@ -14,6 +14,12 @@ public struct SettingsView: View {
     @AppStorage(ClipboardTypeConfiguration.storeImagesKey) private var storeImages: Bool = true
     @AppStorage(ClipboardTypeConfiguration.storeFilesKey) private var storeFiles: Bool = true
 
+    // Search and sorting preferences (P4-04 / F-019, F-024, F-050, F-054)
+    @AppStorage("searchHighlightStyle") private var searchHighlightStyleRaw: String = SearchHighlightStyle.bold.rawValue
+    @AppStorage("pinArrangement") private var pinArrangementRaw: String = "top"
+    @AppStorage("historySortMode") private var historySortModeRaw: String = "recency"
+    @AppStorage("searchByRelevance") private var searchByRelevance: Bool = true
+
     public init() {}
 
     public var body: some View {
@@ -85,6 +91,42 @@ public struct SettingsView: View {
             .formStyle(.grouped)
             .tabItem {
                 Label("Appearance", systemImage: "paintpalette")
+            }
+
+            Form {
+                Section("Search Highlights") {
+                    Picker("Match Highlight Style", selection: $searchHighlightStyleRaw) {
+                        ForEach(SearchHighlightStyle.allCases, id: \.rawValue) { style in
+                            Text(style.displayName).tag(style.rawValue)
+                        }
+                    }
+                }
+
+                Section("History Sorting & Pins") {
+                    Picker("Pin Placement", selection: $pinArrangementRaw) {
+                        Text("Top of list").tag("top")
+                        Text("Bottom of list").tag("bottom")
+                        Text("Inline (mixed)").tag("inline")
+                    }
+
+                    Picker("Sort History By", selection: $historySortModeRaw) {
+                        Text("Recency (last copied)").tag("recency")
+                        Text("Number of copies").tag("copyCount")
+                        Text("First copied (creation)").tag("firstCopied")
+                    }
+
+                    Toggle("Rank search results by relevance", isOn: $searchByRelevance)
+                }
+
+                Section("Information") {
+                    Text("Highlight styles indicate matching characters in titles and snippets during active searches. Pin placement controls whether pinned clips stay grouped at the top, bottom, or naturally mixed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+            .tabItem {
+                Label("Search & Sorting", systemImage: "arrow.up.arrow.down.circle")
             }
 
             Form {

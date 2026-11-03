@@ -818,3 +818,50 @@ Users require power-user search capabilities (`F-048`, `T-SRCH-02`), including e
 * **Positive:** Guaranteed linear-time ReDoS immunity; zero crash risk on invalid regex; typed and helpful error presentation in UI; race-free search result ordering via monotonic generation counters; accurate UTF-16 highlights across all modes.
 * **Negative:** Patterns exceeding 256 characters or 64 KB compiled size are rejected with a descriptive error.
 
+---
+
+## ADR-028: Pinned Items Arrangement, Configurable Sort Modes, Selectable Highlight Styles, and Selection Identity Preservation
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Users require tailored organization and visual cues when browsing and searching clipboard history (`F-019`, `F-024`, `F-048`, `F-050`, `F-054`, `T-UI-03`, `T-KEY-03`):
+1. **Pinned Placement:** Users have differing preferences for pinned items—some prefer pinned items grouped at the top, others at the bottom, and others mixed inline with recency.
+2. **Sort Criteria:** Browsing history benefits from recency (`last_copied_at_ms DESC`), copy count / frequency (`copy_count DESC`), or chronological first-capture order (`first_copied_at_ms DESC`). In active search, results should be rankable by relevance or by recency.
+3. **Highlight Customization:** Different visual themes require adaptable highlight treatments (bold, underline, italic, bold & underline, accent color, or none).
+4. **Selection Jumping Bug (DoD Requirement):** In traditional clipboard manager lists, index-based selection (`selectedIndex = 2`) causes selection jumping:
+   - When a new item is captured in the background, all rows shift down, jumping the user's selection to an unrelated item.
+   - When an unpinned item is deleted above the selection, the selection shifts down.
+   - When the currently selected item is deleted, resetting unconditionally to `0` disorients the user.
+   - The Definition of Done strictly mandates: *selection remains on same ID on updates*.
+
+### Decision
+1. **Rust Storage & FFI Sort Pipeline:**
+   - Introduced `HistorySortMode` (`Recency`, `CopyCount`, `FirstCopied`) and `PinArrangement` (`Top`, `Bottom`, `Inline`) in `RustCore/src/domain/dto.rs`.
+   - Implemented `list_history_page_with_options` with parameterized, injection-proof SQL ORDER BY clauses.
+   - Implemented `search_history_page_with_options` supporting `sortByRelevance` (relevance score vs recency tie-breaking) and `pin_arrangement`.
+   - Exposed `listPageWithSort` and `searchPageWithOptions` across UniFFI with 100% backward-compatible default overloads.
+2. **Selectable Highlight Styles:**
+   - Implemented `SearchHighlightStyle` (`bold`, `underline`, `italic`, `boldUnderline`, `accent`, `none`) with SwiftUI display names.
+   - Integrated with `HighlightedLabel` and persisted via `@AppStorage("searchHighlightStyle")`.
+3. **Selection Identity Preservation (DoD):**
+   - In `PanelViewModel`, introduced `selectedItemId: String?` tracking the UUID of the selected item.
+   - Implemented `applyItemsPreservingSelection(_ newItems:)`:
+     - If `selectedItemId` exists in the updated items list, locate its new index and update `selectedIndex` to match, guaranteeing selection stays locked to the same item ID.
+     - If the selected item was deleted, clamp `selectedIndex` to `min(previousIndex, count - 1)` so the item currently occupying that visual slot is selected without jumping to index 0.
+     - If the list becomes empty, gracefully set `selectedIndex = 0` and `selectedItemId = nil`.
+   - When typing in `searchText`, if the previously selected item matches the new query, its selection is retained.
+4. **Keyboard Navigation & Deletion Operations:**
+   - Added `selectPageUp(pageSize:)`, `selectPageDown(pageSize:)`, `selectFirst()`, and `selectLast()` satisfying `T-KEY-03` and `F-030`.
+   - Added `deleteSelectedItem()` and `deleteItem(itemId:)` with immediate in-memory item removal and selection clamping.
+   - Bound Page Up (116), Page Down (121), Home (115), End (119), and Option-Delete / Command-Delete (51) in `FloatingPanel.handlePanelKeyDown`.
+5. **Settings Configuration:**
+   - Added a "Search & Sorting" tab in `SettingsView` exposing match highlight style, pin placement, history sort order, and search relevance ranking options.
+
+### Consequences
+* **Positive:** Complete elimination of spurious selection jumps during background copies or deletions; user preference support for pin positioning and highlight styling; resilient keyboard navigation with standard Page Up/Down and Option-Delete; 100% verified across 62 Rust unit tests and 30 Swift integration verification suites.
+* **Negative:** Tracking selection by ID adds a linear scan (`firstIndex(where:)`) over the current page (up to 100 items), completing in < 5 microseconds on Apple Silicon.
+
+

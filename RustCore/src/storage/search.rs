@@ -106,6 +106,27 @@ pub fn search_history_page(
     limit: usize,
     offset: usize,
 ) -> Result<Vec<HistoryItemSummary>, CoreError> {
+    search_history_page_with_options(
+        conn,
+        query,
+        mode,
+        true,
+        crate::domain::dto::PinArrangement::Top,
+        limit,
+        offset,
+    )
+}
+
+/// Paginated hybrid search with configurable relevance sorting and pinned item arrangement.
+pub fn search_history_page_with_options(
+    conn: &Connection,
+    query: &str,
+    mode: SearchMode,
+    sort_by_relevance: bool,
+    pin_arrangement: crate::domain::dto::PinArrangement,
+    limit: usize,
+    offset: usize,
+) -> Result<Vec<HistoryItemSummary>, CoreError> {
     let trimmed_query = query.trim();
     if trimmed_query.is_empty() {
         return Ok(Vec::new());
@@ -240,25 +261,54 @@ pub fn search_history_page(
         }
     }
 
-    // 4. Sort by pinned priority, then descending score, then last_copied_at_ms
+    // 4. Sort by pinned priority (per pin_arrangement), then score/recency
+    use crate::domain::dto::PinArrangement;
+
     scored_items.sort_by(|a, b| {
-        b.candidate
-            .is_pinned
-            .cmp(&a.candidate.is_pinned)
-            .then_with(|| match (a.candidate.is_pinned, b.candidate.is_pinned) {
-                (true, true) => a
-                    .candidate
-                    .pin_order
-                    .unwrap_or(999)
-                    .cmp(&b.candidate.pin_order.unwrap_or(999)),
-                _ => std::cmp::Ordering::Equal,
-            })
-            .then_with(|| b.score.cmp(&a.score))
-            .then_with(|| {
+        let pin_cmp = match pin_arrangement {
+            PinArrangement::Top => {
+                b.candidate
+                    .is_pinned
+                    .cmp(&a.candidate.is_pinned)
+                    .then_with(|| match (a.candidate.is_pinned, b.candidate.is_pinned) {
+                        (true, true) => a
+                            .candidate
+                            .pin_order
+                            .unwrap_or(999)
+                            .cmp(&b.candidate.pin_order.unwrap_or(999)),
+                        _ => std::cmp::Ordering::Equal,
+                    })
+            }
+            PinArrangement::Bottom => {
+                a.candidate
+                    .is_pinned
+                    .cmp(&b.candidate.is_pinned)
+                    .then_with(|| match (a.candidate.is_pinned, b.candidate.is_pinned) {
+                        (true, true) => a
+                            .candidate
+                            .pin_order
+                            .unwrap_or(999)
+                            .cmp(&b.candidate.pin_order.unwrap_or(999)),
+                        _ => std::cmp::Ordering::Equal,
+                    })
+            }
+            PinArrangement::Inline => std::cmp::Ordering::Equal,
+        };
+
+        pin_cmp.then_with(|| {
+            if sort_by_relevance {
+                b.score.cmp(&a.score).then_with(|| {
+                    b.candidate
+                        .last_copied_at_ms
+                        .cmp(&a.candidate.last_copied_at_ms)
+                })
+            } else {
                 b.candidate
                     .last_copied_at_ms
                     .cmp(&a.candidate.last_copied_at_ms)
-            })
+                    .then_with(|| b.score.cmp(&a.score))
+            }
+        })
     });
 
     // 5. Apply pagination (offset & limit)
@@ -540,5 +590,101 @@ mod tests {
             search_history_page(&conn, "Special Alpha", SearchMode::Fuzzy, 10, 0).unwrap();
         assert_eq!(after_rebuild.len(), 1);
         assert_eq!(after_rebuild[0].title, "Target Special Alpha Item");
+    }
+
+    #[test]
+    fn test_search_page_sorting_and_pin_arrangements() {
+        use crate::domain::content::{uti, Representation};
+        use crate::domain::dto::PinArrangement;
+        use crate::domain::item::HistoryItem;
+        use crate::storage::repository::ingest_clipboard_item;
+
+        let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+        run_migrations(&mut conn).unwrap();
+
+        // 1. Item with exact title match but older timestamp (t=1000)
+        let rep1 = Representation::new(
+            0,
+            uti::UTF8_PLAIN_TEXT,
+            b"Terminal command reference".to_vec(),
+        )
+        .unwrap();
+        let item1 = HistoryItem::new(vec![rep1], None, 1000).unwrap();
+        ingest_clipboard_item(&mut conn, item1, 200).unwrap();
+
+        // 2. Item with weaker match but newer timestamp (t=2000)
+        let rep2 = Representation::new(
+            0,
+            uti::UTF8_PLAIN_TEXT,
+            b"Setup guide with some Terminal tips".to_vec(),
+        )
+        .unwrap();
+        let item2 = HistoryItem::new(vec![rep2], None, 2000).unwrap();
+        ingest_clipboard_item(&mut conn, item2, 200).unwrap();
+
+        // 3. Pinned item matching query (t=1500)
+        let rep3 = Representation::new(
+            0,
+            uti::UTF8_PLAIN_TEXT,
+            b"Pinned Terminal workflows".to_vec(),
+        )
+        .unwrap();
+        let mut item3 = HistoryItem::new(vec![rep3], None, 1500).unwrap();
+        item3.is_pinned = true;
+        item3.pin_order = Some(1);
+        ingest_clipboard_item(&mut conn, item3, 200).unwrap();
+
+        // Query: "Terminal"
+
+        // Case A: Top pin arrangement + Sort by relevance:
+        // Pinned item first, then exact/stronger title match (rep1), then weaker match (rep2)
+        let top_rel = search_history_page_with_options(
+            &conn,
+            "Terminal",
+            SearchMode::Fuzzy,
+            true,
+            PinArrangement::Top,
+            10,
+            0,
+        )
+        .unwrap();
+        assert_eq!(top_rel.len(), 3);
+        assert_eq!(top_rel[0].title, "Pinned Terminal workflows");
+        assert_eq!(top_rel[1].title, "Terminal command reference");
+        assert_eq!(top_rel[2].title, "Setup guide with some Terminal tips");
+
+        // Case B: Top pin arrangement + Sort by recency (sort_by_relevance = false):
+        // Pinned item first, then newer item rep2 (t=2000), then older rep1 (t=1000)
+        let top_rec = search_history_page_with_options(
+            &conn,
+            "Terminal",
+            SearchMode::Fuzzy,
+            false,
+            PinArrangement::Top,
+            10,
+            0,
+        )
+        .unwrap();
+        assert_eq!(top_rec.len(), 3);
+        assert_eq!(top_rec[0].title, "Pinned Terminal workflows");
+        assert_eq!(top_rec[1].title, "Setup guide with some Terminal tips");
+        assert_eq!(top_rec[2].title, "Terminal command reference");
+
+        // Case C: Bottom pin arrangement + Sort by relevance:
+        // Unpinned ranked by relevance first (rep1, then rep2), Pinned item last
+        let bottom_rel = search_history_page_with_options(
+            &conn,
+            "Terminal",
+            SearchMode::Fuzzy,
+            true,
+            PinArrangement::Bottom,
+            10,
+            0,
+        )
+        .unwrap();
+        assert_eq!(bottom_rel.len(), 3);
+        assert_eq!(bottom_rel[0].title, "Terminal command reference");
+        assert_eq!(bottom_rel[1].title, "Setup guide with some Terminal tips");
+        assert_eq!(bottom_rel[2].title, "Pinned Terminal workflows");
     }
 }

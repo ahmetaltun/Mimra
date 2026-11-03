@@ -553,9 +553,13 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     
     func listPage(limit: UInt32, offset: UInt32) throws  -> [HistoryItemSummaryDto]
     
+    func listPageWithSort(sortMode: HistorySortMode, pinArrangement: PinArrangement, limit: UInt32, offset: UInt32) throws  -> [HistoryItemSummaryDto]
+    
     func rebuildSearchIndex() throws 
     
     func searchPage(query: String, mode: SearchMode, limit: UInt32, offset: UInt32) throws  -> [HistoryItemSummaryDto]
+    
+    func searchPageWithOptions(query: String, mode: SearchMode, sortByRelevance: Bool, pinArrangement: PinArrangement, limit: UInt32, offset: UInt32) throws  -> [HistoryItemSummaryDto]
     
     func setMaxUnpinned(limit: UInt32) 
     
@@ -701,6 +705,17 @@ open func listPage(limit: UInt32, offset: UInt32)throws  -> [HistoryItemSummaryD
 })
 }
     
+open func listPageWithSort(sortMode: HistorySortMode, pinArrangement: PinArrangement, limit: UInt32, offset: UInt32)throws  -> [HistoryItemSummaryDto] {
+    return try  FfiConverterSequenceTypeHistoryItemSummaryDTO.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_list_page_with_sort(self.uniffiClonePointer(),
+        FfiConverterTypeHistorySortMode.lower(sortMode),
+        FfiConverterTypePinArrangement.lower(pinArrangement),
+        FfiConverterUInt32.lower(limit),
+        FfiConverterUInt32.lower(offset),$0
+    )
+})
+}
+    
 open func rebuildSearchIndex()throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_rebuild_search_index(self.uniffiClonePointer(),$0
     )
@@ -712,6 +727,19 @@ open func searchPage(query: String, mode: SearchMode, limit: UInt32, offset: UIn
     uniffi_mimra_core_fn_method_mimracorehandle_search_page(self.uniffiClonePointer(),
         FfiConverterString.lower(query),
         FfiConverterTypeSearchMode.lower(mode),
+        FfiConverterUInt32.lower(limit),
+        FfiConverterUInt32.lower(offset),$0
+    )
+})
+}
+    
+open func searchPageWithOptions(query: String, mode: SearchMode, sortByRelevance: Bool, pinArrangement: PinArrangement, limit: UInt32, offset: UInt32)throws  -> [HistoryItemSummaryDto] {
+    return try  FfiConverterSequenceTypeHistoryItemSummaryDTO.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_search_page_with_options(self.uniffiClonePointer(),
+        FfiConverterString.lower(query),
+        FfiConverterTypeSearchMode.lower(mode),
+        FfiConverterBool.lower(sortByRelevance),
+        FfiConverterTypePinArrangement.lower(pinArrangement),
         FfiConverterUInt32.lower(limit),
         FfiConverterUInt32.lower(offset),$0
     )
@@ -1493,6 +1521,172 @@ extension CoreError: Foundation.LocalizedError {
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * Sorting order for history items.
+ */
+
+public enum HistorySortMode {
+    
+    /**
+     * Ordered by most recently copied timestamp (default).
+     */
+    case recency
+    /**
+     * Ordered by total number of times copied (most frequent first), tie-broken by recency.
+     */
+    case copyCount
+    /**
+     * Ordered by first initial copy timestamp (chronological capture order).
+     */
+    case firstCopied
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistorySortMode: FfiConverterRustBuffer {
+    typealias SwiftType = HistorySortMode
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistorySortMode {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .recency
+        
+        case 2: return .copyCount
+        
+        case 3: return .firstCopied
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistorySortMode, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .recency:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .copyCount:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .firstCopied:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistorySortMode_lift(_ buf: RustBuffer) throws -> HistorySortMode {
+    return try FfiConverterTypeHistorySortMode.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistorySortMode_lower(_ value: HistorySortMode) -> RustBuffer {
+    return FfiConverterTypeHistorySortMode.lower(value)
+}
+
+
+
+extension HistorySortMode: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Placement of pinned items relative to unpinned items in list views.
+ */
+
+public enum PinArrangement {
+    
+    /**
+     * Pinned items appear at the very top of the list (default).
+     */
+    case top
+    /**
+     * Pinned items appear at the bottom of the list.
+     */
+    case bottom
+    /**
+     * Pinned items are mixed inline with unpinned items based solely on the active sort order.
+     */
+    case inline
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePinArrangement: FfiConverterRustBuffer {
+    typealias SwiftType = PinArrangement
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PinArrangement {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .top
+        
+        case 2: return .bottom
+        
+        case 3: return .inline
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PinArrangement, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .top:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .bottom:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .inline:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePinArrangement_lift(_ buf: RustBuffer) throws -> PinArrangement {
+    return try FfiConverterTypePinArrangement.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePinArrangement_lower(_ value: PinArrangement) -> RustBuffer {
+    return FfiConverterTypePinArrangement.lower(value)
+}
+
+
+
+extension PinArrangement: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * Search mode defining matching behavior across clipboard history.
  */
 
@@ -1807,10 +2001,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_mimra_core_checksum_method_mimracorehandle_list_page() != 26656) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_list_page_with_sort() != 28344) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_rebuild_search_index() != 2150) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_search_page() != 43715) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_search_page_with_options() != 33189) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_set_max_unpinned() != 29999) {

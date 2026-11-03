@@ -12,7 +12,8 @@ pub mod url_utils;
 pub use color::HexColor;
 pub use content::{uti, ContentKind, Representation};
 pub use dto::{
-    HistoryItemSummaryDTO, IngestResultDTO, RawCapture, RawRepresentation, StorageStatsDTO,
+    HistoryItemSummaryDTO, HistorySortMode, IngestResultDTO, PinArrangement, RawCapture,
+    RawRepresentation, StorageStatsDTO,
 };
 pub use item::{HistoryItem, MAX_TITLE_CHARS};
 pub use search::{fuzzy_match, score_item, HighlightRangeDTO, SearchMode};

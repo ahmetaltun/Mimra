@@ -145,6 +145,25 @@ public struct FloatingPanelView: View {
                 .stroke(Color.primary.opacity(0.12), lineWidth: 1)
         )
         .task {
+            // Apply persisted sorting & pin arrangement preferences
+            if let pinArr = UserDefaults.standard.string(forKey: "pinArrangement") {
+                switch pinArr {
+                case "bottom": viewModel.pinArrangement = .bottom
+                case "inline": viewModel.pinArrangement = .inline
+                default: viewModel.pinArrangement = .top
+                }
+            }
+            if let sortMode = UserDefaults.standard.string(forKey: "historySortMode") {
+                switch sortMode {
+                case "copyCount": viewModel.sortMode = .copyCount
+                case "firstCopied": viewModel.sortMode = .firstCopied
+                default: viewModel.sortMode = .recency
+                }
+            }
+            if UserDefaults.standard.object(forKey: "searchByRelevance") != nil {
+                viewModel.searchByRelevance = UserDefaults.standard.bool(forKey: "searchByRelevance")
+            }
+
             await viewModel.loadData()
             isSearchFocused = true
             accessibilityService.startObserving()
@@ -201,7 +220,12 @@ struct PanelItemRow: View {
     @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
     @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
     @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
+    @AppStorage("searchHighlightStyle") private var searchHighlightStyleRaw: String = SearchHighlightStyle.bold.rawValue
     @State private var isHovered: Bool = false
+
+    private var highlightStyle: SearchHighlightStyle {
+        SearchHighlightStyle(rawValue: searchHighlightStyleRaw) ?? .bold
+    }
 
     private var detectedColor: HexColorInfo? {
         showColorSwatches ? ColorDetector.detect(in: item.title) : nil
@@ -231,7 +255,8 @@ struct PanelItemRow: View {
                         ranges: item.titleHighlights,
                         isSelected: isSelected,
                         baseFont: .system(size: 12, weight: .medium),
-                        defaultColor: .primary
+                        defaultColor: .primary,
+                        highlightStyle: highlightStyle
                     )
 
                     if let color = detectedColor {
@@ -307,7 +332,8 @@ struct PanelItemRow: View {
                         ranges: item.snippetHighlights,
                         isSelected: isSelected,
                         baseFont: .system(size: 11),
-                        defaultColor: .secondary
+                        defaultColor: .secondary,
+                        highlightStyle: highlightStyle
                     )
                 }
             }
@@ -536,7 +562,29 @@ struct CopyOnlyBanner: View {
     }
 }
 
-// MARK: - Highlighted Label Component (P4-02)
+// MARK: - Highlight Styles (P4-04 / F-050)
+
+public enum SearchHighlightStyle: String, CaseIterable, Codable, Sendable {
+    case bold = "bold"
+    case underline = "underline"
+    case italic = "italic"
+    case boldUnderline = "boldUnderline"
+    case accent = "accent"
+    case none = "none"
+
+    public var displayName: String {
+        switch self {
+        case .bold: return "Bold"
+        case .underline: return "Underline"
+        case .italic: return "Italic"
+        case .boldUnderline: return "Bold & Underline"
+        case .accent: return "Accent Color"
+        case .none: return "None"
+        }
+    }
+}
+
+// MARK: - Highlighted Label Component (P4-02, P4-04)
 
 struct HighlightedLabel: View {
     let text: String
@@ -544,9 +592,10 @@ struct HighlightedLabel: View {
     let isSelected: Bool
     let baseFont: Font
     let defaultColor: Color
+    var highlightStyle: SearchHighlightStyle = .bold
 
     var body: some View {
-        if ranges.isEmpty {
+        if ranges.isEmpty || highlightStyle == .none {
             Text(text)
                 .font(baseFont)
                 .foregroundColor(isSelected ? .white : defaultColor)
@@ -565,14 +614,29 @@ struct HighlightedLabel: View {
         attr.font = baseFont
         attr.foregroundColor = isSelected ? .white : defaultColor
 
+        guard highlightStyle != .none else { return attr }
+
         for r in ranges {
             let nsRange = NSRange(location: Int(r.start), length: Int(r.length))
             if nsRange.location + nsRange.length <= nsText.length,
                let swiftRange = Range(nsRange, in: text),
                let attrRange = Range(swiftRange, in: attr) {
-                attr[attrRange].font = .system(size: 12, weight: .bold)
-                attr[attrRange].foregroundColor = highlightColor
-                attr[attrRange].underlineStyle = .single
+                switch highlightStyle {
+                case .bold:
+                    attr[attrRange].font = .system(size: 12, weight: .bold)
+                case .underline:
+                    attr[attrRange].underlineStyle = .single
+                case .italic:
+                    attr[attrRange].font = .system(size: 12).italic()
+                case .boldUnderline:
+                    attr[attrRange].font = .system(size: 12, weight: .bold)
+                    attr[attrRange].underlineStyle = .single
+                case .accent:
+                    attr[attrRange].font = .system(size: 12, weight: .bold)
+                    attr[attrRange].foregroundColor = highlightColor
+                case .none:
+                    break
+                }
             }
         }
         return attr

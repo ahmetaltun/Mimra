@@ -182,6 +182,38 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             return true
         }
 
+        // 7. Page Up (keyCode 116, T-KEY-03)
+        if event.keyCode == 116 {
+            viewModel.selectPageUp()
+            return true
+        }
+
+        // 8. Page Down (keyCode 121, T-KEY-03)
+        if event.keyCode == 121 {
+            viewModel.selectPageDown()
+            return true
+        }
+
+        // 9. Home (keyCode 115)
+        if event.keyCode == 115 {
+            viewModel.selectFirst()
+            return true
+        }
+
+        // 10. End (keyCode 119)
+        if event.keyCode == 119 {
+            viewModel.selectLast()
+            return true
+        }
+
+        // 11. Option-Delete / Command-Delete (keyCode 51, T-KEY-03)
+        if event.keyCode == 51 && (event.modifierFlags.contains(.option) || event.modifierFlags.contains(.command)) {
+            Task {
+                _ = await viewModel.deleteSelectedItem()
+            }
+            return true
+        }
+
         return false
     }
 

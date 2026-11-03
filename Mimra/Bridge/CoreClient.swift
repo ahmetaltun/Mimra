@@ -20,6 +20,8 @@ extension RawRepresentation: @unchecked Sendable {}
 extension RawCapture: @unchecked Sendable {}
 extension HighlightRangeDto: @unchecked Sendable {}
 extension SearchMode: @unchecked Sendable {}
+extension HistorySortMode: @unchecked Sendable {}
+extension PinArrangement: @unchecked Sendable {}
 
 extension HistoryItemSummaryDto {
     /// Backward-compatible initializer for tests without explicit highlights.
@@ -113,6 +115,21 @@ public actor CoreClient {
         return try handle.listPage(limit: limit, offset: offset)
     }
 
+    /// Returns a paginated list of history item summaries with configurable sort order and pinned arrangement.
+    public func listPageWithSort(
+        sortMode: HistorySortMode = .recency,
+        pinArrangement: PinArrangement = .top,
+        limit: UInt32 = 50,
+        offset: UInt32 = 0
+    ) throws -> [HistoryItemSummaryDto] {
+        return try handle.listPageWithSort(
+            sortMode: sortMode,
+            pinArrangement: pinArrangement,
+            limit: limit,
+            offset: offset
+        )
+    }
+
     /// Searches history items using SQLite FTS5, deterministic fuzzy ranker, or bounded regex.
     public func searchPage(
         query: String,
@@ -121,6 +138,25 @@ public actor CoreClient {
         offset: UInt32 = 0
     ) throws -> [HistoryItemSummaryDto] {
         return try handle.searchPage(query: query, mode: mode, limit: limit, offset: offset)
+    }
+
+    /// Searches history items with explicit relevance sorting and pinned arrangement.
+    public func searchPageWithOptions(
+        query: String,
+        mode: SearchMode = .fuzzy,
+        sortByRelevance: Bool = true,
+        pinArrangement: PinArrangement = .top,
+        limit: UInt32 = 50,
+        offset: UInt32 = 0
+    ) throws -> [HistoryItemSummaryDto] {
+        return try handle.searchPageWithOptions(
+            query: query,
+            mode: mode,
+            sortByRelevance: sortByRelevance,
+            pinArrangement: pinArrangement,
+            limit: limit,
+            offset: offset
+        )
     }
 
     /// Rebuilds the FTS5 virtual search index.

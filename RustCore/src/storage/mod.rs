@@ -12,11 +12,13 @@ pub use migrations::{run_migrations, verify_database_integrity, ALL_MIGRATIONS};
 pub use repository::{
     clear_all_history, clear_unpinned_history, delete_item_by_id, enforce_retention_limit,
     fetch_payload, find_by_content_hash, find_by_id, get_storage_stats, ingest_clipboard_item,
-    insert_item, list_history_page, load_representations, query_available_utis, set_pin_status,
-    update_recopy, HistoryItemSummary, IngestOutcome, StorageStats,
+    insert_item, list_history_page, list_history_page_with_options, load_representations,
+    query_available_utis, set_pin_status, update_recopy, HistoryItemSummary, IngestOutcome,
+    StorageStats,
 };
 pub use search::{
-    rebuild_search_index, sanitize_fts5_query, search_history_page, verify_search_index_integrity,
+    rebuild_search_index, sanitize_fts5_query, search_history_page,
+    search_history_page_with_options, verify_search_index_integrity,
 };
 
 #[cfg(test)]
@@ -497,6 +499,85 @@ fn test_list_history_page_ordering_and_pins() {
     // Older unpinned must come THIRD
     assert_eq!(page[2].title, "Older Unpinned");
     assert!(!page[2].is_pinned);
+}
+
+#[test]
+fn test_list_history_page_sorting_and_pin_arrangements() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::dto::{HistorySortMode, PinArrangement};
+    use crate::domain::item::HistoryItem;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    // Item A: Copied at t=1000, 1 copy
+    let rep_a = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Alpha item".to_vec()).unwrap();
+    let item_a = HistoryItem::new(vec![rep_a], None, 1000).unwrap();
+    ingest_clipboard_item(&mut conn, item_a, 200).unwrap();
+
+    // Item B: Copied at t=2000, 5 copies
+    let rep_b = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Beta item".to_vec()).unwrap();
+    let mut item_b = HistoryItem::new(vec![rep_b], None, 2000).unwrap();
+    item_b.copy_count = 5;
+    ingest_clipboard_item(&mut conn, item_b, 200).unwrap();
+
+    // Item C: Pinned item, copied at t=1500, 1 copy
+    let rep_c = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Pinned item".to_vec()).unwrap();
+    let mut item_c = HistoryItem::new(vec![rep_c], None, 1500).unwrap();
+    item_c.is_pinned = true;
+    item_c.pin_order = Some(1);
+    ingest_clipboard_item(&mut conn, item_c, 200).unwrap();
+
+    // 1. Top arrangement + Recency sort:
+    // Pinned first, then Beta (2000), then Alpha (1000)
+    let page_top =
+        list_history_page_with_options(&conn, HistorySortMode::Recency, PinArrangement::Top, 10, 0)
+            .unwrap();
+    assert_eq!(page_top[0].title, "Pinned item");
+    assert_eq!(page_top[1].title, "Beta item");
+    assert_eq!(page_top[2].title, "Alpha item");
+
+    // 2. Bottom arrangement + Recency sort:
+    // Beta (2000) first, then Alpha (1000), then Pinned last
+    let page_bottom = list_history_page_with_options(
+        &conn,
+        HistorySortMode::Recency,
+        PinArrangement::Bottom,
+        10,
+        0,
+    )
+    .unwrap();
+    assert_eq!(page_bottom[0].title, "Beta item");
+    assert_eq!(page_bottom[1].title, "Alpha item");
+    assert_eq!(page_bottom[2].title, "Pinned item");
+
+    // 3. Inline arrangement + Recency sort:
+    // Beta (2000) first, Pinned (1500) second, Alpha (1000) third
+    let page_inline = list_history_page_with_options(
+        &conn,
+        HistorySortMode::Recency,
+        PinArrangement::Inline,
+        10,
+        0,
+    )
+    .unwrap();
+    assert_eq!(page_inline[0].title, "Beta item");
+    assert_eq!(page_inline[1].title, "Pinned item");
+    assert_eq!(page_inline[2].title, "Alpha item");
+
+    // 4. CopyCount sort with Top arrangement:
+    // Pinned first, then Beta (count=5), then Alpha (count=1)
+    let page_count = list_history_page_with_options(
+        &conn,
+        HistorySortMode::CopyCount,
+        PinArrangement::Top,
+        10,
+        0,
+    )
+    .unwrap();
+    assert_eq!(page_count[0].title, "Pinned item");
+    assert_eq!(page_count[1].title, "Beta item");
+    assert_eq!(page_count[2].title, "Alpha item");
 }
 
 #[test]

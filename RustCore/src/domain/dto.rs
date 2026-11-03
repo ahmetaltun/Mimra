@@ -116,3 +116,25 @@ impl From<StorageStats> for StorageStatsDTO {
         }
     }
 }
+
+/// Sorting order for history items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, uniffi::Enum)]
+pub enum HistorySortMode {
+    /// Ordered by most recently copied timestamp (default).
+    Recency,
+    /// Ordered by total number of times copied (most frequent first), tie-broken by recency.
+    CopyCount,
+    /// Ordered by first initial copy timestamp (chronological capture order).
+    FirstCopied,
+}
+
+/// Placement of pinned items relative to unpinned items in list views.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, uniffi::Enum)]
+pub enum PinArrangement {
+    /// Pinned items appear at the very top of the list (default).
+    Top,
+    /// Pinned items appear at the bottom of the list.
+    Bottom,
+    /// Pinned items are mixed inline with unpinned items based solely on the active sort order.
+    Inline,
+}

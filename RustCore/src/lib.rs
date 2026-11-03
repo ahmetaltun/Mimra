@@ -15,16 +15,17 @@ pub use domain::dto::{
 };
 pub use domain::{
     fuzzy_match, score_item, uti, CanonicalUrl, ContentKind, HexColor, HighlightRangeDTO,
-    HistoryItem, Representation, SearchMode,
+    HistoryItem, HistorySortMode, PinArrangement, Representation, SearchMode,
 };
 pub use error::CoreError;
 pub use storage::{
     clear_all_history, clear_unpinned_history, delete_item_by_id, enforce_retention_limit,
     fetch_payload, find_by_content_hash, find_by_id, get_storage_stats, ingest_clipboard_item,
-    insert_item, list_history_page, load_representations, open_database, open_in_memory,
-    query_available_utis, rebuild_search_index, run_migrations, sanitize_fts5_query,
-    search_history_page, set_pin_status, update_recopy, verify_database_integrity,
-    verify_search_index_integrity, DatabaseConfig, HistoryItemSummary, IngestOutcome, StorageStats,
+    insert_item, list_history_page, list_history_page_with_options, load_representations,
+    open_database, open_in_memory, query_available_utis, rebuild_search_index, run_migrations,
+    sanitize_fts5_query, search_history_page, search_history_page_with_options, set_pin_status,
+    update_recopy, verify_database_integrity, verify_search_index_integrity, DatabaseConfig,
+    HistoryItemSummary, IngestOutcome, StorageStats,
 };
 
 // Setup UniFFI scaffolding for procedural macro bindings
@@ -113,11 +114,27 @@ impl MimraCoreHandle {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<HistoryItemSummaryDTO>, CoreError> {
+        self.list_page_with_sort(HistorySortMode::Recency, PinArrangement::Top, limit, offset)
+    }
+
+    pub fn list_page_with_sort(
+        &self,
+        sort_mode: HistorySortMode,
+        pin_arrangement: PinArrangement,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<HistoryItemSummaryDTO>, CoreError> {
         let conn = self.conn.lock().map_err(|e| CoreError::Internal {
             message: format!("Failed to acquire database lock: {e}"),
         })?;
 
-        let summaries = list_history_page(&conn, limit as usize, offset as usize)?;
+        let summaries = list_history_page_with_options(
+            &conn,
+            sort_mode,
+            pin_arrangement,
+            limit as usize,
+            offset as usize,
+        )?;
         Ok(summaries
             .into_iter()
             .map(HistoryItemSummaryDTO::from)
@@ -131,11 +148,31 @@ impl MimraCoreHandle {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<HistoryItemSummaryDTO>, CoreError> {
+        self.search_page_with_options(query, mode, true, PinArrangement::Top, limit, offset)
+    }
+
+    pub fn search_page_with_options(
+        &self,
+        query: String,
+        mode: SearchMode,
+        sort_by_relevance: bool,
+        pin_arrangement: PinArrangement,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<HistoryItemSummaryDTO>, CoreError> {
         let conn = self.conn.lock().map_err(|e| CoreError::Internal {
             message: format!("Failed to acquire database lock: {e}"),
         })?;
 
-        let summaries = search_history_page(&conn, &query, mode, limit as usize, offset as usize)?;
+        let summaries = search_history_page_with_options(
+            &conn,
+            &query,
+            mode,
+            sort_by_relevance,
+            pin_arrangement,
+            limit as usize,
+            offset as usize,
+        )?;
         Ok(summaries
             .into_iter()
             .map(HistoryItemSummaryDTO::from)

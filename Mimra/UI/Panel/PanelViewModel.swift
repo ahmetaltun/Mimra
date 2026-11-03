@@ -1,8 +1,8 @@
 // ==============================================================================
 // Mimra — Panel View Model
-// State management, keyboard navigation, search filtering, and selection logic.
-// Linked Features: F-019
-// Test IDs: T-UI-03
+// State management, keyboard navigation, search filtering, sorting, and selection logic.
+// Linked Features: F-019, F-024, F-048, F-050, F-054
+// Test IDs: T-UI-03, T-KEY-03, T-SRCH-01, T-SRCH-02
 // ==============================================================================
 
 import AppKit
@@ -15,14 +15,23 @@ public final class PanelViewModel: ObservableObject {
 
     @Published public var searchText: String = "" {
         didSet {
-            // Reset selection to top row only when search filter actually changes
             if oldValue != searchText {
-                selectedIndex = 0
+                let targetId = selectedItemId ?? selectedItem?.id
+                let list = filteredItems
+                if let targetId = targetId,
+                   let foundIndex = list.firstIndex(where: { $0.id == targetId }) {
+                    selectedIndex = foundIndex
+                    selectedItemId = targetId
+                } else {
+                    selectedIndex = 0
+                    selectedItemId = list.first?.id
+                }
             }
         }
     }
     @Published public var items: [HistoryItemSummaryDto] = []
     @Published public var selectedIndex: Int = 0
+    @Published public var selectedItemId: String?
     @Published public var isLoading: Bool = false
     @Published public var stats: StorageStatsDto?
     @Published public var errorMessage: String?
@@ -34,6 +43,15 @@ public final class PanelViewModel: ObservableObject {
         }
     }
     @Published public var regexErrorMessage: String?
+
+    /// Active sort mode for history items (recency, copy count, or first copied).
+    @Published public var sortMode: HistorySortMode = .recency
+
+    /// Active pinned items arrangement (top, bottom, or inline).
+    @Published public var pinArrangement: PinArrangement = .top
+
+    /// Whether search results are ranked by relevance (true) or recency (false).
+    @Published public var searchByRelevance: Bool = true
 
     /// Monotonically increasing counter to discard stale asynchronous search results.
     public private(set) var searchGeneration: UInt64 = 0
@@ -68,12 +86,34 @@ public final class PanelViewModel: ObservableObject {
         return list[selectedIndex]
     }
 
+    /// Applies updated items while preserving the selected item by ID (Definition of Done: P4-04).
+    public func applyItemsPreservingSelection(_ newItems: [HistoryItemSummaryDto]) {
+        let targetId = selectedItemId ?? selectedItem?.id
+        let previousIndex = selectedIndex
+        self.items = newItems
+
+        let list = filteredItems
+        if list.isEmpty {
+            self.selectedIndex = 0
+            self.selectedItemId = nil
+        } else if let targetId = targetId,
+                  let foundIndex = list.firstIndex(where: { $0.id == targetId }) {
+            self.selectedIndex = foundIndex
+            self.selectedItemId = targetId
+        } else {
+            let clamped = min(previousIndex, list.count - 1)
+            self.selectedIndex = max(0, clamped)
+            self.selectedItemId = list[self.selectedIndex].id
+        }
+    }
+
     /// Move selection down (wraps around when reaching the bottom).
     public func selectNext() {
         let count = filteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
         selectedIndex = (selectedIndex + 1) % count
+        selectedItemId = selectedItem?.id
     }
 
     /// Move selection up (wraps around to the bottom when at index 0).
@@ -86,6 +126,43 @@ public final class PanelViewModel: ObservableObject {
         } else {
             selectedIndex -= 1
         }
+        selectedItemId = selectedItem?.id
+    }
+
+    /// Move selection up by a page (T-KEY-03).
+    public func selectPageUp(pageSize: Int = 10) {
+        let count = filteredItems.count
+        guard count > 0 else { return }
+        lastKeyboardNavTime = CACurrentMediaTime()
+        selectedIndex = max(0, selectedIndex - pageSize)
+        selectedItemId = selectedItem?.id
+    }
+
+    /// Move selection down by a page (T-KEY-03).
+    public func selectPageDown(pageSize: Int = 10) {
+        let count = filteredItems.count
+        guard count > 0 else { return }
+        lastKeyboardNavTime = CACurrentMediaTime()
+        selectedIndex = min(count - 1, selectedIndex + pageSize)
+        selectedItemId = selectedItem?.id
+    }
+
+    /// Selects the first item in the list (Home key).
+    public func selectFirst() {
+        let count = filteredItems.count
+        guard count > 0 else { return }
+        lastKeyboardNavTime = CACurrentMediaTime()
+        selectedIndex = 0
+        selectedItemId = selectedItem?.id
+    }
+
+    /// Selects the last item in the list (End key).
+    public func selectLast() {
+        let count = filteredItems.count
+        guard count > 0 else { return }
+        lastKeyboardNavTime = CACurrentMediaTime()
+        selectedIndex = max(0, count - 1)
+        selectedItemId = selectedItem?.id
     }
 
     /// Set selection index directly with optional hover guard.
@@ -98,6 +175,7 @@ public final class PanelViewModel: ObservableObject {
         let count = filteredItems.count
         guard index >= 0, index < count else { return }
         selectedIndex = index
+        selectedItemId = selectedItem?.id
     }
 
     /// Quick-pick shortcut selection (1-9).
@@ -107,6 +185,7 @@ public final class PanelViewModel: ObservableObject {
         let list = filteredItems
         if targetIndex < list.count {
             selectedIndex = targetIndex
+            selectedItemId = list[targetIndex].id
             commitSelection(mode: mode, forcePaste: forcePaste)
         }
     }
@@ -118,19 +197,41 @@ public final class PanelViewModel: ObservableObject {
         onDismiss?()
     }
 
-    /// Loads history items and stats from SQLite via CoreClient actor.
+    /// Deletes the currently selected item from SQLite storage while preserving selection stability.
+    public func deleteSelectedItem() async -> Bool {
+        guard let item = selectedItem else { return false }
+        return await deleteItem(itemId: item.id)
+    }
+
+    /// Deletes an item by UUID from SQLite storage while maintaining selection stability (T-KEY-03).
+    public func deleteItem(itemId: String) async -> Bool {
+        do {
+            let deleted = try await coreClient.deleteItem(itemId: itemId)
+            if deleted {
+                let remaining = items.filter { $0.id != itemId }
+                applyItemsPreservingSelection(remaining)
+            }
+            return deleted
+        } catch {
+            self.errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Loads history items and stats from SQLite via CoreClient actor with active sort and pin arrangement.
     public func loadData() async {
         isLoading = true
         do {
-            let loaded = try await coreClient.listPage(limit: 100, offset: 0)
+            let loaded = try await coreClient.listPageWithSort(
+                sortMode: self.sortMode,
+                pinArrangement: self.pinArrangement,
+                limit: 100,
+                offset: 0
+            )
             let loadedStats = try await coreClient.getStats()
-            self.items = loaded
+            applyItemsPreservingSelection(loaded)
             self.stats = loadedStats
             self.isLoading = false
-            // Ensure selection stays within valid bounds
-            if selectedIndex >= filteredItems.count {
-                selectedIndex = max(0, filteredItems.count - 1)
-            }
         } catch {
             self.errorMessage = error.localizedDescription
             self.isLoading = false
@@ -155,26 +256,31 @@ public final class PanelViewModel: ObservableObject {
 
         do {
             if trimmed.isEmpty {
-                let loaded = try await coreClient.listPage(limit: limit, offset: offset)
-                guard currentGen == self.searchGeneration else { return }
-                self.items = loaded
-            } else {
-                let results = try await coreClient.searchPage(
-                    query: trimmed,
-                    mode: effectiveMode,
+                let loaded = try await coreClient.listPageWithSort(
+                    sortMode: self.sortMode,
+                    pinArrangement: self.pinArrangement,
                     limit: limit,
                     offset: offset
                 )
                 guard currentGen == self.searchGeneration else { return }
-                self.items = results
+                applyItemsPreservingSelection(loaded)
+            } else {
+                let results = try await coreClient.searchPageWithOptions(
+                    query: trimmed,
+                    mode: effectiveMode,
+                    sortByRelevance: self.searchByRelevance,
+                    pinArrangement: self.pinArrangement,
+                    limit: limit,
+                    offset: offset
+                )
+                guard currentGen == self.searchGeneration else { return }
+                applyItemsPreservingSelection(results)
             }
-            self.selectedIndex = 0
             self.isLoading = false
         } catch let CoreError.InvalidRegex(pattern: _, errorMessage: errorMsg) {
             guard currentGen == self.searchGeneration else { return }
             self.regexErrorMessage = errorMsg
-            self.items = []
-            self.selectedIndex = 0
+            applyItemsPreservingSelection([])
             self.isLoading = false
         } catch {
             guard currentGen == self.searchGeneration else { return }

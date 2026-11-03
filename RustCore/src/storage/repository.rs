@@ -483,15 +483,65 @@ pub fn list_history_page(
     limit: usize,
     offset: usize,
 ) -> Result<Vec<HistoryItemSummary>, CoreError> {
-    let mut stmt = conn.prepare(
+    list_history_page_with_options(
+        conn,
+        crate::domain::dto::HistorySortMode::Recency,
+        crate::domain::dto::PinArrangement::Top,
+        limit,
+        offset,
+    )
+}
+
+/// Retrieves a paginated list of history item summaries with configurable sorting and pinned arrangement.
+pub fn list_history_page_with_options(
+    conn: &Connection,
+    sort_mode: crate::domain::dto::HistorySortMode,
+    pin_arrangement: crate::domain::dto::PinArrangement,
+    limit: usize,
+    offset: usize,
+) -> Result<Vec<HistoryItemSummary>, CoreError> {
+    use crate::domain::dto::{HistorySortMode, PinArrangement};
+
+    let order_clause = match pin_arrangement {
+        PinArrangement::Top => match sort_mode {
+            HistorySortMode::Recency => {
+                "is_pinned DESC, CASE WHEN is_pinned = 1 THEN pin_order END ASC, last_copied_at_ms DESC"
+            }
+            HistorySortMode::CopyCount => {
+                "is_pinned DESC, CASE WHEN is_pinned = 1 THEN pin_order END ASC, copy_count DESC, last_copied_at_ms DESC"
+            }
+            HistorySortMode::FirstCopied => {
+                "is_pinned DESC, CASE WHEN is_pinned = 1 THEN pin_order END ASC, first_copied_at_ms DESC"
+            }
+        },
+        PinArrangement::Bottom => match sort_mode {
+            HistorySortMode::Recency => {
+                "is_pinned ASC, CASE WHEN is_pinned = 1 THEN pin_order END ASC, last_copied_at_ms DESC"
+            }
+            HistorySortMode::CopyCount => {
+                "is_pinned ASC, CASE WHEN is_pinned = 1 THEN pin_order END ASC, copy_count DESC, last_copied_at_ms DESC"
+            }
+            HistorySortMode::FirstCopied => {
+                "is_pinned ASC, CASE WHEN is_pinned = 1 THEN pin_order END ASC, first_copied_at_ms DESC"
+            }
+        },
+        PinArrangement::Inline => match sort_mode {
+            HistorySortMode::Recency => "last_copied_at_ms DESC",
+            HistorySortMode::CopyCount => "copy_count DESC, last_copied_at_ms DESC",
+            HistorySortMode::FirstCopied => "first_copied_at_ms DESC",
+        },
+    };
+
+    let sql = format!(
         "SELECT id, content_kind, title, search_text, is_pinned, pin_order, pin_key,
                 source_bundle_id, first_copied_at_ms, last_copied_at_ms, copy_count, byte_size
          FROM history_items
-         ORDER BY is_pinned DESC,
-                  CASE WHEN is_pinned = 1 THEN pin_order END ASC,
-                  last_copied_at_ms DESC
+         ORDER BY {}
          LIMIT ?1 OFFSET ?2;",
-    )?;
+        order_clause
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
 
     let rows = stmt.query_map(params![limit as i64, offset as i64], |row| {
         let id_str: String = row.get(0)?;
