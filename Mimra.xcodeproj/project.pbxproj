@@ -24,6 +24,10 @@
 		10000015 /* PanelViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000017 /* PanelViewModel.swift */; };
 		10000016 /* PasteCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000018 /* PasteCoordinator.swift */; };
 		10000017 /* AccessibilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000019 /* AccessibilityService.swift */; };
+		10000018 /* ImageThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000020 /* ImageThumbnailService.swift */; };
+		10000019 /* ColorAndUrlPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000021 /* ColorAndUrlPreview.swift */; };
+		10000020 /* AppIconService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000022 /* AppIconService.swift */; };
+		10000021 /* ClipboardTypeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000023 /* ClipboardTypeConfiguration.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +51,10 @@
 		20000017 /* PanelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelViewModel.swift; sourceTree = "<group>"; };
 		20000018 /* PasteCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteCoordinator.swift; sourceTree = "<group>"; };
 		20000019 /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
+		20000020 /* ImageThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailService.swift; sourceTree = "<group>"; };
+		20000021 /* ColorAndUrlPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorAndUrlPreview.swift; sourceTree = "<group>"; };
+		20000022 /* AppIconService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconService.swift; sourceTree = "<group>"; };
+		20000023 /* ClipboardTypeConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTypeConfiguration.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -135,6 +143,9 @@
 				20000016 /* HotkeyManager.swift */,
 				20000018 /* PasteCoordinator.swift */,
 				20000019 /* AccessibilityService.swift */,
+				20000020 /* ImageThumbnailService.swift */,
+				20000022 /* AppIconService.swift */,
+				20000023 /* ClipboardTypeConfiguration.swift */,
 			);
 			path = macOS;
 			sourceTree = "<group>";
@@ -171,6 +182,7 @@
 				20000014 /* FloatingPanel.swift */,
 				20000015 /* FloatingPanelView.swift */,
 				20000017 /* PanelViewModel.swift */,
+				20000021 /* ColorAndUrlPreview.swift */,
 			);
 			path = Panel;
 			sourceTree = "<group>";
@@ -243,6 +255,10 @@
 				10000015 /* PanelViewModel.swift in Sources */,
 				10000016 /* PasteCoordinator.swift in Sources */,
 				10000017 /* AccessibilityService.swift in Sources */,
+				10000018 /* ImageThumbnailService.swift in Sources */,
+				10000019 /* ColorAndUrlPreview.swift in Sources */,
+				10000020 /* AppIconService.swift in Sources */,
+				10000021 /* ClipboardTypeConfiguration.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

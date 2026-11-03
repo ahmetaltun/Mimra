@@ -22,6 +22,7 @@ pub mod uti {
     pub const HEIC: &str = "public.heic";
     pub const FILE_URL: &str = "public.file-url";
     pub const URL: &str = "public.url";
+    pub const URL_NAME: &str = "public.url-name";
     pub const MIMRA_PROVENANCE: &str = "com.mimra.provenance";
 }
 

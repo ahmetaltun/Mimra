@@ -236,6 +236,154 @@ fn test_ingest_new_item_and_duplicate_handling() {
 }
 
 #[test]
+fn test_ingest_duplicate_merges_rich_representations_and_upgrades_kind() {
+    use crate::domain::content::{uti, ContentKind, Representation};
+    use crate::domain::item::HistoryItem;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    // 1. Ingest plain text item (ContentKind::Text)
+    let rep_plain =
+        Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Meeting Summary".to_vec()).unwrap();
+    let item1 = HistoryItem::new(
+        vec![rep_plain],
+        Some("com.apple.Terminal".to_string()),
+        1000,
+    )
+    .unwrap();
+    let original_id = item1.id;
+
+    let outcome1 = ingest_clipboard_item(&mut conn, item1, 100).unwrap();
+    assert!(matches!(outcome1, IngestOutcome::NewItem(_)));
+
+    // 2. Recopy identical text with rich representations (HTML + RTF) from Notes/Safari
+    let rep_plain2 =
+        Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Meeting Summary".to_vec()).unwrap();
+    let rep_html = Representation::new(0, uti::HTML, b"<b>Meeting Summary</b>".to_vec()).unwrap();
+    let rep_rtf = Representation::new(0, uti::RTF, b"{\\rtf1 Meeting Summary}".to_vec()).unwrap();
+    let item2 = HistoryItem::new(
+        vec![rep_plain2, rep_html, rep_rtf],
+        Some("com.apple.Notes".to_string()),
+        2000,
+    )
+    .unwrap();
+
+    let outcome2 = ingest_clipboard_item(&mut conn, item2, 100).unwrap();
+    match outcome2 {
+        IngestOutcome::DuplicateUpdated(updated) => {
+            assert_eq!(updated.id, original_id);
+            assert_eq!(updated.copy_count, 2);
+            assert_eq!(
+                updated.content_kind,
+                ContentKind::RichText,
+                "Kind must upgrade from Text to RichText"
+            );
+            assert_eq!(
+                updated.representations.len(),
+                3,
+                "Merged item must contain all 3 representations"
+            );
+            assert_eq!(
+                updated.source_bundle_id,
+                Some("com.apple.Notes".to_string())
+            );
+        }
+        IngestOutcome::NewItem(_) => panic!("Expected DuplicateUpdated"),
+    }
+
+    // 3. Recopy plain text only again (e.g. from Terminal) -> rich representations must NOT be lost
+    let rep_plain3 =
+        Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Meeting Summary".to_vec()).unwrap();
+    let item3 = HistoryItem::new(
+        vec![rep_plain3],
+        Some("com.apple.Terminal".to_string()),
+        3000,
+    )
+    .unwrap();
+
+    let outcome3 = ingest_clipboard_item(&mut conn, item3, 100).unwrap();
+    match outcome3 {
+        IngestOutcome::DuplicateUpdated(updated) => {
+            assert_eq!(updated.id, original_id);
+            assert_eq!(updated.copy_count, 3);
+            assert_eq!(
+                updated.content_kind,
+                ContentKind::RichText,
+                "Kind must remain RichText"
+            );
+            assert_eq!(
+                updated.representations.len(),
+                3,
+                "Rich representations must be preserved across plain recopy"
+            );
+        }
+        IngestOutcome::NewItem(_) => panic!("Expected DuplicateUpdated"),
+    }
+
+    // 4. Verify in-database representations count
+    let stored_reps = load_representations(&conn, &original_id).unwrap();
+    assert_eq!(stored_reps.len(), 3);
+
+    verify_database_integrity(&conn).expect("Database integrity check must pass");
+}
+
+#[test]
+fn test_ingest_google_sheets_recopy_updates_html_representation() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    let plain = b"Revenue\t$50,000".to_vec();
+    let html_v1 = b"<google-sheets data-session=\"1\"><table><tr><td>$50,000</td></tr></table></google-sheets>".to_vec();
+    let html_v2 = b"<google-sheets data-session=\"2\"><table><tr><td>$50,000</td></tr></table></google-sheets>".to_vec();
+
+    let rep_p1 = Representation::new(0, uti::UTF8_PLAIN_TEXT, plain.clone()).unwrap();
+    let rep_h1 = Representation::new(0, uti::HTML, html_v1).unwrap();
+    let item1 = HistoryItem::new(
+        vec![rep_p1, rep_h1],
+        Some("com.google.Chrome".to_string()),
+        1000,
+    )
+    .unwrap();
+    let original_id = item1.id;
+
+    let outcome1 = ingest_clipboard_item(&mut conn, item1, 100).unwrap();
+    assert!(matches!(outcome1, IngestOutcome::NewItem(_)));
+
+    let rep_p2 = Representation::new(0, uti::UTF8_PLAIN_TEXT, plain).unwrap();
+    let rep_h2 = Representation::new(0, uti::HTML, html_v2.clone()).unwrap();
+    let item2 = HistoryItem::new(
+        vec![rep_p2, rep_h2],
+        Some("com.google.Chrome".to_string()),
+        2000,
+    )
+    .unwrap();
+
+    let outcome2 = ingest_clipboard_item(&mut conn, item2, 100).unwrap();
+    match outcome2 {
+        IngestOutcome::DuplicateUpdated(updated) => {
+            assert_eq!(updated.id, original_id);
+            assert_eq!(updated.copy_count, 2);
+            let html_rep = updated
+                .representations
+                .iter()
+                .find(|r| r.uti == uti::HTML)
+                .unwrap();
+            assert_eq!(
+                html_rep.payload, html_v2,
+                "HTML payload must be updated to the latest copy"
+            );
+        }
+        IngestOutcome::NewItem(_) => panic!("Expected DuplicateUpdated"),
+    }
+
+    verify_database_integrity(&conn).expect("Database integrity check must pass");
+}
+
+#[test]
 fn test_retention_limit_and_pinned_protection() {
     use crate::domain::content::{uti, Representation};
     use crate::domain::item::HistoryItem;

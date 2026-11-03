@@ -439,3 +439,272 @@ Implement an airtight, multi-layered guard pipeline in `PasteCoordinator.paste(.
 * **Positive:** Absolute guarantee that Mimra never pastes to an unintended target or password field; transparent degradation to copy-only mode with descriptive typed reasons; 100% testable without manual hardware interaction.
 * **Negative:** Focus verification adds a check on `frontmostApplication` following activation.
 
+---
+
+## ADR-018: HTML & RTF Multi-Representation Capture, Replay Fidelity, and Plain-Text Synthesis
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+When macOS applications (Safari, Google Chrome, Apple Pages, Microsoft Word, Apple Notes, TextEdit) copy formatted text, they place multiple representations on the pasteboard simultaneously. This presents several challenges:
+1. **UTI Variant Fragmentation:** Modern apps use standard UTIs (`public.html`, `public.rtf`, `com.apple.flat-rtfd`), whereas legacy AppKit or WebKit components use legacy type strings (`Apple HTML pasteboard type`, `NSHTMLPboardType`, `NSRTFPboardType`, `NSRTFDPboardType`).
+2. **Searchability and Title Derivation:** Certain tools write only HTML or only RTF without a `public.utf8-plain-text` flavor. Without plain text, the entry would lack a descriptive title in the history UI and would be unsearchable in SQLite FTS5.
+3. **Replay Fidelity:** When replaying original rich text, target applications expect all original representations preserved byte-for-byte. Furthermore, older Cocoa apps often query `item.string(forType: .string)` rather than `item.data(forType:)`.
+4. **Resilience to Malformed Payloads:** Truncated or malformed HTML/RTF payloads must never crash the capture or replay pipelines.
+
+### Decision
+1. **Canonical UTI Standardization:**
+   - In `ClipboardMonitor.supportedUtiMappings`, map legacy WebKit and AppKit identifiers (`Apple HTML pasteboard type`, `NSHTMLPboardType`, `NSRTFPboardType`, `com.apple.flat-rtfd`, `public.rtfd`, `NSRTFDPboardType`) to canonical UTIs (`public.html`, `public.rtf`, `com.apple.flat-rtfd`, `public.utf8-plain-text`).
+2. **Swift Plain-Text Synthesis:**
+   - In `ClipboardMonitor.extractRawCapture`, detect when an item group contains rich text (`public.html`, `public.rtf`, `com.apple.flat-rtfd`) but lacks `public.utf8-plain-text`.
+   - Synthesize a `public.utf8-plain-text` representation derived via `PasteCoordinator.extractPlainText` so the item is immediately indexed and titled.
+3. **Rust Defense-in-Depth Extraction:**
+   - In `RustCore`, implement `HistoryItem::extract_text_from_html` and `HistoryItem::extract_text_from_rtf` to extract clean NFC-normalized plain text from HTML (stripping tags, decoding entities, spacing block elements) and RTF (skipping font/color tables, stripping control words, converting paragraph breaks, unescaping braces).
+   - In `HistoryItem::derive_text_fields`, utilize this extracted text as a fallback when plain text is absent, ensuring FTS5 indexing and title derivation even when ingested directly via Rust FFI.
+4. **Replay Compatibility:**
+   - In `PasteCoordinator.encodeOriginalItems`, set both `.setData` and `.setString` for plain-text representations to ensure compatibility with both modern and legacy target applications.
+   - In `PasteCoordinator.extractPlainText`, provide regex fallback scanners if `NSAttributedString` parsing fails on malformed or truncated inputs.
+
+### Consequences
+* **Positive:** Full round-trip fidelity across Word, Pages, Notes, Safari, and Chrome; all rich items are searchable in SQLite FTS5 and display readable titles; 100% resilient to malformed or truncated payloads.
+* **Negative:** Synthesizing plain text adds an `NSAttributedString` conversion step during capture for rich-only copies.
+
+---
+
+## ADR-019: Lazy Non-Main-Thread Image Decoding, Memory-Bounded Thumbnail Caching, and Format Fidelity
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Users copy high-resolution screenshots, diagrams, and photos in various supported image formats (`public.png`, `public.tiff`, `public.jpeg`, `public.heic`). Unconstrained handling of image payloads introduces critical performance and memory hazards:
+1. **Main-Thread Decoding Jitter:** Decoding multi-megabyte compressed images directly on the main thread during SwiftUI row evaluation causes dropped frames, input latency, and sluggish panel navigation.
+2. **Unbounded Memory Consumption:** Decompressing full-size bitmaps (e.g., a 48 MP photo can consume 200 MB of uncompressed memory) would rapidly exhaust available memory if stored in an unconstrained cache.
+3. **Repeated Redecoding:** Scrolling through history rows would repeatedly decompress identical images without an efficient thumbnail cache.
+4. **Replay & Format Fallback:** Replaying images must preserve exact original bytes, and plain-text paste requests on pure images must gracefully fall back to the image representation rather than wiping the clipboard.
+
+### Decision
+1. **Asynchronous, Off-Main-Thread Thumbnailing:**
+   - Implement `ImageThumbnailService` as a Swift actor.
+   - Use `CGImageSourceCreateThumbnailAtIndex` with:
+     - `kCGImageSourceShouldCache: false` (avoids immediate full-size allocation)
+     - `kCGImageSourceCreateThumbnailFromImageAlways: true`
+     - `kCGImageSourceCreateThumbnailWithTransform: true`
+     - `kCGImageSourceThumbnailMaxPixelSize: 160` (clamped thumbnail bounds)
+   - Perform all decoding tasks in background `Task`s off the main actor.
+2. **Memory-Bounded Cache & Swift 6 Isolation:**
+   - Wrap `NSCache<NSString, NSImage>` in an `@unchecked Sendable` `ThumbnailCacheBox` to satisfy Swift 6 strict concurrency while allowing synchronous, zero-latency cache hits via `cachedThumbnail(for:)`.
+   - Enforce strict limits: `countLimit = 250` thumbnails, `totalCostLimit = 64 MB` estimated by pixel buffer size (`width * height * 4`).
+3. **Task Coalescing:**
+   - Maintain an in-flight task dictionary (`inFlightTasks: [String: Task<NSImage?, Never>]`) to deduplicate simultaneous requests for the same `itemId`, preventing redundant SQLite reads and duplicate decodes.
+4. **UI Integration:**
+   - In `FloatingPanelView.swift`, introduce `ItemThumbnailView`: renders a 22×22 thumbnail with 4pt continuous rounded corners and subtle border, seamlessly displaying the SF Symbol placeholder while decoding occurs asynchronously.
+5. **Rust Domain Metadata:**
+   - In `RustCore`, update `HistoryItem::derive_text_fields` for `ContentKind::Image` to generate descriptive titles incorporating format and human-readable byte size (e.g. `PNG Image (2.5 KB)`), indexing format metadata in FTS5.
+
+### Consequences
+* **Positive:** Zero main-thread decode latency; fluid 120 FPS scrolling; strictly capped RAM usage; descriptive image titles and searchability in Rust FTS5; 100% testable in automated CLI environments.
+* **Negative:** Storing thumbnails consumes up to 64 MB of RAM when full (safely bounded and evictable).
+
+---
+
+## ADR-020: File Reference Normalization, Multi-File Group Ordering, Finder Pasteboard Replay, and Vanished-File Resilience
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+When files are copied in macOS Finder, Terminal, or third-party tools:
+1. **Multi-Item Groups:** Copying multiple files generates distinct `NSPasteboardItem` objects on the pasteboard, each bearing `public.file-url` (`kUTTypeFileURL`). Legacy macOS utilities may write an `NSFilenamesPboardType` property list of POSIX path strings instead.
+2. **URL Escaping and Titles:** File URLs carry percent-encodings (`file:///path/to/My%20Folder/Report%20File.pdf`) and may contain trailing directory slashes. List titles must display clean, unencoded basenames (`Report File.pdf` or `Projects`), while multi-file copies should indicate the count (`3 files`).
+3. **Replay Fidelity:** Replaying file copies into Finder requires valid `NSPasteboardItem` structures with `.fileURL` types and data preserved across original group indices.
+4. **Vanished Files:** If a referenced file has been deleted, moved, or unmounted between copy and paste:
+   - Replay must not crash or fail.
+   - Plain-text paste must continue to output the POSIX path string without silent downgrade or empty clipboard writes.
+   - The UI must provide transparent visual indication that the target file no longer exists at its recorded path.
+
+### Decision
+1. **Rust Domain Normalization:**
+   - In `RustCore/src/domain/item.rs`, evaluate `ContentKind::FileUrls` before plain text in `derive_text_fields`.
+   - Implement `HistoryItem::percent_decode_str` to decode percent sequences (`%20` -> `' '`, etc.) and trim trailing slashes.
+   - If 1 file: extract decoded basename. If >1 file: format as `"{} files"`.
+   - Populate `search_text` with newline-delimited URLs so all filenames and full paths are indexed in FTS5.
+2. **Swift Capture & Legacy Bridge:**
+   - In `ClipboardMonitor.swift`, detect legacy `NSFilenamesPboardType` payloads if `public.file-url` is absent, parsing POSIX paths and generating canonical `public.file-url` representations.
+   - Synthesize a `public.utf8-plain-text` flavor containing decoded POSIX paths for search and plain-text fallback.
+3. **Finder-Compatible Replay:**
+   - In `PasteCoordinator.swift`, iterate across sorted `groupIndex` values to emit matching `NSPasteboardItem`s. Set `.setString(trimmed, forType: .fileURL)` and `.setData(payload, forType: .fileURL)` with provenance markers.
+   - In plain-text mode (`.plainText`), extract clean, newline-delimited POSIX paths without URL schemes.
+4. **Vanished-File UX:**
+   - In `FloatingPanelView.swift`, implement `isFileVanished(path:)`: inspects the local filesystem via `FileManager.default.fileExists(atPath:)`.
+   - If the file has vanished from disk, display a subtle `"missing"` badge next to the title.
+
+### Consequences
+* **Positive:** Complete round-trip fidelity for Finder and Terminal file copies; multi-file group order preserved; clean percent-decoded titles; clear vanished-file UX; zero data degradation.
+* **Negative:** Checking filesystem existence for displayed file items performs a fast stat check.
+
+
+
+---
+
+## ADR-021: URL Canonicalization, Web Page Title Attribution, HEX Color Swatch Previews, and Click-Safe Navigation
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Users frequently copy URLs (from Safari, Chrome, Slack, emails) and HEX color codes (from design tools like Figma, CSS, Xcode, terminal, web inspectors). Several specific requirements and pitfalls arise:
+1. **URL Noise and Normalization:** Copied URLs often carry redundant default ports (`:80`, `:443`), redundant trailing consecutive slashes (`//`), and mixed-case schemes or hosts (`HTTPS://WWW.EXAMPLE.COM`). Furthermore, macOS browsers often provide rich metadata flavors (`public.url`, `public.url-name`, and `public.utf8-plain-text`).
+2. **Searchability and Title Attribution:** When a user copies a link with an associated web page title (e.g. `public.url-name`), the page title should serve as the human-readable item title, while the normalized URL, host, and clean domain should be indexed in SQLite FTS5 for instant discovery.
+3. **HEX Color Recognition & Visual Swatches:** Color codes are commonly formatted as `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, or with a `0x` prefix. Users want an immediate visual preview (swatch) of the color in the history list, but **text must remain primary**: pasting the item must output the exact text string (e.g., `#FF5733`), never an image or binary artifact.
+4. **Click-Safe Navigation:** In a clipboard manager, clicking an item row must immediately select and commit the item for pasting/copying into the active recipient application. Clicking a row must **never** inadvertently launch the default web browser, preventing disruptive accidental browser tab explosions during keyboard or mouse navigation.
+
+### Decision
+1. **Rust Domain URL Canonicalization & FTS5 Indexing:**
+   - Implement `CanonicalUrl` in `RustCore/src/domain/url_utils.rs`: converts scheme and host to lower case, removes default ports (80 for http, 443 for https, 21 for ftp), collapses duplicate consecutive slashes in paths, and extracts clean display domains (stripping `www.`).
+   - In `HistoryItem::derive_text_fields`, recognize `public.url` UTI representations and plain-text URLs. If `public.url-name` is present, use it as the item title; otherwise use the canonical URL. Index the URL, domain, and host in `search_text` for FTS5 queries.
+2. **Rust Domain HEX Color Parsing:**
+   - Implement `HexColor` in `RustCore/src/domain/color.rs`: parses 3, 4, 6, and 8-digit hex strings (with `#` or `0x` prefix). Computes 8-bit channel expansion and ITU-R BT.601 perceptual luminance (`is_perceptually_dark`).
+   - In `HistoryItem::derive_text_fields`, detect hex color plain text and index both the raw `#HEX` and stripped `HEX` for FTS5 searchability, keeping the exact copied string as the title.
+3. **Swift Detection & SwiftUI Previews:**
+   - In `Mimra/UI/Panel/ColorAndUrlPreview.swift`, create pure, non-blocking Swift detectors: `ColorDetector` (yielding `HexColorInfo`) and `UrlDetector` (yielding `UrlInfo`).
+   - Create `ColorSwatchView`: renders a rounded rectangle with contrast outline border and an alpha checkerboard grid for translucent colors.
+   - Create `UrlBadgeView`: renders a clean domain pill badge and link icon.
+4. **Settings Toggles & Panel Integration:**
+   - In `SettingsView.swift` (Appearance tab), add `@AppStorage("showColorSwatches")` and `@AppStorage("showUrlPreviews")` toggles.
+   - In `FloatingPanelView.swift`:
+     - `ItemThumbnailView`: Displays `ColorSwatchView` in place of the generic text icon when color swatches are enabled and a hex color is detected; shows `link` icon for URLs.
+     - `PanelItemRow`: Shows an inline color swatch next to the hex text and a domain badge next to URLs.
+5. **Click-Safe Row Guarantee:**
+   - Standard row click or Return key exclusively commits the item (copy/paste into the active app).
+   - An explicit external browser open action is provided via an isolated hover button (`NSWorkspace.shared.open(url)`) or future slideout preview, ensuring row selection remains 100% click-safe.
+
+### Consequences
+* **Positive:** Full feature parity for color swatches and URL previews; exact text payload preserved on paste; rich page title attribution; FTS5 domain and hex searchability; zero accidental browser activations.
+* **Negative:** String inspection on row display occurs synchronously in SwiftUI; mitigated by lightweight, non-allocating regex-free parsing.
+
+
+---
+
+## ADR-022: Source Application Attribution via `org.nspasteboard.source`, LaunchServices Bundle Resolution, and Off-Main App Icon Caching
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Users copy content across dozens of diverse macOS applications (browsers, IDEs, terminal, office suites, design tools). Displaying the source application's identity and icon improves visual scanning and attribution. Key engineering considerations include:
+1. **Source Attribution Extraction:** Applications may attach source markers either as explicit strings via `org.nspasteboard.source` or as raw UTF-8 `Data` buffers. If absent, the attribution must fall back to the frontmost active application via `NSWorkspace.shared.frontmostApplication`.
+2. **LaunchServices Bundle Resolution:** Resolving an application icon from a bundle identifier (`NSWorkspace.shared.urlForApplication(withBundleIdentifier:)` and `NSWorkspace.shared.icon(forFile:)`) involves disk inspection and LaunchServices lookups. Running this synchronously on the main thread during SwiftUI row rendering would cause dropped frames and UI jitter.
+3. **App Updates & Staleness (F-016):** When an installed application updates its bundle or icon on disk, cached icons should refresh rather than displaying stale assets permanently.
+4. **Unknown Sources & Remote Captures:** Content copied from uninstalled tools, CLI utilities, or remote Universal Clipboard devices may present unknown bundle identifiers or nil. The resolution pipeline must be 100% "unknown source safe", failing gracefully without panics, exceptions, or visual glitches.
+
+### Decision
+1. **Multi-Source Detection in `ClipboardMonitor`:**
+   - In `ClipboardMonitor.detectSourceBundleId()`, first inspect all pasteboard items for `org.nspasteboard.source` (checking both `.string` and UTF-8 `.data`).
+   - If not found, fall back to `NSWorkspace.shared.frontmostApplication?.bundleIdentifier`.
+   - Store the resulting identifier in `RawCapture.sourceBundleId`, persisted in SQLite via `HistoryItem.source_bundle_id`.
+2. **Asynchronous, Memory-Bounded `AppIconService`:**
+   - Implement `AppIconService` as a Swift actor.
+   - Use an `@unchecked Sendable` `IconCacheBox` wrapping `NSCache<NSString, CachedIconEntry>` with `countLimit = 120`.
+   - Store bundle file modification timestamps (`contentModificationDateKey`) in cache entries. If the on-disk bundle modification date is newer than the cached date, refresh the icon.
+   - Coalesce simultaneous resolution requests for the same bundle ID via an in-flight task map (`inFlightResolutions`).
+   - Provide a zero-contention synchronous fast path `cachedIcon(for:)` for immediate, flash-free SwiftUI rendering.
+3. **SwiftUI Integration & Settings Toggle:**
+   - Implement `SourceAppIconView`: renders a 14×14 rounded app icon with asynchronous resolution and graceful fallback to clear space if unknown.
+   - In `PanelItemRow`, display `SourceAppIconView` adjacent to the row's status indicators.
+   - In `SettingsView.swift` (Appearance tab), add user toggle `Show source application icon` (`showSourceAppIcon`, default `true`).
+4. **Replay Provenance Guard:**
+   - Replayed items continue to stamp `org.nspasteboard.source = "com.mimra.app"`, preventing self-recapture loops.
+
+### Consequences
+* **Positive:** Fast, asynchronous app icon resolution; zero main-thread disk I/O; icons refresh when applications update; complete resilience to unknown bundle IDs; user-configurable display.
+* **Negative:** LaunchServices queries occur off-main on cold start; mitigated by bounded cache and coalescing.
+
+---
+
+## ADR-023: Deduplication Hardening Across Complex Applications
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In complex macOS applications (Google Sheets, Microsoft Office, VS Code, Apple Notes, Safari, Chrome, Finder), naive raw-payload deduplication creates frequent duplicate storms or lost formatting:
+1. **Google Sheets / Excel HTML Session Churn:**
+   Copying spreadsheet cells attaches `public.utf8-plain-text` alongside `public.html`. Google Sheets generates dynamic session IDs (`data-sheets-root="session-xxxx"`), random CSS class names, and timestamps in its HTML payload on every copy. If content hashing compares raw HTML representations, identical cells copied twice produce different hashes, flooding history with duplicate entries.
+2. **Safari & Web URL Variants (F-006, F-012):**
+   Copying a URL from Safari's address bar puts plain text, while context-menu "Copy Link" includes `public.url`, `public.url-name` (page title), and plain text. Furthermore, trailing slashes (`https://example.com/foo/` vs `https://example.com/foo`), default ports (`:80`, `:443`), and case variations in hosts create distinct raw hashes despite referencing the identical resource.
+3. **VS Code Trailing Whitespace & Newlines:**
+   In VS Code and modern text editors, pressing Cmd+C on a line without selection copies the line with a trailing newline `\n`. Selecting the line text copies without the newline. Furthermore, code snippets frequently contain trailing spaces before newlines.
+4. **Apple Notes & MS Office RTF Variations:**
+   Apple Notes and MS Word emit RTF payloads with local font table definitions, stylesheet IDs, and document GUIDs that vary between consecutive copies of identical text.
+5. **Multi-Representation Merging & Upgrade Progression:**
+   When a user copies a plain text snippet and later copies the same snippet from a rich text editor (or vice versa), the existing history item must be updated with richer representations and refreshed formatting rather than creating a duplicate entry or dropping rich formatting.
+6. **Finder Multi-File Selection Order:**
+   Selecting files in Finder in different orders (e.g. file A then B vs file B then A) emits file URLs in arbitrary permutation.
+7. **Rapid Burst Debouncing:**
+   Multi-stage clipboard writes by complex editors can increment `changeCount` multiple times within < 100ms.
+
+### Decision
+1. **Canonical Deduplication Hashing (`HistoryItem::calculate_content_hash`):**
+   - **Text & Rich Text with Plain Text:** Normalizes newlines (`\r\n` and `\r` -> `\n`), trims outer whitespace/newlines, NFC-normalizes Unicode, and trims trailing whitespace per line for multiline text (`canonicalize_text`).
+   - **URLs (`public.url` or plain text URL):** Parsed via `CanonicalUrl::parse`, schemes and hosts lowercased, default ports 80/443 stripped, slashes collapsed, and trailing slashes normalized (`clean_url = canonical.normalized_url.trim_end_matches('/')`). Hashed as `URL:\n<normalized_url>`.
+   - **Colors:** Parsed via `HexColor::parse` and hashed as `COLOR:\n<hex_clean>`.
+   - **General Text:** Hashed as `TEXT:\n<canonical_text>`.
+   - **Rich Text without Plain Text:** Extracts plain text from HTML or RTF; if non-empty, hashes extracted canonical text.
+   - **File URLs (`public.file-url`):** Schemes stripped, percent-decoded, trailing slashes trimmed, NFC-normalized, and canonical paths sorted lexicographically before hashing (`canonicalize_file_url`).
+   - **Images:** Hashes primary image representation payload (`IMAGE:\n<uti><payload>`).
+2. **Transactional Representation Upsert & Upgrades (`update_recopy_and_merge`):**
+   - On duplicate match via `find_by_content_hash`:
+     - Upsert incoming representations into SQLite `item_representations` using `ON CONFLICT(item_id, group_index, uti) DO UPDATE SET payload = excluded.payload`.
+     - Preserves existing rich representations when an item is recopied from a plain-text source (e.g. copying rich text then recopying in Terminal retains RTF/HTML).
+     - Upgrades `content_kind` from `Text` to `RichText` if rich representations arrive.
+     - Upgrades bare URL titles to rich web page titles when `public.url-name` arrives.
+     - Updates `last_copied_at_ms`, increments `copy_count`, and recalculates `byte_size`.
+     - Pinned status, order, key, and `first_copied_at_ms` remain completely preserved.
+3. **Swift `ClipboardMonitor` Burst Debouncing:**
+   - Detects rapid successive `changeCount` updates (< 100ms) from the same source app with identical representation fingerprint, skipping redundant processing to prevent duplicate storms during multi-stage pasteboard writes.
+
+### Consequences
+* **Positive:** Eliminates duplicate storms from Google Sheets, Excel, Safari, VS Code, and Apple Notes; preserves rich formatting across multi-representation recopies; upgrades bare URL titles to web page titles automatically; zero data loss.
+* **Negative:** Slightly more CPU work per ingestion to compute canonical hash; offset by BLAKE3 efficiency (< 10 microseconds).
+
+---
+
+## ADR-024: Clipboard Format Enablement & Payload Filtering
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Users require granular preferences to choose which clipboard content types Mimra captures (plain text, rich text, images, and file references). Additionally, security and privacy requirements (`F-015`) dictate that unknown, proprietary, or unselected payload types (such as `WebArchive` or arbitrary binary blobs) must never be stored in SQLite or persisted to disk. Key architectural criteria include:
+1. **Pre-Payload Filtering:** If a copied item contains only disabled formats (e.g. screenshot taken while images are disabled), the clipboard event must be rejected in Swift before reading raw byte payloads into memory or making FFI calls.
+2. **Selective Representation Stripping:** If an item contains multiple formats (e.g. formatted text copied from Safari with plain text and HTML) and the user has disabled rich text, the rich representations (`public.html`, `public.rtf`) must be stripped in Swift, capturing only the plain text representation.
+3. **Strict Payload Allowlisting (F-015):** Unsupported private payloads (e.g. `com.apple.webarchive`, `com.adobe.*`) must be dropped unconditionally.
+4. **Live Settings Synchronization:** Toggling format settings in SwiftUI Settings must immediately take effect in the active `ClipboardMonitor` and `PrivacyFilter`.
+
+### Decision
+1. **`ClipboardTypeConfiguration` Domain Model:**
+   - Implemented `ClipboardTypeConfiguration` with toggles for `storePlainText`, `storeRichText`, `storeImages`, and `storeFiles` (defaulting all to `true`).
+   - Centralized `supportedUtiMappings` defining all allowlisted UTIs.
+   - Provided `isUtiEnabled(canonicalUti:)` and `isRawTypeEnabled(rawType:)` to evaluate format enablement against user preferences.
+2. **Early Metadata Evaluation in `PrivacyFilter`:**
+   - In `PrivacyFilter.shouldCapture()`, check whether the pasteboard contains at least one enabled supported format (`_typeConfiguration.hasAnyEnabledType(in: allRawTypes)`). If not, drop with `.noSupportedTypes` before reading any data bytes into memory.
+3. **Representation Stripping in `ClipboardMonitor`:**
+   - In `ClipboardMonitor.extractRawCapture()`, filter each candidate representation against `typeConfiguration.isUtiEnabled(canonicalUti)`.
+   - Strip disabled representations from multi-representation groups (e.g. dropping HTML/RTF while preserving plain text).
+   - Skip legacy file serialization and plain text synthesis if their respective format toggles are disabled.
+4. **SwiftUI Settings & Reactive Updates:**
+   - Added a dedicated "Storage" tab in `SettingsView.swift` with user toggles bound to `@AppStorage`.
+   - In `AppDelegate.swift`, observed `UserDefaults.didChangeNotification` to automatically reload `typeConfiguration` when preferences change.
+
+### Consequences
+* **Positive:** Full user control over captured formats (`F-013`); strict allowlist guarantees zero arbitrary or private binary payloads reach disk (`F-015`); multi-representation copies cleanly degrade to plain text when rich formats are disabled; zero main-thread overhead.
+* **Negative:** None. Minimal overhead during pasteboard polling (< 1 microsecond).

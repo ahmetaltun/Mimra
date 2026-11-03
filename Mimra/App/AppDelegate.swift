@@ -25,6 +25,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.clipboardMonitor = monitor
             monitor.startMonitoring()
 
+            // Observe format enablement updates from Settings (F-013)
+            NotificationCenter.default.addObserver(
+                forName: UserDefaults.didChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak monitor] _ in
+                monitor?.reloadTypeConfiguration()
+            }
+
             // 3. Initialize Panel Coordinator
             let panelCoord = PanelCoordinator(coreClient: client)
             self.panelCoordinator = panelCoord

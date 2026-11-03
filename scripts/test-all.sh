@@ -48,6 +48,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
     -lmimra_core \
     "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/tests/privacy_filter_tests.swift" \
     -o /tmp/mimra_privacy_filter_test_runner
@@ -77,8 +78,10 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     -lmimra_core \
     "$PROJECT_ROOT/Generated/mimra_core.swift" \
     "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/tests/capture_pipeline_tests.swift" \
     -o /tmp/mimra_capture_pipeline_test_runner
@@ -108,11 +111,15 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     -lmimra_core \
     "$PROJECT_ROOT/Generated/mimra_core.swift" \
     "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
@@ -139,11 +146,15 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     -lmimra_core \
     "$PROJECT_ROOT/Generated/mimra_core.swift" \
     "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
@@ -163,11 +174,15 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     -lmimra_core \
     "$PROJECT_ROOT/Generated/mimra_core.swift" \
     "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
@@ -185,6 +200,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     -lmimra_core \
     "$PROJECT_ROOT/Generated/mimra_core.swift" \
     "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
@@ -203,11 +219,15 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     -lmimra_core \
     "$PROJECT_ROOT/Generated/mimra_core.swift" \
     "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
@@ -225,6 +245,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     -lmimra_core \
     "$PROJECT_ROOT/Generated/mimra_core.swift" \
     "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
@@ -244,11 +265,15 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     -lmimra_core \
     "$PROJECT_ROOT/Generated/mimra_core.swift" \
     "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
@@ -266,6 +291,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     -lmimra_core \
     "$PROJECT_ROOT/Generated/mimra_core.swift" \
     "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
@@ -276,7 +302,156 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 /tmp/mimra_paste_error_test_runner
 rm -f /tmp/mimra_paste_error_test_runner
 
-echo -e "\n=== 19. Building Native macOS App (Mimra.app) via Xcode ==="
+echo -e "\n=== 19. Running Rich Text & HTML Multi-Representation Tests (T-TYPE-01) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/tests/rich_text_tests.swift" \
+    -o /tmp/mimra_rich_text_test_runner
+
+/tmp/mimra_rich_text_test_runner
+rm -f /tmp/mimra_rich_text_test_runner
+
+echo -e "\n=== 20. Running Image Types & Thumbnail Cache Tests (T-TYPE-02) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/tests/image_type_tests.swift" \
+    -o /tmp/mimra_image_type_test_runner
+
+/tmp/mimra_image_type_test_runner
+rm -f /tmp/mimra_image_type_test_runner
+
+echo -e "\n=== 21. Running File Reference & Multi-File URL Tests (T-TYPE-03) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/tests/file_url_tests.swift" \
+    -o /tmp/mimra_file_url_test_runner
+
+/tmp/mimra_file_url_test_runner
+rm -f /tmp/mimra_file_url_test_runner
+
+echo -e "\n=== 22. Running URL & HEX Color Recognition Tests (T-TYPE-04, T-TYPE-06) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/tests/url_color_tests.swift" \
+    -o /tmp/mimra_url_color_test_runner
+
+/tmp/mimra_url_color_test_runner
+rm -f /tmp/mimra_url_color_test_runner
+
+echo -e "\n=== 23. Running Source Attribution & App Icon Tests (T-CAP-04) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/tests/source_attribution_tests.swift" \
+    -o /tmp/mimra_source_attribution_test_runner
+
+/tmp/mimra_source_attribution_test_runner
+rm -f /tmp/mimra_source_attribution_test_runner
+
+echo -e "\n=== 24. Running Deduplication Hardening Tests (T-CAP-05, F-012) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/tests/dedupe_hardening_tests.swift" \
+    -o /tmp/mimra_dedupe_hardening_test_runner
+
+/tmp/mimra_dedupe_hardening_test_runner
+rm -f /tmp/mimra_dedupe_hardening_test_runner
+
+echo -e "\n=== 25. Running Clipboard Type Settings Tests (T-TYPE-05, F-013, F-015) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/tests/type_settings_tests.swift" \
+    -o /tmp/mimra_type_settings_test_runner
+
+/tmp/mimra_type_settings_test_runner
+rm -f /tmp/mimra_type_settings_test_runner
+
+echo -e "\n=== 26. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \
     -scheme Mimra \

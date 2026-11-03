@@ -28,6 +28,11 @@ public final class ClipboardMonitor: ObservableObject {
     private var timer: Timer?
     private var lastChangeCount: Int = -1
 
+    /// Timestamp (uptime nanoseconds) of the most recent capture for burst debouncing (F-012, T-CAP-05).
+    private var lastCaptureUptimeNanos: UInt64 = 0
+    /// Lightweight hash of the most recent capture for rapid burst deduplication (F-012, T-CAP-05).
+    private var lastCaptureFingerprint: Int = 0
+
     @Published public private(set) var isMonitoring: Bool = false
     public var pollingInterval: TimeInterval = 0.5 {
         didSet {
@@ -40,44 +45,37 @@ public final class ClipboardMonitor: ObservableObject {
     /// Callback invoked whenever a new item is successfully ingested.
     public var onIngest: (@MainActor (IngestResultDto) -> Void)?
 
-    /// Canonical mapping of supported pasteboard UTIs to standardize representations.
-    private static let supportedUtiMappings: [String: String] = [
-        // Plain text variants
-        "public.utf8-plain-text": "public.utf8-plain-text",
-        "NSStringPboardType": "public.utf8-plain-text",
-        "public.plain-text": "public.utf8-plain-text",
-        "public.text": "public.utf8-plain-text",
+    /// Canonical mapping of supported pasteboard UTIs to standardize representations (F-015).
+    public static var supportedUtiMappings: [String: String] {
+        ClipboardTypeConfiguration.supportedUtiMappings
+    }
 
-        // Rich text variants
-        "public.rtf": "public.rtf",
-        "NSRTFPboardType": "public.rtf",
-
-        // HTML
-        "public.html": "public.html",
-
-        // File URLs
-        "public.file-url": "public.file-url",
-        "NSURLPboardType": "public.file-url",
-
-        // Images
-        "public.png": "public.png",
-        "public.tiff": "public.tiff",
-        "NSTypedPasteboardItemPboardType": "public.tiff",
-        "public.jpeg": "public.jpeg",
-        "public.heic": "public.heic",
-    ]
+    /// User configuration governing which format categories are captured (F-013, F-015).
+    public var typeConfiguration: ClipboardTypeConfiguration {
+        didSet {
+            privacyFilter.typeConfiguration = typeConfiguration
+        }
+    }
 
     public init(
         pasteboard: NSPasteboard = .general,
         privacyFilter: PrivacyFilter = PrivacyFilter(),
         provenanceGuard: ClipboardProvenance = ClipboardProvenance(),
+        typeConfiguration: ClipboardTypeConfiguration = ClipboardTypeConfiguration.load(),
         coreClient: CoreClient
     ) {
         self.pasteboard = pasteboard
         self.privacyFilter = privacyFilter
         self.provenanceGuard = provenanceGuard
+        self.typeConfiguration = typeConfiguration
+        self.privacyFilter.typeConfiguration = typeConfiguration
         self.coreClient = coreClient
         self.lastChangeCount = pasteboard.changeCount
+    }
+
+    /// Reloads format enablement settings from UserDefaults (F-013).
+    public func reloadTypeConfiguration(from defaults: UserDefaults = .standard) {
+        self.typeConfiguration = ClipboardTypeConfiguration.load(from: defaults)
     }
 
     // MARK: - Lifecycle
@@ -152,6 +150,32 @@ public final class ClipboardMonitor: ObservableObject {
             return
         }
 
+        // 4b. Rapid burst debouncing (F-012, T-CAP-05)
+        // Multi-stage clipboard writes from editors or complex apps (e.g. VS Code, Excel) can trigger multiple
+        // changeCounts within < 100ms. If the representations and content are identical, debounce to prevent storms.
+        var hasher = Hasher()
+        hasher.combine(sourceBundleId ?? "")
+        hasher.combine(capture.representations.count)
+        for rep in capture.representations {
+            hasher.combine(rep.groupIndex)
+            hasher.combine(rep.uti)
+            hasher.combine(rep.payload.count)
+            hasher.combine(rep.payload.prefix(64))
+        }
+        let currentFingerprint = hasher.finalize()
+
+        let nowUptime = DispatchTime.now().uptimeNanoseconds
+        let elapsedNanos = nowUptime >= lastCaptureUptimeNanos ? (nowUptime - lastCaptureUptimeNanos) : 0
+        let elapsedMs = Double(elapsedNanos) / 1_000_000.0
+
+        if elapsedMs < 100.0 && lastCaptureFingerprint == currentFingerprint {
+            logger.debug("Debouncing rapid clipboard burst (\(elapsedMs, privacy: .public)ms) with identical content.")
+            return
+        }
+
+        lastCaptureUptimeNanos = nowUptime
+        lastCaptureFingerprint = currentFingerprint
+
         // 5. Ingest into RustCore via background actor (off main thread)
         Task {
             do {
@@ -173,17 +197,28 @@ public final class ClipboardMonitor: ObservableObject {
     // MARK: - Extraction Helpers
 
     private func detectSourceBundleId() -> String? {
-        // Try reading explicit source attribution marker if present
+        // Try reading explicit source attribution marker if present (F-011)
         if let items = pasteboard.pasteboardItems {
             for item in items {
-                if let source = item.string(forType: ClipboardProvenance.sourceAppType), !source.isEmpty {
-                    return source
+                if let source = item.string(forType: ClipboardProvenance.sourceAppType),
+                   !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return source.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                if let data = item.data(forType: ClipboardProvenance.sourceAppType),
+                   let str = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !str.isEmpty {
+                    return str
                 }
             }
         }
 
         // Fall back to frontmost application
-        return NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        if let frontmostId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+           !frontmostId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return frontmostId.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return nil
     }
 
     private func extractRawCapture(sourceBundleId: String?) -> RawCapture? {
@@ -196,9 +231,15 @@ public final class ClipboardMonitor: ObservableObject {
 
         for (groupIndex, item) in items.enumerated() {
             var seenCanonicalUtis = Set<String>()
+            var groupReps: [RawRepresentation] = []
 
             for type in item.types {
                 guard let canonicalUti = Self.supportedUtiMappings[type.rawValue] else {
+                    continue
+                }
+
+                // Enforce user format enablement settings (F-013, F-015)
+                guard typeConfiguration.isUtiEnabled(canonicalUti) else {
                     continue
                 }
 
@@ -219,7 +260,7 @@ public final class ClipboardMonitor: ObservableObject {
                 }
 
                 seenCanonicalUtis.insert(canonicalUti)
-                rawRepresentations.push(
+                groupReps.append(
                     RawRepresentation(
                         groupIndex: UInt32(groupIndex),
                         uti: canonicalUti,
@@ -227,6 +268,48 @@ public final class ClipboardMonitor: ObservableObject {
                     )
                 )
             }
+
+            // If group contains NSFilenamesPboardType but lacks public.file-url (legacy file copies)
+            if typeConfiguration.isUtiEnabled("public.file-url"),
+               !seenCanonicalUtis.contains("public.file-url"),
+               let filenamesData = item.data(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")),
+               let paths = try? PropertyListSerialization.propertyList(from: filenamesData, format: nil) as? [String] {
+                for path in paths {
+                    let fileUrl = URL(fileURLWithPath: path).absoluteString
+                    if let urlData = fileUrl.data(using: .utf8) {
+                        seenCanonicalUtis.insert("public.file-url")
+                        groupReps.append(
+                            RawRepresentation(groupIndex: UInt32(groupIndex), uti: "public.file-url", payload: urlData)
+                        )
+                    }
+                }
+            }
+
+            // Synthesize plain text representation if rich text, file URLs, or web URLs are present but plain text is missing (P3-01, P3-03, P3-04)
+            // ONLY synthesize if plain text is enabled by user configuration (F-013)
+            let hasPlainText = seenCanonicalUtis.contains("public.utf8-plain-text")
+            let hasRichText = seenCanonicalUtis.contains("public.rtf") ||
+                              seenCanonicalUtis.contains("com.apple.flat-rtfd") ||
+                              seenCanonicalUtis.contains("public.html")
+            let hasFileUrl = seenCanonicalUtis.contains("public.file-url")
+            let hasWebUrl = seenCanonicalUtis.contains("public.url")
+
+            if typeConfiguration.isUtiEnabled("public.utf8-plain-text"),
+               !hasPlainText && (hasRichText || hasFileUrl || hasWebUrl) {
+                if let extractedText = PasteCoordinator.extractPlainText(from: groupReps),
+                   !extractedText.isEmpty,
+                   let textData = extractedText.data(using: .utf8) {
+                    groupReps.append(
+                        RawRepresentation(
+                            groupIndex: UInt32(groupIndex),
+                            uti: "public.utf8-plain-text",
+                            payload: textData
+                        )
+                    )
+                }
+            }
+
+            rawRepresentations.append(contentsOf: groupReps)
         }
 
         guard !rawRepresentations.isEmpty else {

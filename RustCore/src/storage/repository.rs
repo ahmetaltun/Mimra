@@ -306,6 +306,86 @@ pub fn update_recopy(
     Ok(())
 }
 
+/// Updates recopy timestamps, count, source application, and merges representations for an existing item (F-012, T-CAP-05).
+pub fn update_recopy_and_merge(
+    tx: &Transaction,
+    existing: &mut HistoryItem,
+    incoming: &HistoryItem,
+) -> Result<(), CoreError> {
+    existing.record_recopy(
+        incoming.last_copied_at_ms,
+        incoming.source_bundle_id.clone(),
+    );
+
+    // 1. Upsert incoming representations into item_representations
+    for rep in &incoming.representations {
+        tx.execute(
+            "INSERT INTO item_representations (item_id, group_index, uti, payload)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(item_id, group_index, uti) DO UPDATE SET payload = excluded.payload;",
+            params![
+                existing.id.to_string(),
+                rep.group_index,
+                rep.uti,
+                rep.payload.as_slice(),
+            ],
+        )?;
+    }
+
+    // 2. Check if content kind or title should be upgraded (e.g. text -> rich_text or url page title)
+    let should_upgrade_kind =
+        existing.content_kind == ContentKind::Text && incoming.content_kind != ContentKind::Text;
+
+    let existing_is_bare_url = existing.title.starts_with("http://")
+        || existing.title.starts_with("https://")
+        || existing.title.starts_with("file://")
+        || existing.title.is_empty();
+    let incoming_has_rich_title = !incoming.title.is_empty()
+        && !incoming.title.starts_with("http://")
+        && !incoming.title.starts_with("https://")
+        && !incoming.title.starts_with("file://");
+    let should_upgrade_title = incoming_has_rich_title && existing_is_bare_url;
+
+    if should_upgrade_kind {
+        existing.content_kind = incoming.content_kind;
+    }
+    if should_upgrade_title || (should_upgrade_kind && !incoming.title.is_empty()) {
+        existing.title = incoming.title.clone();
+        existing.search_text = incoming.search_text.clone();
+    }
+
+    // 3. Update history_items record
+    tx.execute(
+        "UPDATE history_items
+         SET last_copied_at_ms = ?1,
+             copy_count = copy_count + 1,
+             source_bundle_id = COALESCE(?2, source_bundle_id),
+             content_kind = ?3,
+             title = ?4,
+             search_text = ?5,
+             byte_size = (SELECT COALESCE(SUM(LENGTH(payload)), 0) FROM item_representations WHERE item_id = ?6)
+         WHERE id = ?6;",
+        params![
+            incoming.last_copied_at_ms,
+            incoming.source_bundle_id.as_deref(),
+            existing.content_kind.to_string(),
+            existing.title,
+            existing.search_text,
+            existing.id.to_string(),
+        ],
+    )?;
+
+    // 4. Reload merged representations into in-memory struct
+    existing.representations = load_representations(tx, &existing.id)?;
+    existing.byte_size = existing
+        .representations
+        .iter()
+        .map(|r| r.payload.len() as u64)
+        .sum();
+
+    Ok(())
+}
+
 /// Evicts the oldest unpinned items if the total unpinned count exceeds `max_unpinned`.
 /// Pinned items are NEVER evicted.
 /// Returns the number of evicted items.
@@ -350,15 +430,7 @@ pub fn ingest_clipboard_item(
 
     // 1. Check if identical content hash exists
     if let Some(mut existing) = find_by_content_hash(&tx, &item.content_hash)? {
-        // Record recopy on existing item
-        existing.record_recopy(item.last_copied_at_ms, item.source_bundle_id.clone());
-        update_recopy(
-            &tx,
-            &existing.id,
-            item.last_copied_at_ms,
-            item.source_bundle_id.as_deref(),
-        )?;
-
+        update_recopy_and_merge(&tx, &mut existing, &item)?;
         tx.commit()?;
         return Ok(IngestOutcome::DuplicateUpdated(existing));
     }

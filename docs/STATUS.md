@@ -41,8 +41,8 @@
 | **G0** | Clean Native + Rust Build | **COMPLETED** | arm64 app launches, Rust static library invoked from Swift, all ADRs recorded |
 | **G1** | Safe Capture Engine | **COMPLETED** | Privacy filters, text capture, persistence, zero secret-marker leaks |
 | **G2** | Reliable Copy / Paste | **COMPLETED** | NSPanel popup, focus restoration, global shortcut, accessibility fallback |
-| **G3** | Complete Data Types | PENDING | RTF, HTML, PNG/JPEG/HEIC, file URLs with full round-trip fidelity |
-| **G4** | History Power Features | PENDING | Fuzzy/regex search, pinning, retention cleanup, settings UI |
+| **G3** | Complete Data Types | **COMPLETED** | RTF, HTML, PNG/JPEG/HEIC, file URLs, URLs/colors, attribution, dedupe hardening, type settings |
+| **G4** | History Power Features | IN PROGRESS | Fuzzy/regex search, pinning, retention cleanup, settings UI |
 | **G5** | Core Feature Parity | PENDING | Slideout preview, OCR, cycle summon, VoiceOver, localization |
 | **G6** | Release Hardening | PENDING | Leaks, benchmarks, fuzzing, notarized arm64 distribution |
 | **G7** | Mimra Differentiators | PENDING | Privacy profiles, secret heuristics, encrypted vault (SQLCipher) |
@@ -80,8 +80,21 @@
 
 ---
 
-## 6. Current Blockers & Risks
+## 6. Phase 3 Task Tracker (Gate G3)
 
-* **None.** Gate G2 (Phase 2) is 100% complete and fully verified.
-* **Next Milestone:** Gate G3 — Complete Data Types (Phase 3: HTML, RTF, images, and file references).
-* **Next Task:** P3-01 (HTML/RTF multi-representation capture & replay fidelity, `MIMRA_MASTER_PLAN.md`).
+| Task ID | Description | Status | Verification / Artifact |
+|---|---|---|---|
+| **P3-01** | HTML/RTF: multi-representation capture & replay fidelity | Completed | `Mimra/macOS/ClipboardMonitor.swift`, `Mimra/macOS/PasteCoordinator.swift`, `RustCore/src/domain/item.rs` (`tests/rich_text_tests.swift`, `T-TYPE-01`, `F-003`, `F-007`, `F-021`) |
+| **P3-02** | Images: allowlisted PNG/TIFF/JPEG/HEIC; lazy decode and thumbnail cache with memory limits | Completed | `Mimra/macOS/ImageThumbnailService.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `RustCore/src/domain/item.rs` (`tests/image_type_tests.swift`, `T-TYPE-02`, `F-004`) |
+| **P3-03** | File references: capture one/multiple file URLs; preserve identity and order; define vanished-file UX | Completed | `Mimra/macOS/ClipboardMonitor.swift`, `Mimra/macOS/PasteCoordinator.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `RustCore/src/domain/item.rs` (`tests/file_url_tests.swift`, `T-TYPE-03`, `F-005`, `F-021`) |
+| **P3-04** | URLs/colors: detection, click-safe preview, HEX swatch toggle; text remains primary | Completed | `Mimra/UI/Panel/ColorAndUrlPreview.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `RustCore/src/domain/color.rs`, `RustCore/src/domain/url_utils.rs` (`tests/url_color_tests.swift`, `T-TYPE-04`, `T-TYPE-06`, `F-006`, `F-037`) |
+| **P3-05** | Source attribution: bundle ID/icon via Workspace and `org.nspasteboard.source` marker | Completed | `Mimra/macOS/AppIconService.swift`, `Mimra/macOS/ClipboardMonitor.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/source_attribution_tests.swift`, `T-CAP-04`, `F-011`, `F-016`) |
+| **P3-06** | Dedupe hardening: Safari, Sheets, VS Code, Notes, MS Office, multi-representation copies | Completed | `RustCore/src/domain/item.rs`, `RustCore/src/storage/repository.rs`, `Mimra/macOS/ClipboardMonitor.swift` (`tests/dedupe_hardening_tests.swift`, `T-CAP-05`, `F-012`) |
+| **P3-07** | Type settings: types enabled/disabled without storing unknown private payloads | Completed | `Mimra/macOS/ClipboardTypeConfiguration.swift`, `Mimra/macOS/PrivacyFilter.swift`, `Mimra/macOS/ClipboardMonitor.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/type_settings_tests.swift`, `T-TYPE-05`, `F-013`, `F-015`) |
+
+---
+
+## 7. Current Blockers & Risks
+
+* **None.** Gate G3 (Complete Data Types) is 100% complete and verified across Rust, Swift, and Xcode.
+* **Next Task:** P4-01 (Search index: maintain Rust FTS5 and transactional index triggers; paginate, `T-SRCH-01`, `F-019`).

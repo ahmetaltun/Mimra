@@ -64,6 +64,9 @@ public final class PrivacyFilter: @unchecked Sendable {
     private var _ignoredAppBundleIds: Set<String> = []
     private var _customIgnoredUtis: Set<String> = []
 
+    // Format enablement configuration (F-013, F-015)
+    private var _typeConfiguration: ClipboardTypeConfiguration = ClipboardTypeConfiguration()
+
     // Mandatory sensitive markers that MUST ALWAYS be dropped (F-008)
     public static let mandatoryConcealedMarkers: Set<String> = [
         "org.nspasteboard.ConcealedType",
@@ -84,9 +87,25 @@ public final class PrivacyFilter: @unchecked Sendable {
 
     public static let universalClipboardUti = "com.apple.is-remote-clipboard"
 
-    public init() {}
+    public init(typeConfiguration: ClipboardTypeConfiguration = ClipboardTypeConfiguration()) {
+        self._typeConfiguration = typeConfiguration
+    }
 
     // MARK: - State Configuration
+
+    public var typeConfiguration: ClipboardTypeConfiguration {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _typeConfiguration
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _typeConfiguration = newValue
+            logger.info("PrivacyFilter typeConfiguration updated.")
+        }
+    }
 
     public var isPaused: Bool {
         get {
@@ -224,6 +243,20 @@ public final class PrivacyFilter: @unchecked Sendable {
                     }
                 }
             }
+        }
+
+        // 9. Check if pasteboard contains at least one enabled supported format (F-013, F-015, T-TYPE-05)
+        var allRawTypes = typeStrings
+        if let items = pasteboard.pasteboardItems {
+            for item in items {
+                for t in item.types {
+                    allRawTypes.insert(t.rawValue)
+                }
+            }
+        }
+
+        if !_typeConfiguration.hasAnyEnabledType(in: allRawTypes) {
+            return .drop(.noSupportedTypes)
         }
 
         return .capture

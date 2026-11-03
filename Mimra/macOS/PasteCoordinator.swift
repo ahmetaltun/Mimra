@@ -236,6 +236,22 @@ public final class PasteCoordinator {
             for rep in groupReps {
                 let type = NSPasteboard.PasteboardType(rep.uti)
                 pbItem.setData(rep.payload, forType: type)
+                if (rep.uti == "public.utf8-plain-text" || rep.uti == "public.plain-text"),
+                   let str = String(data: rep.payload, encoding: .utf8) {
+                    pbItem.setString(str, forType: .string)
+                } else if rep.uti == "public.file-url",
+                          let urlStr = String(data: rep.payload, encoding: .utf8) {
+                    let trimmed = urlStr.trimmingCharacters(in: .whitespacesAndNewlines)
+                    pbItem.setString(trimmed, forType: .fileURL)
+                } else if rep.uti == "public.url",
+                          let urlStr = String(data: rep.payload, encoding: .utf8) {
+                    let trimmed = urlStr.trimmingCharacters(in: .whitespacesAndNewlines)
+                    pbItem.setString(trimmed, forType: .URL)
+                } else if rep.uti == "public.url-name",
+                          let nameStr = String(data: rep.payload, encoding: .utf8) {
+                    let trimmed = nameStr.trimmingCharacters(in: .whitespacesAndNewlines)
+                    pbItem.setString(trimmed, forType: NSPasteboard.PasteboardType("public.url-name"))
+                }
             }
 
             // Stamp provenance marker and source application to prevent recapture
@@ -296,10 +312,19 @@ public final class PasteCoordinator {
                     return plain
                 }
             }
+            if let rtfStr = String(data: rtfRep.payload, encoding: .utf8) ?? String(data: rtfRep.payload, encoding: .ascii) {
+                let stripped = rtfStr
+                    .replacingOccurrences(of: "\\\\[a-zA-Z]+-?[0-9]*[ ]?", with: " ", options: .regularExpression, range: nil)
+                    .replacingOccurrences(of: "[{}]", with: "", options: .regularExpression, range: nil)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !stripped.isEmpty {
+                    return stripped
+                }
+            }
         }
 
         if let rtfdRep = representations.first(where: {
-            $0.uti == "com.apple.rtfd" || $0.uti == "NSRTFDPboardType"
+            $0.uti == "com.apple.flat-rtfd" || $0.uti == "public.rtfd" || $0.uti == "com.apple.rtfd" || $0.uti == "NSRTFDPboardType"
         }) {
             if let attrStr = try? NSAttributedString(
                 data: rtfdRep.payload,
@@ -315,7 +340,7 @@ public final class PasteCoordinator {
 
         // 3. Check for HTML and convert to plain text
         if let htmlRep = representations.first(where: {
-            $0.uti == "public.html" || $0.uti == "NSHTMLPboardType"
+            $0.uti == "public.html" || $0.uti == "NSHTMLPboardType" || $0.uti == "Apple HTML pasteboard type"
         }) {
             if let attrStr = try? NSAttributedString(
                 data: htmlRep.payload,
@@ -325,6 +350,13 @@ public final class PasteCoordinator {
                 let plain = attrStr.string.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !plain.isEmpty {
                     return plain
+                }
+            }
+            if let htmlStr = String(data: htmlRep.payload, encoding: .utf8) ?? String(data: htmlRep.payload, encoding: .isoLatin1) {
+                let stripped = htmlStr.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression, range: nil)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !stripped.isEmpty {
+                    return stripped
                 }
             }
         }
@@ -356,7 +388,17 @@ public final class PasteCoordinator {
             }
         }
 
-        // 5. Fallback for generic text-like data (source code, json, csv, etc.)
+        // 5. Check for Web URLs (P3-04)
+        if let urlRep = representations.first(where: { $0.uti == "public.url" }) {
+            if let rawString = String(data: urlRep.payload, encoding: .utf8) {
+                let trimmed = rawString.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
+            }
+        }
+
+        // 6. Fallback for generic text-like data (source code, json, csv, etc.)
         for rep in representations {
             let uti = rep.uti.lowercased()
             if uti.contains("json") || uti.contains("xml") || uti.contains("source-code") || uti.contains("csv") || uti.contains("tsv") {

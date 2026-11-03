@@ -13,7 +13,7 @@ use uuid::Uuid;
 pub use domain::dto::{
     HistoryItemSummaryDTO, IngestResultDTO, RawCapture, RawRepresentation, StorageStatsDTO,
 };
-pub use domain::{uti, ContentKind, HistoryItem, Representation};
+pub use domain::{uti, CanonicalUrl, ContentKind, HexColor, HistoryItem, Representation};
 pub use error::CoreError;
 pub use storage::{
     clear_all_history, clear_unpinned_history, delete_item_by_id, enforce_retention_limit,

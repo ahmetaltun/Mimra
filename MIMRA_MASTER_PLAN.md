@@ -550,13 +550,13 @@ All settings changes persist atomically and update relevant components without r
 
 ### PHASE 3 — Full data fidelity and richer previews (G3)
 
-- [ ] **P3-01 HTML/RTF:** capture/write multiple coherent representations. **DoD:** Word/Pages/Notes/browser round trips (formats that system supports).
-- [ ] **P3-02 Images:** allowlisted PNG/TIFF/JPEG/HEIC; lazy decode and thumbnail cache with memory limits. **DoD:** screenshots/large images repeat correctly without main-thread decode.
-- [ ] **P3-03 File references:** capture one/multiple file URLs; preserve identity and order; define vanished-file UX. **DoD:** paste as file in Finder where possible; no silent path-text degradation.
-- [ ] **P3-04 URLs/colors:** detection, click-safe preview, HEX swatch toggle; text remains primary. **DoD:** #RGB/#RRGGBB parsing and URL canonicalization tests.
-- [ ] **P3-05 Source attribution:** bundle ID/icon via Workspace and `org.nspasteboard.source` marker (best-effort). **DoD:** icons update when app changes, unknown source safe.
-- [ ] **P3-06 Dedupe hardening:** Safari, Sheets, VS Code, Notes, MS Office, multi-representation copies and source-specific markers. **DoD:** no duplicate storms or content loss.
-- [ ] **P3-07 Type settings:** types enabled/disabled without storing unknown private payloads. **DoD:** every toggle has capture test.
+- [x] **P3-01 HTML/RTF:** capture/write multiple coherent representations. **DoD:** Word/Pages/Notes/browser round trips (formats that system supports).
+- [x] **P3-02 Images:** allowlisted PNG/TIFF/JPEG/HEIC; lazy decode and thumbnail cache with memory limits. **DoD:** screenshots/large images repeat correctly without main-thread decode.
+- [x] **P3-03 File references:** capture one/multiple file URLs; preserve identity and order; define vanished-file UX. **DoD:** paste as file in Finder where possible; no silent path-text degradation.
+- [x] **P3-04 URLs/colors:** detection, click-safe preview, HEX swatch toggle; text remains primary. **DoD:** #RGB/#RRGGBB parsing and URL canonicalization tests.
+- [x] **P3-05 Source attribution:** bundle ID/icon via Workspace and `org.nspasteboard.source` marker (best-effort). **DoD:** icons update when app changes, unknown source safe.
+- [x] **P3-06 Dedupe hardening:** Safari, Sheets, VS Code, Notes, MS Office, multi-representation copies and source-specific markers. **DoD:** no duplicate storms or content loss.
+- [x] **P3-07 Type settings:** types enabled/disabled without storing unknown private payloads. **DoD:** every toggle has capture test.
 
 **Phase 3 exit:** normal text, rich text, images and file references round-trip as supported; graceful failure for unsupported formats.
 

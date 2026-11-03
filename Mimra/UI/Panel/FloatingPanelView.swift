@@ -72,7 +72,8 @@ public struct FloatingPanelView: View {
                                     PanelItemRow(
                                         item: item,
                                         shortcutIndex: index < 9 ? (index + 1) : nil,
-                                        isSelected: index == viewModel.selectedIndex
+                                        isSelected: index == viewModel.selectedIndex,
+                                        coreClient: viewModel.coreClient
                                     )
                                     .id(item.id)
                                     .onHover { isHovered in
@@ -176,14 +177,32 @@ struct PanelItemRow: View {
     let item: HistoryItemSummaryDto
     let shortcutIndex: Int?
     let isSelected: Bool
+    var coreClient: CoreClient? = nil
+
+    @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
+    @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
+    @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
+    @State private var isHovered: Bool = false
+
+    private var detectedColor: HexColorInfo? {
+        showColorSwatches ? ColorDetector.detect(in: item.title) : nil
+    }
+
+    private var detectedUrl: UrlInfo? {
+        showUrlPreviews ? UrlDetector.detect(in: item.title) : nil
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            // Type icon
-            Image(systemName: iconForKind(item.contentKind))
-                .font(.system(size: 13))
-                .foregroundColor(isSelected ? .white : .accentColor)
-                .frame(width: 20)
+            // Type icon, cached image thumbnail, or color swatch (P3-02, P3-04)
+            ItemThumbnailView(
+                itemId: item.id,
+                contentKind: item.contentKind,
+                title: item.title,
+                availableUtis: item.availableUtis,
+                isSelected: isSelected,
+                coreClient: coreClient
+            )
 
             // Text title and preview snippet
             VStack(alignment: .leading, spacing: 2) {
@@ -193,10 +212,28 @@ struct PanelItemRow: View {
                         .foregroundColor(isSelected ? .white : .primary)
                         .lineLimit(1)
 
+                    if let color = detectedColor {
+                        ColorSwatchView(colorInfo: color, size: 12, cornerRadius: 2.5)
+                    }
+
+                    if let urlInfo = detectedUrl {
+                        UrlBadgeView(urlInfo: urlInfo, isSelected: isSelected)
+                    }
+
                     if item.isPinned {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 9))
                             .foregroundColor(.orange)
+                    }
+
+                    if item.contentKind == "file_urls" && isFileVanished(path: item.snippet) {
+                        Text("missing")
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.red.opacity(0.18))
+                            .foregroundColor(isSelected ? .white : .red)
+                            .cornerRadius(3)
                     }
 
                     if item.copyCount > 1 {
@@ -210,6 +247,25 @@ struct PanelItemRow: View {
                     }
 
                     Spacer()
+
+                    // Click-safe external browser launcher (explicit button on hover only)
+                    if let urlInfo = detectedUrl, isHovered, let url = urlInfo.url {
+                        Button {
+                            NSWorkspace.shared.open(url)
+                        } label: {
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.system(size: 11))
+                                .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Open in Browser")
+                    }
+
+                    // Source application icon (P3-05, F-011)
+                    if showSourceAppIcon, let bundleId = item.sourceBundleId, !bundleId.isEmpty {
+                        SourceAppIconView(bundleId: bundleId, size: 14)
+                            .help(bundleId)
+                    }
 
                     // Quick-pick shortcut badge (⌘1 - ⌘9)
                     if let key = shortcutIndex {
@@ -238,9 +294,90 @@ struct PanelItemRow: View {
                 .fill(isSelected ? Color.accentColor : Color.clear)
         )
         .contentShape(Rectangle())
+        .onHover { hovering in
+            self.isHovered = hovering
+        }
+    }
+
+    private func isFileVanished(path: String) -> Bool {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let firstLine = trimmed.components(separatedBy: .newlines).first ?? trimmed
+        let cleanPath: String
+        if firstLine.hasPrefix("file://") {
+            guard let url = URL(string: firstLine) else { return false }
+            cleanPath = url.path
+        } else if firstLine.hasPrefix("/") {
+            cleanPath = firstLine
+        } else {
+            return false
+        }
+        return !FileManager.default.fileExists(atPath: cleanPath)
+    }
+}
+
+// MARK: - Reusable Asynchronous Item Thumbnail Component
+
+struct ItemThumbnailView: View {
+    let itemId: String
+    let contentKind: String
+    var title: String = ""
+    var availableUtis: [String] = []
+    let isSelected: Bool
+    let coreClient: CoreClient?
+
+    @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
+    @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
+
+    @State private var thumbnail: NSImage?
+    @State private var hasAttemptedLoad = false
+
+    var body: some View {
+        Group {
+            if let image = thumbnail {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 22, height: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .stroke(isSelected ? Color.white.opacity(0.3) : Color.primary.opacity(0.1), lineWidth: 0.5)
+                    )
+            } else if showColorSwatches, let color = ColorDetector.detect(in: title) {
+                ColorSwatchView(colorInfo: color, size: 22, cornerRadius: 4)
+            } else {
+                Image(systemName: iconForKind(contentKind))
+                    .font(.system(size: 13))
+                    .foregroundColor(isSelected ? .white : .accentColor)
+                    .frame(width: 22, height: 22)
+            }
+        }
+        .task(id: itemId) {
+            guard contentKind == "image", !hasAttemptedLoad, let client = coreClient else { return }
+            hasAttemptedLoad = true
+            if let cached = await ImageThumbnailService.shared.cachedThumbnail(for: itemId) {
+                self.thumbnail = cached
+                return
+            }
+            let loaded = await ImageThumbnailService.shared.thumbnail(for: itemId) {
+                for uti in ["public.png", "public.tiff", "public.jpeg", "public.heic"] {
+                    if let data = try? await client.fetchPayload(itemId: itemId, uti: uti) {
+                        return data
+                    }
+                }
+                return nil
+            }
+            if let loaded = loaded {
+                self.thumbnail = loaded
+            }
+        }
     }
 
     private func iconForKind(_ kind: String) -> String {
+        if showUrlPreviews && (UrlDetector.detect(in: title) != nil || availableUtis.contains("public.url")) {
+            return "link"
+        }
         switch kind {
         case "text":
             return "text.alignleft"
