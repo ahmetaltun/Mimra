@@ -104,11 +104,11 @@
 | **P4-04** | Sorting/highlights: pinned arrangement, recency, relevance and highlight styles | Completed | `RustCore/src/storage/repository.rs`, `RustCore/src/storage/search.rs`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/sorting_highlight_tests.swift`, `T-UI-03`, `T-KEY-03`, `F-019`, `F-024`) |
 | **P4-05** | History limit: count/age/size retention and clear, preserve pins | Completed | `RustCore/src/storage/repository.rs`, `RustCore/src/domain/dto.rs`, `RustCore/src/lib.rs`, `Mimra/Bridge/CoreClient.swift` (`tests/history_limit_tests.swift`, `T-HIST-01`, `T-HIST-03`, `T-HIST-05`, `F-025`, `F-052`, `F-053`) |
 | **P4-06** | Storage UI: DB size/limits/types/clear-unpinned/clear-all and confirmation | Completed | `Mimra/UI/Settings/SettingsView.swift`, `Mimra/Bridge/CoreClient.swift`, `Mimra/macOS/StatusBarCoordinator.swift` (`tests/storage_ui_tests.swift`, `T-HIST-01`, `T-HIST-05`, `F-025`, `F-055`) |
-| **P4-07** | Failure recovery: low disk, corrupt db, bad migration, full capacity, relaunch and backup recoverability | Pending | Scheduled next (`T-DB-01`) |
+| **P4-07** | Failure recovery: low disk, corrupt db, bad migration, full capacity, relaunch and backup recoverability | Completed | `RustCore/src/storage/recovery.rs`, `RustCore/src/lib.rs`, `RustCore/src/error.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/UI/Settings/SettingsView.swift`, `Mimra/App/AppDelegate.swift` (`tests/failure_recovery_tests.swift`, `T-DB-01`, `F-052`, `F-055`) |
 
 ---
 
 ## 8. Current Blockers & Risks
 
-* **None.** Gate G4 Tasks P4-01 through P4-06 are 100% complete and verified across Rust, Swift, and Xcode.
-* **Next Task:** P4-07 (Failure recovery: low disk, corrupt db, bad migration, full capacity, relaunch and backup recoverability, `T-DB-01`).
+* **None.** Gate G4 is 100% complete! All tasks P4-01 through P4-07 are implemented and verified across Rust, Swift, and Xcode.
+* **Next Task:** P5-01 (Pins: pin/unpin, stable pinned section and shortcuts, eviction protection, `F-020`, `F-053`, `T-KEY-01`).

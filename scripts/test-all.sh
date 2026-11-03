@@ -597,7 +597,21 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 /tmp/mimra_storage_ui_test_runner
 rm -f /tmp/mimra_storage_ui_test_runner
 
-echo -e "\n=== 32. Building Native macOS App (Mimra.app) via Xcode ==="
+echo -e "\n=== 32. Running Database Failure Recovery & Backup Tests (P4-07 / T-DB-01, F-052, F-055) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/tests/failure_recovery_tests.swift" \
+    -o /tmp/mimra_failure_recovery_test_runner
+
+/tmp/mimra_failure_recovery_test_runner
+rm -f /tmp/mimra_failure_recovery_test_runner
+
+echo -e "\n=== 33. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \
     -scheme Mimra \

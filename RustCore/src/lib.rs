@@ -11,23 +11,25 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 pub use domain::dto::{
-    HistoryItemSummaryDTO, IngestResultDTO, RawCapture, RawRepresentation, StorageStatsDTO,
+    DatabaseRecoveryReportDTO, HistoryItemSummaryDTO, IngestResultDTO, RawCapture,
+    RawRepresentation, StorageStatsDTO,
 };
 pub use domain::{
     fuzzy_match, score_item, uti, CanonicalUrl, CleanupReport, CleanupReportDTO, ContentKind,
-    HexColor, HighlightRangeDTO, HistoryItem, HistorySortMode, PinArrangement, Representation,
-    RetentionPolicy, RetentionPolicyDTO, SearchMode,
+    DatabaseRecoveryReport, HexColor, HighlightRangeDTO, HistoryItem, HistorySortMode,
+    PinArrangement, Representation, RetentionPolicy, RetentionPolicyDTO, SearchMode,
 };
 pub use error::CoreError;
 pub use storage::{
-    clear_all_history, clear_unpinned_history, delete_item_by_id, enforce_retention_limit,
-    enforce_retention_policy, fetch_payload, find_by_content_hash, find_by_id, get_storage_stats,
-    ingest_clipboard_item, ingest_clipboard_item_with_policy, insert_item, list_history_page,
-    list_history_page_with_options, load_representations, open_database, open_in_memory,
-    query_available_utis, rebuild_search_index, run_migrations, sanitize_fts5_query,
-    search_history_page, search_history_page_with_options, set_pin_status, update_recopy,
-    verify_database_integrity, verify_search_index_integrity, DatabaseConfig, HistoryItemSummary,
-    IngestOutcome, StorageStats,
+    attempt_salvage_corrupted_database, backup_database, clear_all_history, clear_unpinned_history,
+    delete_item_by_id, enforce_retention_limit, enforce_retention_policy, fetch_payload,
+    find_by_content_hash, find_by_id, get_storage_stats, ingest_clipboard_item,
+    ingest_clipboard_item_with_policy, insert_item, list_history_page,
+    list_history_page_with_options, load_representations, open_database, open_database_resilient,
+    open_in_memory, quarantine_corrupted_database, query_available_utis, rebuild_search_index,
+    restore_database_from_backup, run_migrations, sanitize_fts5_query, search_history_page,
+    search_history_page_with_options, set_pin_status, update_recopy, verify_database_integrity,
+    verify_search_index_integrity, DatabaseConfig, HistoryItemSummary, IngestOutcome, StorageStats,
 };
 
 // Setup UniFFI scaffolding for procedural macro bindings
@@ -39,6 +41,7 @@ pub struct MimraCoreHandle {
     db_path: Option<PathBuf>,
     conn: Mutex<rusqlite::Connection>,
     retention_policy: Mutex<RetentionPolicy>,
+    recovery_report: Mutex<Option<DatabaseRecoveryReportDTO>>,
 }
 
 #[uniffi::export]
@@ -46,9 +49,7 @@ impl MimraCoreHandle {
     #[uniffi::constructor]
     pub fn open(db_path: String) -> Result<Arc<Self>, CoreError> {
         let path = PathBuf::from(db_path);
-        let mut conn = open_database(&path, &DatabaseConfig::default())?;
-        run_migrations(&mut conn)?;
-        verify_database_integrity(&conn)?;
+        let (conn, recovery_report) = open_database_resilient(&path, &DatabaseConfig::default())?;
 
         Ok(Arc::new(Self {
             db_path: Some(path),
@@ -58,7 +59,13 @@ impl MimraCoreHandle {
                 max_age_days: None,
                 max_size_bytes: None,
             }),
+            recovery_report: Mutex::new(Some(recovery_report.into())),
         }))
+    }
+
+    #[uniffi::constructor]
+    pub fn open_resilient(db_path: String) -> Result<Arc<Self>, CoreError> {
+        Self::open(db_path)
     }
 
     #[uniffi::constructor]
@@ -75,6 +82,7 @@ impl MimraCoreHandle {
                 max_age_days: None,
                 max_size_bytes: None,
             }),
+            recovery_report: Mutex::new(None),
         }))
     }
 
@@ -377,6 +385,67 @@ impl MimraCoreHandle {
         let stats = get_storage_stats(&conn, self.db_path.as_deref())?;
         Ok(StorageStatsDTO::from(stats))
     }
+
+    /// Queries the recovery diagnosis report if database recovery occurred during startup.
+    pub fn get_recovery_report(&self) -> Option<DatabaseRecoveryReportDTO> {
+        self.recovery_report.lock().ok().and_then(|r| r.clone())
+    }
+
+    /// Performs an atomic offline backup snapshot into the designated file path using SQLite VACUUM INTO.
+    pub fn backup_database(&self, destination_path: String) -> Result<(), CoreError> {
+        let dest = PathBuf::from(destination_path);
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+        backup_database(&conn, &dest)
+    }
+
+    /// Verifies both B-Tree table integrity, foreign keys, and FTS5 search index synchronization.
+    pub fn verify_integrity(&self) -> Result<(), CoreError> {
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+        verify_database_integrity(&conn)?;
+        verify_search_index_integrity(&conn)?;
+        Ok(())
+    }
+
+    /// Restores the active handle's database in-place from a verified backup file using SQLite Online Backup API.
+    pub fn restore_from_backup(&self, backup_path: String) -> Result<(), CoreError> {
+        let backup = PathBuf::from(backup_path);
+        if !backup.exists() {
+            return Err(CoreError::InvalidInput {
+                details: format!("Backup file '{}' does not exist.", backup.display()),
+            });
+        }
+
+        let backup_conn = rusqlite::Connection::open(&backup)?;
+        crate::storage::db::configure_pragmas(&backup_conn, &DatabaseConfig::default())?;
+        verify_database_integrity(&backup_conn)?;
+
+        let mut conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        {
+            let backup_runner = rusqlite::backup::Backup::new(&backup_conn, &mut conn)?;
+            backup_runner.run_to_completion(100, std::time::Duration::from_millis(10), None)?;
+        }
+
+        run_migrations(&mut conn)?;
+        verify_database_integrity(&conn)?;
+        let _ = rebuild_search_index(&conn);
+
+        Ok(())
+    }
+}
+
+/// Restores a target SQLite database file from a verified backup file.
+#[uniffi::export]
+pub fn restore_database_backup(backup_path: String, target_path: String) -> Result<(), CoreError> {
+    let backup = PathBuf::from(backup_path);
+    let target = PathBuf::from(target_path);
+    restore_database_from_backup(&backup, &target, &DatabaseConfig::default())
 }
 
 /// Maximum allowed payload size for a single clipboard item representation (10 MB).

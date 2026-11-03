@@ -78,6 +78,8 @@ CREATE TRIGGER history_items_au AFTER UPDATE ON history_items BEGIN
 END;
 "#;
 
+pub const MAX_SUPPORTED_SCHEMA_VERSION: i64 = 1;
+
 pub const ALL_MIGRATIONS: &[Migration] = &[Migration {
     version: 1,
     description: "Initial schema with normalized tables, cascading deletes, and FTS5 triggers",
@@ -106,6 +108,17 @@ pub fn run_migrations(conn: &mut Connection) -> Result<Vec<i64>, CoreError> {
         }
         versions
     };
+
+    // Forward schema mismatch check: fail gracefully if database has higher schema version than this build supports
+    for &version in &applied_versions {
+        if version > MAX_SUPPORTED_SCHEMA_VERSION {
+            return Err(CoreError::SchemaMismatch {
+                details: format!(
+                    "Database schema version {version} is newer than maximum supported version ({MAX_SUPPORTED_SCHEMA_VERSION}). Please update Mimra."
+                ),
+            });
+        }
+    }
 
     let mut newly_applied = Vec::new();
 
@@ -142,7 +155,7 @@ pub fn verify_database_integrity(conn: &Connection) -> Result<(), CoreError> {
         .query_row("PRAGMA foreign_key_check;", [], |_| Ok(1))
         .unwrap_or(0);
     if fk_violations > 0 {
-        return Err(CoreError::DatabaseError {
+        return Err(CoreError::DatabaseCorrupt {
             details: "Foreign key integrity check failed: orphaned references detected."
                 .to_string(),
         });
@@ -152,7 +165,7 @@ pub fn verify_database_integrity(conn: &Connection) -> Result<(), CoreError> {
     let integrity_result: String =
         conn.query_row("PRAGMA integrity_check;", [], |row| row.get(0))?;
     if integrity_result.to_lowercase() != "ok" {
-        return Err(CoreError::DatabaseError {
+        return Err(CoreError::DatabaseCorrupt {
             details: format!("SQLite integrity check failed: {integrity_result}"),
         });
     }

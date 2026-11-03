@@ -41,7 +41,7 @@ pub fn open_in_memory(config: &DatabaseConfig) -> Result<Connection, CoreError> 
 }
 
 /// Applies required PRAGMAs to an active SQLite connection.
-fn configure_pragmas(conn: &Connection, config: &DatabaseConfig) -> Result<(), CoreError> {
+pub fn configure_pragmas(conn: &Connection, config: &DatabaseConfig) -> Result<(), CoreError> {
     // 1. Enforce foreign keys (crucial for cascading deletes)
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
 

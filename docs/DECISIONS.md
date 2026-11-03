@@ -939,9 +939,45 @@ Users require full visibility into clipboard history disk usage and fine-grained
    - `showClearAllAlert`: High-impact critical confirmation requiring explicit affirmation to wipe all history items, including all pinned clips.
    - Both actions trigger immediate WAL checkpoint / vacuum and refresh `stats` live so disk metrics reflect the new state immediately.
 
+---
+
+## ADR-031: Database Failure Recovery, Safe Quarantine, Online Vacuum Backups, and Backup Restoration
+
+* **Status:** Accepted  
+* **Date:** 2026-11-03  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+SQLite databases can experience corruption, unexpected process termination mid-transaction, low disk conditions (`SQLITE_FULL`), or incompatible future schema migrations (`schemaMismatch`). A catastrophic failure mode of naïve clipboard engines is unconditional database erasure or silent loss of pinned anchors upon launch errors. Mimra's Definition of Done mandates user-facing safe error presentation, zero silent data loss, and guaranteed recoverability.
+
+### Decision
+1. **Resilient Opening & Automatic Quarantine (`RustCore::storage::recovery`):**
+   - When `open_database_resilient` detects database file corruption, malformed B-trees, or failed `PRAGMA integrity_check`:
+     - The damaged database file, along with `-wal` and `-shm` auxiliary files, is renamed to timestamped quarantine backups (`mimra.sqlite.corrupt.<timestamp>.bak`).
+     - A fresh database is initialized and migrated.
+     - `attempt_salvage_corrupted_database` opens the quarantined file in read-only mode, extracting all readable `history_items` and `item_representations` records into the new database while skipping damaged pages.
+     - The search index is rebuilt and database integrity verified.
+     - A structured `DatabaseRecoveryReportDTO` is returned containing `was_recovered: true`, `quarantined_backup_path`, and `salvaged_items_count`.
+2. **Strict Schema Mismatch Protection (`run_migrations`):**
+   - If `schema_migrations` contains versions higher than `MAX_SUPPORTED_SCHEMA_VERSION` (e.g. app downgrade scenario), execution fails immediately with `CoreError::SchemaMismatch`.
+   - The database is **never** quarantined or overwritten on schema mismatch.
+3. **Transaction Rollback & Zero Orphan Records (`T-DB-01`):**
+   - Ingestion, deduplication, and retention occur within single atomic SQLite transactions (`tx`).
+   - Aborted or failed transactions automatically roll back, leaving zero orphaned items in `history_items` or `item_representations` and ensuring search triggers remain consistent.
+4. **Online Atomic Backups via SQLite VACUUM INTO:**
+   - `MimraCoreHandle::backup_database` leverages SQLite's `VACUUM INTO` to create a transactionally consistent, defragmented backup copy while the database is actively being read and written in WAL mode.
+   - The generated backup is verified with `PRAGMA integrity_check` before returning.
+5. **In-Place Live and Offline Restoration (`rusqlite::backup::Backup`):**
+   - Active database connections can be restored in-place without file replacement using the SQLite Online Backup API.
+   - Offline database restoration verifies the backup snapshot, safely creates a rollback point, writes the verified database, and runs migrations.
+6. **User-Facing Presentation in Swift (`AppDelegate` & `StorageSettingsTab`):**
+   - If recovery occurs on startup, `AppDelegate` displays a non-blocking informative alert detailing the quarantine path and salvaged item count.
+   - `StorageSettingsTab` features a dedicated "Backup & Recovery" section with "Create Backup..." (`NSSavePanel`), "Verify Integrity" checks, and persistent recovery notices.
+
 ### Consequences
-* **Positive:** Complete visibility into storage utilization; instant reclamation of disk space via on-demand checkpoint and vacuum; zero ambiguity between clearing unpinned history and wiping pinned anchors; 100% test coverage under automated test runner `tests/storage_ui_tests.swift`.
-* **Negative:** None.
+* **Positive:** Complete elimination of unconditional database wiping; transparent recovery notices; full resilience against simulated corruptions and transaction interrupts verified by `tests/failure_recovery_tests.swift` (`T-DB-01`).
+* **Negative:** Minor disk overhead for timestamped quarantine `.bak` files when corruption occurs, ensuring forensic data preservation.
+
 
 
 

@@ -535,6 +535,11 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
  */
 public protocol MimraCoreHandleProtocol : AnyObject {
     
+    /**
+     * Performs an atomic offline backup snapshot into the designated file path using SQLite VACUUM INTO.
+     */
+    func backupDatabase(destinationPath: String) throws 
+    
     func checkSearchIndexIntegrity() throws  -> Bool
     
     func checkpointWal() throws  -> UInt32
@@ -551,6 +556,11 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     
     func getItemRepresentations(itemId: String) throws  -> [RawRepresentation]
     
+    /**
+     * Queries the recovery diagnosis report if database recovery occurred during startup.
+     */
+    func getRecoveryReport()  -> DatabaseRecoveryReportDto?
+    
     func getRetentionPolicy()  -> RetentionPolicyDto
     
     func getStats() throws  -> StorageStatsDto
@@ -563,6 +573,11 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     
     func rebuildSearchIndex() throws 
     
+    /**
+     * Restores the active handle's database in-place from a verified backup file using SQLite Online Backup API.
+     */
+    func restoreFromBackup(backupPath: String) throws 
+    
     func searchPage(query: String, mode: SearchMode, limit: UInt32, offset: UInt32) throws  -> [HistoryItemSummaryDto]
     
     func searchPageWithOptions(query: String, mode: SearchMode, sortByRelevance: Bool, pinArrangement: PinArrangement, limit: UInt32, offset: UInt32) throws  -> [HistoryItemSummaryDto]
@@ -574,6 +589,11 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     func setRetentionPolicy(policy: RetentionPolicyDto) 
     
     func vacuumDatabase() throws 
+    
+    /**
+     * Verifies both B-Tree table integrity, foreign keys, and FTS5 search index synchronization.
+     */
+    func verifyIntegrity() throws 
     
 }
 
@@ -643,7 +663,25 @@ public static func openInMemory()throws  -> MimraCoreHandle {
 })
 }
     
+public static func openResilient(dbPath: String)throws  -> MimraCoreHandle {
+    return try  FfiConverterTypeMimraCoreHandle.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_constructor_mimracorehandle_open_resilient(
+        FfiConverterString.lower(dbPath),$0
+    )
+})
+}
+    
 
+    
+    /**
+     * Performs an atomic offline backup snapshot into the designated file path using SQLite VACUUM INTO.
+     */
+open func backupDatabase(destinationPath: String)throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_backup_database(self.uniffiClonePointer(),
+        FfiConverterString.lower(destinationPath),$0
+    )
+}
+}
     
 open func checkSearchIndexIntegrity()throws  -> Bool {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
@@ -706,6 +744,16 @@ open func getItemRepresentations(itemId: String)throws  -> [RawRepresentation] {
 })
 }
     
+    /**
+     * Queries the recovery diagnosis report if database recovery occurred during startup.
+     */
+open func getRecoveryReport() -> DatabaseRecoveryReportDto? {
+    return try!  FfiConverterOptionTypeDatabaseRecoveryReportDTO.lift(try! rustCall() {
+    uniffi_mimra_core_fn_method_mimracorehandle_get_recovery_report(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
 open func getRetentionPolicy() -> RetentionPolicyDto {
     return try!  FfiConverterTypeRetentionPolicyDTO.lift(try! rustCall() {
     uniffi_mimra_core_fn_method_mimracorehandle_get_retention_policy(self.uniffiClonePointer(),$0
@@ -750,6 +798,16 @@ open func listPageWithSort(sortMode: HistorySortMode, pinArrangement: PinArrange
     
 open func rebuildSearchIndex()throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_rebuild_search_index(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+    /**
+     * Restores the active handle's database in-place from a verified backup file using SQLite Online Backup API.
+     */
+open func restoreFromBackup(backupPath: String)throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_restore_from_backup(self.uniffiClonePointer(),
+        FfiConverterString.lower(backupPath),$0
     )
 }
 }
@@ -804,6 +862,15 @@ open func setRetentionPolicy(policy: RetentionPolicyDto) {try! rustCall() {
     
 open func vacuumDatabase()throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_vacuum_database(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+    /**
+     * Verifies both B-Tree table integrity, foreign keys, and FTS5 search index synchronization.
+     */
+open func verifyIntegrity()throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_verify_integrity(self.uniffiClonePointer(),$0
     )
 }
 }
@@ -969,6 +1036,91 @@ public func FfiConverterTypeCleanupReportDTO_lift(_ buf: RustBuffer) throws -> C
 #endif
 public func FfiConverterTypeCleanupReportDTO_lower(_ value: CleanupReportDto) -> RustBuffer {
     return FfiConverterTypeCleanupReportDTO.lower(value)
+}
+
+
+/**
+ * Detailed diagnostic and recovery outcome when opening or recovering a database.
+ */
+public struct DatabaseRecoveryReportDto {
+    public var wasRecovered: Bool
+    public var quarantinedBackupPath: String?
+    public var salvagedItemsCount: UInt32
+    public var errorDetails: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(wasRecovered: Bool, quarantinedBackupPath: String?, salvagedItemsCount: UInt32, errorDetails: String?) {
+        self.wasRecovered = wasRecovered
+        self.quarantinedBackupPath = quarantinedBackupPath
+        self.salvagedItemsCount = salvagedItemsCount
+        self.errorDetails = errorDetails
+    }
+}
+
+
+
+extension DatabaseRecoveryReportDto: Equatable, Hashable {
+    public static func ==(lhs: DatabaseRecoveryReportDto, rhs: DatabaseRecoveryReportDto) -> Bool {
+        if lhs.wasRecovered != rhs.wasRecovered {
+            return false
+        }
+        if lhs.quarantinedBackupPath != rhs.quarantinedBackupPath {
+            return false
+        }
+        if lhs.salvagedItemsCount != rhs.salvagedItemsCount {
+            return false
+        }
+        if lhs.errorDetails != rhs.errorDetails {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(wasRecovered)
+        hasher.combine(quarantinedBackupPath)
+        hasher.combine(salvagedItemsCount)
+        hasher.combine(errorDetails)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDatabaseRecoveryReportDTO: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DatabaseRecoveryReportDto {
+        return
+            try DatabaseRecoveryReportDto(
+                wasRecovered: FfiConverterBool.read(from: &buf), 
+                quarantinedBackupPath: FfiConverterOptionString.read(from: &buf), 
+                salvagedItemsCount: FfiConverterUInt32.read(from: &buf), 
+                errorDetails: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DatabaseRecoveryReportDto, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.wasRecovered, into: &buf)
+        FfiConverterOptionString.write(value.quarantinedBackupPath, into: &buf)
+        FfiConverterUInt32.write(value.salvagedItemsCount, into: &buf)
+        FfiConverterOptionString.write(value.errorDetails, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDatabaseRecoveryReportDTO_lift(_ buf: RustBuffer) throws -> DatabaseRecoveryReportDto {
+    return try FfiConverterTypeDatabaseRecoveryReportDTO.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDatabaseRecoveryReportDTO_lower(_ value: DatabaseRecoveryReportDto) -> RustBuffer {
+    return FfiConverterTypeDatabaseRecoveryReportDTO.lower(value)
 }
 
 
@@ -1662,6 +1814,12 @@ public enum CoreError {
     )
     case DatabaseError(details: String
     )
+    case DatabaseCorrupt(details: String
+    )
+    case DiskFullOrIoError(details: String
+    )
+    case SchemaMismatch(details: String
+    )
     case ItemNotFound(id: String
     )
     case InvalidInput(details: String
@@ -1694,17 +1852,26 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
         case 3: return .DatabaseError(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 4: return .ItemNotFound(
-            id: try FfiConverterString.read(from: &buf)
-            )
-        case 5: return .InvalidInput(
+        case 4: return .DatabaseCorrupt(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 6: return .InvalidRegex(
+        case 5: return .DiskFullOrIoError(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 6: return .SchemaMismatch(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 7: return .ItemNotFound(
+            id: try FfiConverterString.read(from: &buf)
+            )
+        case 8: return .InvalidInput(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 9: return .InvalidRegex(
             pattern: try FfiConverterString.read(from: &buf), 
             errorMessage: try FfiConverterString.read(from: &buf)
             )
-        case 7: return .Internal(
+        case 10: return .Internal(
             message: try FfiConverterString.read(from: &buf)
             )
 
@@ -1734,24 +1901,39 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
             FfiConverterString.write(details, into: &buf)
             
         
-        case let .ItemNotFound(id):
+        case let .DatabaseCorrupt(details):
             writeInt(&buf, Int32(4))
-            FfiConverterString.write(id, into: &buf)
+            FfiConverterString.write(details, into: &buf)
             
         
-        case let .InvalidInput(details):
+        case let .DiskFullOrIoError(details):
             writeInt(&buf, Int32(5))
             FfiConverterString.write(details, into: &buf)
             
         
-        case let .InvalidRegex(pattern,errorMessage):
+        case let .SchemaMismatch(details):
             writeInt(&buf, Int32(6))
+            FfiConverterString.write(details, into: &buf)
+            
+        
+        case let .ItemNotFound(id):
+            writeInt(&buf, Int32(7))
+            FfiConverterString.write(id, into: &buf)
+            
+        
+        case let .InvalidInput(details):
+            writeInt(&buf, Int32(8))
+            FfiConverterString.write(details, into: &buf)
+            
+        
+        case let .InvalidRegex(pattern,errorMessage):
+            writeInt(&buf, Int32(9))
             FfiConverterString.write(pattern, into: &buf)
             FfiConverterString.write(errorMessage, into: &buf)
             
         
         case let .Internal(message):
-            writeInt(&buf, Int32(7))
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(message, into: &buf)
             
         }
@@ -2106,6 +2288,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeDatabaseRecoveryReportDTO: FfiConverterRustBuffer {
+    typealias SwiftType = DatabaseRecoveryReportDto?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeDatabaseRecoveryReportDTO.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeDatabaseRecoveryReportDTO.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeRetentionPolicyDTO: FfiConverterRustBuffer {
     typealias SwiftType = RetentionPolicyDto?
 
@@ -2249,6 +2455,16 @@ public func fingerprint(payload: Data)throws  -> String {
     )
 })
 }
+/**
+ * Restores a target SQLite database file from a verified backup file.
+ */
+public func restoreDatabaseBackup(backupPath: String, targetPath: String)throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_func_restore_database_backup(
+        FfiConverterString.lower(backupPath),
+        FfiConverterString.lower(targetPath),$0
+    )
+}
+}
 
 private enum InitializationResult {
     case ok
@@ -2269,6 +2485,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_func_fingerprint() != 55289) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_func_restore_database_backup() != 61483) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_backup_database() != 47054) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_check_search_index_integrity() != 16171) {
@@ -2295,6 +2517,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_mimra_core_checksum_method_mimracorehandle_get_item_representations() != 306) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_get_recovery_report() != 3990) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_get_retention_policy() != 4741) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2311,6 +2536,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_rebuild_search_index() != 2150) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_restore_from_backup() != 34048) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_search_page() != 43715) {
@@ -2331,10 +2559,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_mimra_core_checksum_method_mimracorehandle_vacuum_database() != 14185) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_verify_integrity() != 52870) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_mimra_core_checksum_constructor_mimracorehandle_open() != 14580) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_constructor_mimracorehandle_open_in_memory() != 5435) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_constructor_mimracorehandle_open_resilient() != 5598) {
         return InitializationResult.apiChecksumMismatch
     }
 

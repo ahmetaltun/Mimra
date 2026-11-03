@@ -157,6 +157,44 @@ public final class StorageSettingsViewModel: ObservableObject {
         }
         isPerformingAction = false
     }
+
+    public var recoveryReport: DatabaseRecoveryReportDto? {
+        coreClient.recoveryReport
+    }
+
+    public func verifyDatabaseIntegrity() async {
+        isPerformingAction = true
+        statusMessage = nil
+        do {
+            try await coreClient.verifyIntegrity()
+            self.statusMessage = "Database integrity check passed: B-tree, foreign keys, and FTS5 search index are 100% valid."
+            self.isErrorMessage = false
+        } catch {
+            self.statusMessage = "Database integrity check failed: \(error.localizedDescription)"
+            self.isErrorMessage = true
+        }
+        isPerformingAction = false
+    }
+
+    public func createBackup() async {
+        let panel = NSSavePanel()
+        panel.title = "Save Mimra Database Backup"
+        panel.nameFieldStringValue = "mimra-backup-\(Int(Date().timeIntervalSince1970)).sqlite"
+        panel.canCreateDirectories = true
+        if panel.runModal() == .OK, let url = panel.url {
+            isPerformingAction = true
+            statusMessage = nil
+            do {
+                try await coreClient.backupDatabase(to: url.path)
+                self.statusMessage = "Database backup saved to: \(url.lastPathComponent)"
+                self.isErrorMessage = false
+            } catch {
+                self.statusMessage = "Failed to create backup: \(error.localizedDescription)"
+                self.isErrorMessage = true
+            }
+            isPerformingAction = false
+        }
+    }
 }
 
 // ==============================================================================
@@ -290,6 +328,46 @@ public struct StorageSettingsTab: View {
                 }
 
                 Text("Clearing unpinned history keeps pinned items intact. Clearing all permanently erases all clips including pinned anchors.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Backup & Recovery") {
+                if let report = viewModel.recoveryReport, report.wasRecovered {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Database Recovered", systemImage: "bandage.fill")
+                            .font(.headline)
+                            .foregroundColor(.orange)
+                        Text("A damaged database was detected and quarantined at:")
+                            .font(.caption)
+                        Text(report.quarantinedBackupPath ?? "Unknown path")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                        Text("Salvaged \(report.salvagedItemsCount) items into fresh database.")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                HStack(spacing: 12) {
+                    Button(action: {
+                        Task { await viewModel.createBackup() }
+                    }) {
+                        Label("Create Backup...", systemImage: "arrow.down.doc")
+                    }
+                    .disabled(viewModel.isPerformingAction)
+
+                    Button(action: {
+                        Task { await viewModel.verifyDatabaseIntegrity() }
+                    }) {
+                        Label("Verify Integrity", systemImage: "checkmark.shield")
+                    }
+                    .disabled(viewModel.isPerformingAction)
+                }
+
+                Text("Backups are atomic and crash-consistent snapshots. Database integrity verification checks table consistency, foreign keys, and FTS5 search index triggers.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -217,3 +217,31 @@ impl From<CleanupReport> for CleanupReportDTO {
         }
     }
 }
+
+/// Detailed diagnostic and recovery outcome when opening or recovering a database.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, uniffi::Record)]
+pub struct DatabaseRecoveryReportDTO {
+    pub was_recovered: bool,
+    pub quarantined_backup_path: Option<String>,
+    pub salvaged_items_count: u32,
+    pub error_details: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DatabaseRecoveryReport {
+    pub was_recovered: bool,
+    pub quarantined_backup_path: Option<String>,
+    pub salvaged_items_count: u32,
+    pub error_details: Option<String>,
+}
+
+impl From<DatabaseRecoveryReport> for DatabaseRecoveryReportDTO {
+    fn from(r: DatabaseRecoveryReport) -> Self {
+        Self {
+            was_recovered: r.was_recovered,
+            quarantined_backup_path: r.quarantined_backup_path,
+            salvaged_items_count: r.salvaged_items_count,
+            error_details: r.error_details,
+        }
+    }
+}

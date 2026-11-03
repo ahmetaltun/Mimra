@@ -24,6 +24,7 @@ extension HistorySortMode: @unchecked Sendable {}
 extension PinArrangement: @unchecked Sendable {}
 extension RetentionPolicyDto: @unchecked Sendable {}
 extension CleanupReportDto: @unchecked Sendable {}
+extension DatabaseRecoveryReportDto: @unchecked Sendable {}
 
 extension HistoryItemSummaryDto {
     /// Backward-compatible initializer for tests without explicit highlights.
@@ -65,6 +66,7 @@ extension HistoryItemSummaryDto {
 /// Actor managing the connection to the RustCore SQLite engine.
 public actor CoreClient {
     private let handle: MimraCoreHandle
+    public let recoveryReport: DatabaseRecoveryReportDto?
     private static let lock = NSLock()
     nonisolated(unsafe) private static var _shared: CoreClient?
 
@@ -112,22 +114,30 @@ public actor CoreClient {
         return mimraDir.appendingPathComponent("mimra.sqlite").path
     }
 
-    /// Private initializer wrapping an existing handle.
-    private init(handle: MimraCoreHandle) {
+    /// Private initializer wrapping an existing handle and optional recovery report.
+    private init(handle: MimraCoreHandle, recoveryReport: DatabaseRecoveryReportDto? = nil) {
         self.handle = handle
+        self.recoveryReport = recoveryReport
     }
 
     /// Initializes a CoreClient with a SQLite database at the specified path (or default path).
+    /// Uses resilient opening: detects corruption, creates a quarantined backup, and salvages readable data.
     public init(databasePath: String? = nil) throws {
         let path = databasePath ?? Self.defaultDatabasePath
         logger.info("Opening MimraCoreHandle at path: \(path, privacy: .public)")
-        self.handle = try MimraCoreHandle.open(dbPath: path)
+        let handle = try MimraCoreHandle.open(dbPath: path)
+        self.handle = handle
+        let report = handle.getRecoveryReport()
+        self.recoveryReport = report
+        if let report = report, report.wasRecovered {
+            logger.warning("Database was recovered from corruption. Quarantined backup: \(report.quarantinedBackupPath ?? "none", privacy: .public), salvaged items: \(report.salvagedItemsCount)")
+        }
     }
 
     /// Creates an in-memory CoreClient instance, ideal for testing and ephemeral sessions.
     public static func inMemory() throws -> CoreClient {
         let handle = try MimraCoreHandle.openInMemory()
-        return CoreClient(handle: handle)
+        return CoreClient(handle: handle, recoveryReport: nil)
     }
 
     // MARK: - API Forwarding to RustCore
@@ -264,5 +274,26 @@ public actor CoreClient {
     /// Queries current storage usage statistics.
     public func getStats() throws -> StorageStatsDto {
         return try handle.getStats()
+    }
+
+    /// Performs an atomic backup snapshot of the database into the designated destination file path.
+    public func backupDatabase(to destinationPath: String) throws {
+        try handle.backupDatabase(destinationPath: destinationPath)
+    }
+
+    /// Verifies SQLite database B-Tree consistency, foreign keys, and FTS5 search index integrity.
+    public func verifyIntegrity() throws {
+        try handle.verifyIntegrity()
+    }
+
+    /// Restores the current active database in-place from a verified backup file.
+    public func restoreFromBackup(backupPath: String) throws {
+        try handle.restoreFromBackup(backupPath: backupPath)
+    }
+
+    /// Restores the database from a verified backup file into the target database path (defaulting to app database).
+    public static func restoreDatabase(from backupPath: String, to targetPath: String? = nil) throws {
+        let target = targetPath ?? Self.defaultDatabasePath
+        try restoreDatabaseBackup(backupPath: backupPath, targetPath: target)
     }
 }

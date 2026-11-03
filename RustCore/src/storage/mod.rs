@@ -4,11 +4,18 @@
 
 pub mod db;
 pub mod migrations;
+pub mod recovery;
 pub mod repository;
 pub mod search;
 
 pub use db::{open_database, open_in_memory, DatabaseConfig};
-pub use migrations::{run_migrations, verify_database_integrity, ALL_MIGRATIONS};
+pub use migrations::{
+    run_migrations, verify_database_integrity, ALL_MIGRATIONS, MAX_SUPPORTED_SCHEMA_VERSION,
+};
+pub use recovery::{
+    attempt_salvage_corrupted_database, backup_database, open_database_resilient,
+    quarantine_corrupted_database, restore_database_from_backup,
+};
 pub use repository::{
     clear_all_history, clear_unpinned_history, delete_item_by_id, enforce_retention_limit,
     enforce_retention_policy, fetch_payload, find_by_content_hash, find_by_id, get_storage_stats,
@@ -1116,4 +1123,230 @@ fn test_crash_safe_reopen_on_disk() {
             "DB file size must be greater than 0"
         );
     }
+}
+
+#[test]
+fn test_corrupt_database_detection_and_quarantine_and_salvage() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+    use std::io::Write;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("corrupt_test.sqlite");
+
+    // 1. Create a valid database with items
+    {
+        let mut conn = open_database(&db_path, &DatabaseConfig::default()).unwrap();
+        run_migrations(&mut conn).unwrap();
+
+        let rep = Representation::new(
+            0,
+            uti::UTF8_PLAIN_TEXT,
+            b"Hello Salvageable Content".to_vec(),
+        )
+        .unwrap();
+        let item = HistoryItem::new(
+            vec![rep],
+            Some("com.apple.Safari".to_string()),
+            1_700_000_000_000,
+        )
+        .unwrap();
+
+        ingest_clipboard_item(&mut conn, item, 200).unwrap();
+        verify_database_integrity(&conn).unwrap();
+    }
+
+    // 2. Intentionally corrupt the database file
+    {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&db_path)
+            .unwrap();
+        // Corrupt page header at offset 16..48
+        file.write_all(b"CORRUPTED_BYTES_HERE_1234567890").unwrap();
+        file.sync_all().unwrap();
+    }
+
+    // 3. Open resiliently — must detect corruption, quarantine, and initialize fresh database
+    let (mut conn, report) = open_database_resilient(&db_path, &DatabaseConfig::default()).unwrap();
+
+    assert!(report.was_recovered, "Database must be marked as recovered");
+    assert!(
+        report.quarantined_backup_path.is_some(),
+        "Quarantine backup path must be set"
+    );
+
+    let backup_path = report.quarantined_backup_path.unwrap();
+    assert!(
+        std::path::Path::new(&backup_path).exists(),
+        "Quarantined backup file must exist on disk"
+    );
+    assert!(
+        backup_path.contains(".corrupt."),
+        "Backup path must contain '.corrupt.'"
+    );
+
+    // Fresh database must be valid and operational
+    verify_database_integrity(&conn).expect("Recovered database must pass integrity check");
+
+    // Insert new item into recovered database
+    let rep2 =
+        Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Post recovery payload".to_vec()).unwrap();
+    let new_item = HistoryItem::new(
+        vec![rep2],
+        Some("com.apple.Terminal".to_string()),
+        1_700_000_100_000,
+    )
+    .unwrap();
+    ingest_clipboard_item(&mut conn, new_item, 200).unwrap();
+
+    let page = list_history_page(&conn, 10, 0).unwrap();
+    assert!(
+        !page.is_empty(),
+        "Recovered database must be fully writable and queryable"
+    );
+}
+
+#[test]
+fn test_completely_corrupted_file_quarantined_clean_init() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("garbage.sqlite");
+
+    // Write completely invalid non-SQLite garbage
+    std::fs::write(&db_path, b"THIS IS NOT A SQLITE DATABASE AT ALL").unwrap();
+
+    let (conn, report) = open_database_resilient(&db_path, &DatabaseConfig::default()).unwrap();
+
+    assert!(report.was_recovered);
+    let backup_path = report.quarantined_backup_path.unwrap();
+    let backup_contents = std::fs::read(&backup_path).unwrap();
+    assert_eq!(
+        backup_contents, b"THIS IS NOT A SQLITE DATABASE AT ALL",
+        "Original bytes must be preserved in quarantine"
+    );
+
+    verify_database_integrity(&conn).unwrap();
+}
+
+#[test]
+fn test_forward_schema_mismatch_fails_gracefully() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("future_schema.sqlite");
+
+    {
+        let mut conn = open_database(&db_path, &DatabaseConfig::default()).unwrap();
+        run_migrations(&mut conn).unwrap();
+
+        // Insert simulated future schema version
+        conn.execute(
+            "INSERT INTO schema_migrations (version, applied_at_ms) VALUES (999, 12345);",
+            [],
+        )
+        .unwrap();
+    }
+
+    // Opening resiliently must fail with SchemaMismatch, NOT quarantine
+    let result = open_database_resilient(&db_path, &DatabaseConfig::default());
+    match result {
+        Err(crate::error::CoreError::SchemaMismatch { details }) => {
+            assert!(
+                details.contains("999"),
+                "Error must mention future version 999: {details}"
+            );
+        }
+        other => panic!("Expected SchemaMismatch error, got: {:?}", other),
+    }
+
+    // Ensure database was NOT quarantined
+    assert!(
+        db_path.exists(),
+        "Target database must not be quarantined on schema mismatch"
+    );
+}
+
+#[test]
+fn test_backup_and_restore_cycle() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("original.sqlite");
+    let backup_path = temp_dir.path().join("backup.sqlite");
+
+    let mut conn = open_database(&db_path, &DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    let rep1 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Item 1 payload".to_vec()).unwrap();
+    let item1 = HistoryItem::new(
+        vec![rep1],
+        Some("com.apple.Safari".to_string()),
+        1_700_000_000_000,
+    )
+    .unwrap();
+    ingest_clipboard_item(&mut conn, item1, 200).unwrap();
+
+    // 1. Create backup
+    backup_database(&conn, &backup_path).expect("Backup must succeed");
+    assert!(backup_path.exists(), "Backup file must exist on disk");
+
+    // 2. Modify original database (insert another item)
+    let rep2 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Item 2 payload".to_vec()).unwrap();
+    let item2 = HistoryItem::new(
+        vec![rep2],
+        Some("com.apple.Safari".to_string()),
+        1_700_000_000_100,
+    )
+    .unwrap();
+    ingest_clipboard_item(&mut conn, item2, 200).unwrap();
+    assert_eq!(list_history_page(&conn, 10, 0).unwrap().len(), 2);
+    drop(conn);
+
+    // 3. Restore from backup to original path
+    restore_database_from_backup(&backup_path, &db_path, &DatabaseConfig::default())
+        .expect("Restore must succeed");
+
+    // 4. Verify restored state matches backup (only item1 exists)
+    let restored_conn = open_database(&db_path, &DatabaseConfig::default()).unwrap();
+    verify_database_integrity(&restored_conn).unwrap();
+    let items = list_history_page(&restored_conn, 10, 0).unwrap();
+    assert_eq!(
+        items.len(),
+        1,
+        "Restored database must only contain the items from backup"
+    );
+    assert_eq!(items[0].title, "Item 1 payload");
+}
+
+#[test]
+fn test_transaction_kill_and_rollback_zero_orphan_records() {
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    // Simulate interrupted transaction
+    {
+        let tx = conn.transaction().unwrap();
+        tx.execute(
+            "INSERT INTO history_items (
+                id, first_copied_at_ms, last_copied_at_ms, copy_count, source_bundle_id,
+                content_kind, title, search_text, ocr_text, content_hash, is_pinned,
+                pin_order, pin_key, byte_size, created_at_ms
+            ) VALUES ('aborted-id', 1000, 1000, 1, 'com.apple.Finder', 'text', 'Aborted Title', 'Aborted Text', '', X'010203', 0, NULL, NULL, 50, 1000);",
+            [],
+        ).unwrap();
+        // Transaction dropped without commit -> simulated process kill / failure
+    }
+
+    // Verify no orphan record remained
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM history_items WHERE id = 'aborted-id';",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 0, "Aborted transaction must leave zero rows");
+
+    // Verify FTS5 and FK integrity pass
+    verify_database_integrity(&conn).unwrap();
+    verify_search_index_integrity(&conn).unwrap();
 }

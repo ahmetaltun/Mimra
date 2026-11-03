@@ -21,6 +21,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             CoreClient.setSharedInstance(client)
             self.coreClient = client
 
+            // Check if resilient recovery occurred on startup (P4-07 / T-DB-01)
+            if let report = client.recoveryReport, report.wasRecovered {
+                let backupPath = report.quarantinedBackupPath ?? "Application Support/com.mimra.app"
+                let count = report.salvagedItemsCount
+                NSLog("Mimra database recovered. Quarantined backup: \(backupPath), salvaged items: \(count)")
+                DispatchQueue.main.async {
+                    let alert = NSAlert()
+                    alert.messageText = "Mimra Database Recovered"
+                    alert.informativeText = "A damaged database file was detected and safely quarantined at:\n\(backupPath)\n\nMimra salvaged \(count) clipboard items. No history was permanently lost."
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            }
+
             // 2. Initialize Clipboard Monitor on @MainActor
             let monitor = ClipboardMonitor(coreClient: client)
             self.clipboardMonitor = monitor
@@ -55,7 +70,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             coordinator.setup()
             self.statusBarCoordinator = coordinator
         } catch {
-            NSLog("Failed to initialize Mimra services: \(error.localizedDescription)")
+            let errorMsg: String
+            if case let CoreError.SchemaMismatch(details) = error {
+                errorMsg = "Database version mismatch: \(details)"
+            } else if case let CoreError.DiskFullOrIoError(details) = error {
+                errorMsg = "Disk full or I/O failure: \(details)"
+            } else {
+                errorMsg = error.localizedDescription
+            }
+            NSLog("Failed to initialize Mimra services: \(errorMsg)")
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = "Mimra Startup Notice"
+                alert.informativeText = "Mimra encountered an issue while initializing its local database:\n\n\(errorMsg)\n\nPlease check available disk space or update Mimra."
+                alert.alertStyle = .critical
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
         }
     }
 

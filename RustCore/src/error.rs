@@ -19,6 +19,15 @@ pub enum CoreError {
     #[error("Database error occurred: {details}. Check SQLite integrity and permissions.")]
     DatabaseError { details: String },
 
+    #[error("Database corruption detected: {details}. Safe backup created.")]
+    DatabaseCorrupt { details: String },
+
+    #[error("Disk full or I/O failure: {details}")]
+    DiskFullOrIoError { details: String },
+
+    #[error("Database schema mismatch: {details}")]
+    SchemaMismatch { details: String },
+
     #[error("Requested item with ID '{id}' was not found in local history.")]
     ItemNotFound { id: String },
 
@@ -37,8 +46,25 @@ pub enum CoreError {
 
 impl From<rusqlite::Error> for CoreError {
     fn from(err: rusqlite::Error) -> Self {
-        CoreError::DatabaseError {
-            details: err.to_string(),
+        match &err {
+            rusqlite::Error::SqliteFailure(lib_err, _) => match lib_err.code {
+                rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase => {
+                    CoreError::DatabaseCorrupt {
+                        details: err.to_string(),
+                    }
+                }
+                rusqlite::ErrorCode::DiskFull | rusqlite::ErrorCode::SystemIoFailure => {
+                    CoreError::DiskFullOrIoError {
+                        details: err.to_string(),
+                    }
+                }
+                _ => CoreError::DatabaseError {
+                    details: err.to_string(),
+                },
+            },
+            _ => CoreError::DatabaseError {
+                details: err.to_string(),
+            },
         }
     }
 }
