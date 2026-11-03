@@ -4,9 +4,14 @@
 
 pub mod db;
 pub mod migrations;
+pub mod repository;
 
 pub use db::{open_database, open_in_memory, DatabaseConfig};
 pub use migrations::{run_migrations, verify_database_integrity, ALL_MIGRATIONS};
+pub use repository::{
+    enforce_retention_limit, find_by_content_hash, find_by_id, ingest_clipboard_item, insert_item,
+    load_representations, update_recopy, IngestOutcome,
+};
 
 #[cfg(test)]
 mod tests {
@@ -185,4 +190,113 @@ mod tests {
             "FTS5 table must have no matches after delete"
         );
     }
+}
+
+#[test]
+fn test_ingest_new_item_and_duplicate_handling() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    let rep =
+        Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Unique Clip Payload".to_vec()).unwrap();
+    let item = HistoryItem::new(vec![rep], Some("com.apple.Safari".to_string()), 1000).unwrap();
+    let original_id = item.id;
+
+    // 1. Ingest new item
+    let outcome = ingest_clipboard_item(&mut conn, item, 200).unwrap();
+    assert!(matches!(outcome, IngestOutcome::NewItem(_)));
+
+    // 2. Ingest duplicate item with updated timestamp and different source
+    let rep_dup =
+        Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Unique Clip Payload".to_vec()).unwrap();
+    let item_dup =
+        HistoryItem::new(vec![rep_dup], Some("com.google.Chrome".to_string()), 2000).unwrap();
+
+    let outcome_dup = ingest_clipboard_item(&mut conn, item_dup, 200).unwrap();
+    match outcome_dup {
+        IngestOutcome::DuplicateUpdated(updated) => {
+            assert_eq!(updated.id, original_id, "Duplicate must retain original ID");
+            assert_eq!(updated.first_copied_at_ms, 1000);
+            assert_eq!(updated.last_copied_at_ms, 2000);
+            assert_eq!(updated.copy_count, 2);
+            assert_eq!(
+                updated.source_bundle_id,
+                Some("com.google.Chrome".to_string())
+            );
+        }
+        IngestOutcome::NewItem(_) => panic!("Expected DuplicateUpdated outcome"),
+    }
+
+    verify_database_integrity(&conn).expect("Database integrity check must pass");
+}
+
+#[test]
+fn test_retention_limit_and_pinned_protection() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    // Capacity limit of 2 unpinned items
+    let max_unpinned = 2;
+
+    // Ingest item 1 (unpinned)
+    let rep1 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Item 1".to_vec()).unwrap();
+    let item1 = HistoryItem::new(vec![rep1], None, 1000).unwrap();
+    let id1 = item1.id;
+    ingest_clipboard_item(&mut conn, item1, max_unpinned).unwrap();
+
+    // Ingest item 2 (pinned!)
+    let rep2 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Item 2 (Pinned)".to_vec()).unwrap();
+    let mut item2 = HistoryItem::new(vec![rep2], None, 2000).unwrap();
+    item2.is_pinned = true;
+    let id2 = item2.id;
+    ingest_clipboard_item(&mut conn, item2, max_unpinned).unwrap();
+
+    // Ingest item 3 (unpinned)
+    let rep3 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Item 3".to_vec()).unwrap();
+    let item3 = HistoryItem::new(vec![rep3], None, 3000).unwrap();
+    let id3 = item3.id;
+    ingest_clipboard_item(&mut conn, item3, max_unpinned).unwrap();
+
+    // Ingest item 4 (unpinned) -> should evict item 1 (oldest unpinned)
+    let rep4 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Item 4".to_vec()).unwrap();
+    let item4 = HistoryItem::new(vec![rep4], None, 4000).unwrap();
+    let id4 = item4.id;
+    ingest_clipboard_item(&mut conn, item4, max_unpinned).unwrap();
+
+    // Verification:
+    // Item 1 was evicted
+    assert!(
+        find_by_id(&conn, &id1).unwrap().is_none(),
+        "Oldest unpinned Item 1 must be evicted"
+    );
+
+    // Item 2 (pinned) was PRESERVED
+    assert!(
+        find_by_id(&conn, &id2).unwrap().is_some(),
+        "Pinned Item 2 must never be evicted"
+    );
+
+    // Item 3 and Item 4 exist
+    assert!(
+        find_by_id(&conn, &id3).unwrap().is_some(),
+        "Item 3 must exist"
+    );
+    assert!(
+        find_by_id(&conn, &id4).unwrap().is_some(),
+        "Item 4 must exist"
+    );
+
+    // Total count = 3 (1 pinned + 2 unpinned)
+    let total_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM history_items;", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(total_count, 3);
+
+    verify_database_integrity(&conn).expect("Database integrity check must pass");
 }

@@ -9,7 +9,8 @@ pub mod storage;
 pub use domain::{uti, ContentKind, HistoryItem, Representation};
 pub use error::CoreError;
 pub use storage::{
-    open_database, open_in_memory, run_migrations, verify_database_integrity, DatabaseConfig,
+    find_by_content_hash, find_by_id, ingest_clipboard_item, load_representations, open_database,
+    open_in_memory, run_migrations, verify_database_integrity, DatabaseConfig, IngestOutcome,
 };
 
 // Setup UniFFI scaffolding for procedural macro bindings
