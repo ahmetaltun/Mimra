@@ -28,6 +28,17 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		10000004 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000004 /* SettingsView.swift */; };
 		10000005 /* mimra_core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000005 /* mimra_core.swift */; };
 		10000006 /* libmimra_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 20000006 /* libmimra_core.a */; };
+		10000007 /* PrivacyFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000009 /* PrivacyFilter.swift */; };
+		10000008 /* ClipboardProvenance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000010 /* ClipboardProvenance.swift */; };
+		10000009 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000011 /* ClipboardMonitor.swift */; };
+		10000010 /* CoreClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000012 /* CoreClient.swift */; };
+		10000011 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000013 /* HistoryView.swift */; };
+		10000012 /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000014 /* FloatingPanel.swift */; };
+		10000013 /* FloatingPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000015 /* FloatingPanelView.swift */; };
+		10000014 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000016 /* HotkeyManager.swift */; };
+		10000015 /* PanelViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000017 /* PanelViewModel.swift */; };
+		10000016 /* PasteCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000018 /* PasteCoordinator.swift */; };
+		10000017 /* AccessibilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000019 /* AccessibilityService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +51,17 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		20000006 /* libmimra_core.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libmimra_core.a; path = RustCore/target/aarch64-apple-darwin/debug/libmimra_core.a; sourceTree = "<group>"; };
 		20000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		20000008 /* mimra_coreFFI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = mimra_coreFFI.h; path = Generated/mimra_coreFFI.h; sourceTree = "<group>"; };
+		20000009 /* PrivacyFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyFilter.swift; sourceTree = "<group>"; };
+		20000010 /* ClipboardProvenance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardProvenance.swift; sourceTree = "<group>"; };
+		20000011 /* ClipboardMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardMonitor.swift; sourceTree = "<group>"; };
+		20000012 /* CoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreClient.swift; sourceTree = "<group>"; };
+		20000013 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		20000014 /* FloatingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanel.swift; sourceTree = "<group>"; };
+		20000015 /* FloatingPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanelView.swift; sourceTree = "<group>"; };
+		20000016 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
+		20000017 /* PanelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelViewModel.swift; sourceTree = "<group>"; };
+		20000018 /* PasteCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteCoordinator.swift; sourceTree = "<group>"; };
+		20000019 /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,6 +90,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			isa = PBXGroup;
 			children = (
 				40000006 /* App */,
+				40000010 /* Bridge */,
 				40000007 /* macOS */,
 				40000008 /* UI */,
 				20000007 /* Info.plist */,
@@ -109,10 +132,24 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			path = App;
 			sourceTree = "<group>";
 		};
+		40000010 /* Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				20000012 /* CoreClient.swift */,
+			);
+			path = Bridge;
+			sourceTree = "<group>";
+		};
 		40000007 /* macOS */ = {
 			isa = PBXGroup;
 			children = (
 				20000003 /* StatusBarCoordinator.swift */,
+				20000009 /* PrivacyFilter.swift */,
+				20000010 /* ClipboardProvenance.swift */,
+				20000011 /* ClipboardMonitor.swift */,
+				20000016 /* HotkeyManager.swift */,
+				20000018 /* PasteCoordinator.swift */,
+				20000019 /* AccessibilityService.swift */,
 			);
 			path = macOS;
 			sourceTree = "<group>";
@@ -121,6 +158,8 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			isa = PBXGroup;
 			children = (
 				40000009 /* Settings */,
+				40000011 /* History */,
+				40000012 /* Panel */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -131,6 +170,24 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				20000004 /* SettingsView.swift */,
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		40000011 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				20000013 /* HistoryView.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
+		40000012 /* Panel */ = {
+			isa = PBXGroup;
+			children = (
+				20000014 /* FloatingPanel.swift */,
+				20000015 /* FloatingPanelView.swift */,
+				20000017 /* PanelViewModel.swift */,
+			);
+			path = Panel;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -190,6 +247,17 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				10000003 /* StatusBarCoordinator.swift in Sources */,
 				10000004 /* SettingsView.swift in Sources */,
 				10000005 /* mimra_core.swift in Sources */,
+				10000007 /* PrivacyFilter.swift in Sources */,
+				10000008 /* ClipboardProvenance.swift in Sources */,
+				10000009 /* ClipboardMonitor.swift in Sources */,
+				10000010 /* CoreClient.swift in Sources */,
+				10000011 /* HistoryView.swift in Sources */,
+				10000012 /* FloatingPanel.swift in Sources */,
+				10000013 /* FloatingPanelView.swift in Sources */,
+				10000014 /* HotkeyManager.swift in Sources */,
+				10000015 /* PanelViewModel.swift in Sources */,
+				10000016 /* PasteCoordinator.swift in Sources */,
+				10000017 /* AccessibilityService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

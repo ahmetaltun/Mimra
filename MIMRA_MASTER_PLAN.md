@@ -536,17 +536,17 @@ All settings changes persist atomically and update relevant components without r
 
 ### PHASE 2 — Core user loop, popup and paste (G2)
 
-- [ ] **P2-01 Panel:** Resizable native `NSPanel` with SwiftUI list, text input, empty state and hide/reopen behavior. **DoD:** no dock UI by default, focus works in regular/fullscreen apps.
-- [ ] **P2-02 Hotkey:** Register/unregister global summon without global keylogger; shortcut collision handling; non-US keyboard tests. **DoD:** summon from Finder/Terminal/browser.
-- [ ] **P2-03 Status item:** icon and menu commands open/pause/ignore-next/settings/clear/quit. **DoD:** Option- and Option-Shift-click functionality documented and tested.
-- [ ] **P2-04 Search interaction:** keyboard arrows, Enter, Escape, `Command-,`, mouse click/hover, selection state. **DoD:** no accidental hover overrides immediately after keyboard navigation.
-- [ ] **P2-05 Replay codec:** reconstruct valid NSPasteboard item(s) from typed payloads, own marker. **DoD:** text round-trip byte/content comparison.
-- [ ] **P2-06 Auto-paste:** track previous app/focus, dismiss panel, paste via consented supported API. **DoD:** exact recipient app receives data in real devices.
-- [ ] **P2-07 Copy-only fallback:** default configurable `Paste automatically`, permissions status, recovery when denied/revoked. **DoD:** user can always copy without Accessibility.
-- [ ] **P2-08 Plain paste:** implement mode-specific key combinations and clipboard encoding behavior. **DoD:** formatted text becomes plain; file URL fallback explicitly tested.
-- [ ] **P2-09 Paste error handling:** app exited/screen switched/password/secure input/remote desktop/Spotlight cases. **DoD:** never paste to an unintended target and never claim success without it.
+- [x] **P2-01 Panel:** Resizable native `NSPanel` with SwiftUI list, text input, empty state and hide/reopen behavior. **DoD:** no dock UI by default, focus works in regular/fullscreen apps.
+- [x] **P2-02 Hotkey:** Register/unregister global summon without global keylogger; shortcut collision handling; non-US keyboard tests. **DoD:** summon from Finder/Terminal/browser.
+- [x] **P2-03 Status item:** icon and menu commands open/pause/ignore-next/settings/clear/quit. **DoD:** Option- and Option-Shift-click functionality documented and tested.
+- [x] **P2-04 Search interaction:** keyboard arrows, Enter, Escape, `Command-,`, mouse click/hover, selection state. **DoD:** no accidental hover overrides immediately after keyboard navigation.
+- [x] **P2-05 Replay codec:** reconstruct valid NSPasteboard item(s) from typed payloads, own marker. **DoD:** text round-trip byte/content comparison.
+- [x] **P2-06 Auto-paste:** track previous app/focus, dismiss panel, paste via consented supported API. **DoD:** exact recipient app receives data in real devices.
+- [x] **P2-07 Copy-only fallback:** default configurable `Paste automatically`, permissions status, recovery when denied/revoked. **DoD:** user can always copy without Accessibility.
+- [x] **P2-08 Plain paste:** implement mode-specific key combinations and clipboard encoding behavior. **DoD:** formatted text becomes plain; file URL fallback explicitly tested.
+- [x] **P2-09 Paste error handling:** app exited/screen switched/password/secure input/remote desktop/Spotlight cases. **DoD:** never paste to an unintended target and never claim success without it.
 
-**Phase 2 exit:** keyboard-only open→search→copy/paste in a normal target app; fallback without permissions.
+**Phase 2 exit:** keyboard-only open→search→copy/paste in a normal target app; fallback without permissions. [COMPLETED]
 
 ### PHASE 3 — Full data fidelity and richer previews (G3)
 

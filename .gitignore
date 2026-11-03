@@ -33,6 +33,7 @@ RustCore/**/*.rs.bk
 *.dylib
 
 # Temporary & Editor files
+main
 *.swp
 *.swo
 *~

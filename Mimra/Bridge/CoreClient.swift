@@ -79,6 +79,11 @@ public actor CoreClient {
         return try handle.fetchPayload(itemId: itemId, uti: uti)
     }
 
+    /// Fetches all stored representations for a given history item.
+    public func getItemRepresentations(itemId: String) throws -> [RawRepresentation] {
+        return try handle.getItemRepresentations(itemId: itemId)
+    }
+
     /// Deletes a history item by UUID.
     public func deleteItem(itemId: String) throws -> Bool {
         return try handle.deleteItem(itemId: itemId)

@@ -26,6 +26,9 @@ public final class ClipboardProvenance: @unchecked Sendable {
     /// Mimra's bundle identifier used for source attribution.
     public static let mimraBundleIdentifier = "com.mimra.app"
 
+    /// Shared singleton instance for application-wide self-write provenance tracking.
+    public static let shared = ClipboardProvenance()
+
     public init() {}
 
     /// Records that Mimra just wrote to the given pasteboard and stores the changeCount.

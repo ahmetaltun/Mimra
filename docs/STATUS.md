@@ -1,6 +1,6 @@
 # Mimra — Project Status & Roadmap Tracker
 
-> **Active Milestone:** Gate G2 — Reliable Copy / Paste (Phase 2)  
+> **Active Milestone:** Gate G3 — Complete Data Types (Phase 3)  
 > **Last Updated:** 2026-11-03  
 > **Target Environment:** macOS 15.0+ (`aarch64-apple-darwin`), Apple Silicon only
 
@@ -40,7 +40,7 @@
 |---|---|---|---|
 | **G0** | Clean Native + Rust Build | **COMPLETED** | arm64 app launches, Rust static library invoked from Swift, all ADRs recorded |
 | **G1** | Safe Capture Engine | **COMPLETED** | Privacy filters, text capture, persistence, zero secret-marker leaks |
-| **G2** | Reliable Copy / Paste | **IN PROGRESS** | NSPanel popup, focus restoration, global shortcut, accessibility fallback |
+| **G2** | Reliable Copy / Paste | **COMPLETED** | NSPanel popup, focus restoration, global shortcut, accessibility fallback |
 | **G3** | Complete Data Types | PENDING | RTF, HTML, PNG/JPEG/HEIC, file URLs with full round-trip fidelity |
 | **G4** | History Power Features | PENDING | Fuzzy/regex search, pinning, retention cleanup, settings UI |
 | **G5** | Core Feature Parity | PENDING | Slideout preview, OCR, cycle summon, VoiceOver, localization |
@@ -68,19 +68,20 @@
 
 | Task ID | Description | Status | Verification / Artifact |
 |---|---|---|---|
-| **P2-01** | Panel: Resizable native `NSPanel` with SwiftUI list, text input, empty state | Planned | `Mimra/UI/Panel/FloatingPanel.swift` |
-| **P2-02** | Hotkey: Carbon `RegisterEventHotKey` global summon without keylogger permissions | Planned | `Mimra/macOS/HotkeyManager.swift` |
-| **P2-03** | Status item menu: Actions, pause toggle, ignore next copy, clear, settings | In Progress | `Mimra/macOS/StatusBarCoordinator.swift` |
-| **P2-04** | Search interaction: Keyboard arrows, Return, Escape, selection state | Planned | `Mimra/UI/Panel/` |
-| **P2-05** | Replay codec: Reconstruct valid NSPasteboard items from typed payloads with provenance | Planned | `Mimra/macOS/PasteCoordinator.swift` |
-| **P2-06** | Auto-paste: Focus tracking and `CGEventPost` Command-V paste | Planned | `Mimra/macOS/PasteCoordinator.swift` |
-| **P2-07** | Copy-only fallback: Graceful degradation when Accessibility permission is denied | Planned | `Mimra/macOS/AccessibilityManager.swift` |
-| **P2-08** | Plain paste: Option-Shift-Return strip formatting shortcut | Planned | `Mimra/macOS/PasteCoordinator.swift` |
-| **P2-09** | Paste error handling: App exited, secure input, password field guards | Planned | `Mimra/macOS/PasteCoordinator.swift` |
+| **P2-01** | Panel: Resizable native `NSPanel` with SwiftUI list, text input, empty state | Completed | `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift` (`tests/panel_tests.swift`, `T-UI-02`) |
+| **P2-02** | Hotkey: Carbon `RegisterEventHotKey` global summon without keylogger permissions | Completed | `Mimra/macOS/HotkeyManager.swift` (`tests/hotkey_tests.swift`, `T-UI-01`, `T-KEY-02`) |
+| **P2-03** | Status item menu: Actions, pause toggle, ignore next copy, clear, settings | Completed | `Mimra/macOS/StatusBarCoordinator.swift` (`tests/status_bar_tests.swift`, `T-UI-01`, `T-HIST-01`, `T-PRIV-06`) |
+| **P2-04** | Search interaction: Keyboard arrows, Return, Escape, selection state | Completed | `Mimra/UI/Panel/` (`tests/search_interaction_tests.swift`, `T-UI-03`) |
+| **P2-05** | Replay codec: Reconstruct valid NSPasteboard items from typed payloads with provenance | Completed | `Mimra/macOS/PasteCoordinator.swift` (`tests/paste_replay_tests.swift`, `T-PASTE-01`, `T-PASTE-02`, `T-CAP-05`) |
+| **P2-06** | Auto-paste: Focus tracking and `CGEventPost` Command-V paste | Completed | `Mimra/macOS/PasteCoordinator.swift` (`tests/auto_paste_tests.swift`, `T-PASTE-01`, `T-PASTE-02`) |
+| **P2-07** | Copy-only fallback: Graceful degradation when Accessibility permission is denied | Completed | `Mimra/macOS/AccessibilityService.swift` (`tests/accessibility_tests.swift`, `T-PASTE-01`, `T-UI-04`) |
+| **P2-08** | Plain paste: Option-Shift-Return & Shift-Return strip formatting shortcut | Completed | `Mimra/macOS/PasteCoordinator.swift` (`tests/plain_paste_tests.swift`, `T-PASTE-03`) |
+| **P2-09** | Paste error handling: App exited, secure input, password field guards | Completed | `Mimra/macOS/PasteCoordinator.swift` (`tests/paste_error_tests.swift`, `T-PASTE-04`) |
 
 ---
 
 ## 6. Current Blockers & Risks
 
-* **None.** Gate G1 successfully verified and completed across all 8 tasks.
-* **Next Task:** P2-01 (Panel: Resizable native `NSPanel` with SwiftUI list, text input, empty state, and non-activating panel behavior).
+* **None.** Gate G2 (Phase 2) is 100% complete and fully verified.
+* **Next Milestone:** Gate G3 — Complete Data Types (Phase 3: HTML, RTF, images, and file references).
+* **Next Task:** P3-01 (HTML/RTF multi-representation capture & replay fidelity, `MIMRA_MASTER_PLAN.md`).

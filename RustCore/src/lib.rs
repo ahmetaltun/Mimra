@@ -136,6 +136,26 @@ impl MimraCoreHandle {
         fetch_payload(&conn, &id, &uti)
     }
 
+    pub fn get_item_representations(
+        &self,
+        item_id: String,
+    ) -> Result<Vec<RawRepresentation>, CoreError> {
+        let id = Uuid::parse_str(&item_id).map_err(|e| CoreError::InvalidInput {
+            details: format!("Invalid UUID '{item_id}': {e}"),
+        })?;
+
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        if find_by_id(&conn, &id)?.is_none() {
+            return Err(CoreError::ItemNotFound { id: item_id });
+        }
+
+        let reps = load_representations(&conn, &id)?;
+        Ok(reps.iter().map(RawRepresentation::from).collect())
+    }
+
     pub fn delete_item(&self, item_id: String) -> Result<bool, CoreError> {
         let id = Uuid::parse_str(&item_id).map_err(|e| CoreError::InvalidInput {
             details: format!("Invalid UUID '{item_id}': {e}"),
@@ -290,5 +310,42 @@ mod tests {
             }
             other => panic!("Expected PayloadTooLarge error, got: {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_get_item_representations_success_and_not_found() {
+        let handle = MimraCoreHandle::open_in_memory().expect("In-memory handle must open");
+        let capture = RawCapture {
+            timestamp_ms: 1000,
+            source_bundle_id: Some("com.apple.dt.Xcode".to_string()),
+            representations: vec![
+                RawRepresentation {
+                    group_index: 0,
+                    uti: "public.utf8-plain-text".to_string(),
+                    payload: b"let x = 42;".to_vec(),
+                },
+                RawRepresentation {
+                    group_index: 0,
+                    uti: "public.html".to_string(),
+                    payload: b"<code>let x = 42;</code>".to_vec(),
+                },
+            ],
+        };
+
+        let ingest_res = handle.ingest(capture).expect("Ingestion must succeed");
+        let reps = handle
+            .get_item_representations(ingest_res.item_id.clone())
+            .expect("Fetching representations must succeed");
+
+        assert_eq!(reps.len(), 2);
+        assert_eq!(reps[0].uti, "public.utf8-plain-text");
+        assert_eq!(reps[0].payload, b"let x = 42;");
+        assert_eq!(reps[1].uti, "public.html");
+        assert_eq!(reps[1].payload, b"<code>let x = 42;</code>");
+
+        // Non-existent item should return CoreError::ItemNotFound
+        let fake_id = Uuid::new_v4().to_string();
+        let not_found_res = handle.get_item_representations(fake_id.clone());
+        assert_eq!(not_found_res, Err(CoreError::ItemNotFound { id: fake_id }));
     }
 }

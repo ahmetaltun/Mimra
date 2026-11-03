@@ -543,6 +543,8 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     
     func fetchPayload(itemId: String, uti: String) throws  -> Data?
     
+    func getItemRepresentations(itemId: String) throws  -> [RawRepresentation]
+    
     func getStats() throws  -> StorageStatsDto
     
     func ingest(capture: RawCapture) throws  -> IngestResultDto
@@ -650,6 +652,14 @@ open func fetchPayload(itemId: String, uti: String)throws  -> Data? {
     uniffi_mimra_core_fn_method_mimracorehandle_fetch_payload(self.uniffiClonePointer(),
         FfiConverterString.lower(itemId),
         FfiConverterString.lower(uti),$0
+    )
+})
+}
+    
+open func getItemRepresentations(itemId: String)throws  -> [RawRepresentation] {
+    return try  FfiConverterSequenceTypeRawRepresentation.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_get_item_representations(self.uniffiClonePointer(),
+        FfiConverterString.lower(itemId),$0
     )
 })
 }
@@ -1553,6 +1563,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_fetch_payload() != 41638) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_get_item_representations() != 306) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_get_stats() != 27469) {

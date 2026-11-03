@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="bg" x1=".04" y1="0" x2=".94" y2="1" gradientUnits="objectBoundingBox">
+    <stop offset="0" stop-color="#B1A5F8"/>
+    <stop offset=".46" stop-color="#9384E9"/>
+    <stop offset="1" stop-color="#6C5ECF"/>
+  </linearGradient>
+  <radialGradient id="light" cx="18%" cy="8%" r="95%">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity=".22"/>
+    <stop offset=".53" stop-color="#FFFFFF" stop-opacity=".04"/>
+    <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="ivory" x1="0" y1="0" x2=".8" y2="1">
+    <stop stop-color="#FFFFFF"/>
+    <stop offset="1" stop-color="#F8F2FC"/>
+  </linearGradient>
+  <linearGradient id="pink" x1=".3" y1="0" x2="1" y2="1">
+    <stop stop-color="#FFD8C0"/>
+    <stop offset=".6" stop-color="#FFC4BB"/>
+    <stop offset="1" stop-color="#FFAFC1"/>
+  </linearGradient>
+  <filter id="outerShadow" x="-30%" y="-30%" width="160%" height="165%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="20" result="blur"/>
+    <feOffset in="blur" dy="16" result="offset"/>
+    <feComponentTransfer in="offset" result="fade"><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
+    <feMerge><feMergeNode in="fade"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <clipPath id="squircle"><rect x="56" y="56" width="912" height="912" rx="218"/></clipPath>
+</defs>
+<g filter="url(#outerShadow)">
+<rect x="56" y="56" width="912" height="912" rx="218" fill="url(#bg)" />
+</g>
+<g clip-path="url(#squircle)">
+  <rect x="56" y="56" width="912" height="912" fill="url(#light)" />
+</g>
+<rect x="58" y="58" width="908" height="908" rx="216" fill="none" stroke="#FFFFFF" stroke-opacity=".30" stroke-width="3"/>
+<!-- The intertwined m ribbons reference a pair of remembered clipboard items. -->
+<!-- back/right ribbon -->
+<path d="M510 687 L510 479 C510 401 550 365 613 365 C682 365 716 411 716 483 L716 687" fill="none" stroke="#594BB6" stroke-opacity=".20" stroke-width="104" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,14)" />
+<path d="M510 687 L510 479 C510 401 550 365 613 365 C682 365 716 411 716 483 L716 687" fill="none" stroke="url(#pink)" stroke-width="104" stroke-linecap="round" stroke-linejoin="round" />
+<!-- front/left ribbon -->
+<path d="M300 687 L300 479 C300 401 340 365 405 365 C470 365 510 407 510 481 L510 687" fill="none" stroke="#594BB6" stroke-opacity=".17" stroke-width="104" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,14)" />
+<path d="M300 687 L300 479 C300 401 340 365 405 365 C470 365 510 407 510 481 L510 687" fill="none" stroke="url(#ivory)" stroke-width="104" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

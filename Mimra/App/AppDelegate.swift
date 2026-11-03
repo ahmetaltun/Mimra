@@ -10,6 +10,8 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coreClient: CoreClient?
     private var clipboardMonitor: ClipboardMonitor?
+    private var panelCoordinator: PanelCoordinator?
+    private var hotkeyManager: HotkeyManager?
     private var statusBarCoordinator: StatusBarCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -23,8 +25,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.clipboardMonitor = monitor
             monitor.startMonitoring()
 
-            // 3. Initialize Status Bar Coordinator
-            let coordinator = StatusBarCoordinator(coreClient: client, monitor: monitor)
+            // 3. Initialize Panel Coordinator
+            let panelCoord = PanelCoordinator(coreClient: client)
+            self.panelCoordinator = panelCoord
+
+            // 4. Initialize Hotkey Manager and Register Shift-Command-C (F-017, F-023)
+            let hotkey = HotkeyManager()
+            hotkey.registerSummonHotkey { [weak panelCoord] in
+                panelCoord?.toggle()
+            }
+            self.hotkeyManager = hotkey
+
+            // 5. Initialize Status Bar Coordinator
+            let coordinator = StatusBarCoordinator(
+                coreClient: client,
+                monitor: monitor,
+                panelCoordinator: panelCoord
+            )
             coordinator.setup()
             self.statusBarCoordinator = coordinator
         } catch {
@@ -34,6 +51,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         // Clean shutdown
+        hotkeyManager?.unregisterSummonHotkey()
+        self.hotkeyManager = nil
+        panelCoordinator?.hide()
+        self.panelCoordinator = nil
         clipboardMonitor?.stopMonitoring()
         self.clipboardMonitor = nil
         self.statusBarCoordinator = nil
