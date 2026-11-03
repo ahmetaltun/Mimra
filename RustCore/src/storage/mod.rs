@@ -5,6 +5,7 @@
 pub mod db;
 pub mod migrations;
 pub mod repository;
+pub mod search;
 
 pub use db::{open_database, open_in_memory, DatabaseConfig};
 pub use migrations::{run_migrations, verify_database_integrity, ALL_MIGRATIONS};
@@ -13,6 +14,9 @@ pub use repository::{
     fetch_payload, find_by_content_hash, find_by_id, get_storage_stats, ingest_clipboard_item,
     insert_item, list_history_page, load_representations, query_available_utis, set_pin_status,
     update_recopy, HistoryItemSummary, IngestOutcome, StorageStats,
+};
+pub use search::{
+    rebuild_search_index, sanitize_fts5_query, search_history_page, verify_search_index_integrity,
 };
 
 #[cfg(test)]

@@ -535,6 +535,8 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
  */
 public protocol MimraCoreHandleProtocol : AnyObject {
     
+    func checkSearchIndexIntegrity() throws  -> Bool
+    
     func clearAll() throws  -> UInt64
     
     func clearUnpinned() throws  -> UInt64
@@ -550,6 +552,10 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     func ingest(capture: RawCapture) throws  -> IngestResultDto
     
     func listPage(limit: UInt32, offset: UInt32) throws  -> [HistoryItemSummaryDto]
+    
+    func rebuildSearchIndex() throws 
+    
+    func searchPage(query: String, mode: SearchMode, limit: UInt32, offset: UInt32) throws  -> [HistoryItemSummaryDto]
     
     func setMaxUnpinned(limit: UInt32) 
     
@@ -625,6 +631,13 @@ public static func openInMemory()throws  -> MimraCoreHandle {
     
 
     
+open func checkSearchIndexIntegrity()throws  -> Bool {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_check_search_index_integrity(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
 open func clearAll()throws  -> UInt64 {
     return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_clear_all(self.uniffiClonePointer(),$0
@@ -682,6 +695,23 @@ open func ingest(capture: RawCapture)throws  -> IngestResultDto {
 open func listPage(limit: UInt32, offset: UInt32)throws  -> [HistoryItemSummaryDto] {
     return try  FfiConverterSequenceTypeHistoryItemSummaryDTO.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_list_page(self.uniffiClonePointer(),
+        FfiConverterUInt32.lower(limit),
+        FfiConverterUInt32.lower(offset),$0
+    )
+})
+}
+    
+open func rebuildSearchIndex()throws  {try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_rebuild_search_index(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+open func searchPage(query: String, mode: SearchMode, limit: UInt32, offset: UInt32)throws  -> [HistoryItemSummaryDto] {
+    return try  FfiConverterSequenceTypeHistoryItemSummaryDTO.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_search_page(self.uniffiClonePointer(),
+        FfiConverterString.lower(query),
+        FfiConverterTypeSearchMode.lower(mode),
         FfiConverterUInt32.lower(limit),
         FfiConverterUInt32.lower(offset),$0
     )
@@ -761,6 +791,76 @@ public func FfiConverterTypeMimraCoreHandle_lower(_ value: MimraCoreHandle) -> U
 
 
 /**
+ * A contiguous slice of text to highlight in the UI.
+ * Start and length are expressed in UTF-16 code units for direct AppKit/SwiftUI compatibility.
+ */
+public struct HighlightRangeDto {
+    public var start: UInt32
+    public var length: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(start: UInt32, length: UInt32) {
+        self.start = start
+        self.length = length
+    }
+}
+
+
+
+extension HighlightRangeDto: Equatable, Hashable {
+    public static func ==(lhs: HighlightRangeDto, rhs: HighlightRangeDto) -> Bool {
+        if lhs.start != rhs.start {
+            return false
+        }
+        if lhs.length != rhs.length {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(start)
+        hasher.combine(length)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHighlightRangeDTO: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HighlightRangeDto {
+        return
+            try HighlightRangeDto(
+                start: FfiConverterUInt32.read(from: &buf), 
+                length: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HighlightRangeDto, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.start, into: &buf)
+        FfiConverterUInt32.write(value.length, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHighlightRangeDTO_lift(_ buf: RustBuffer) throws -> HighlightRangeDto {
+    return try FfiConverterTypeHighlightRangeDTO.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHighlightRangeDTO_lower(_ value: HighlightRangeDto) -> RustBuffer {
+    return FfiConverterTypeHighlightRangeDTO.lower(value)
+}
+
+
+/**
  * Lightweight item summary for UI list rendering without loading payloads into memory.
  */
 public struct HistoryItemSummaryDto {
@@ -777,10 +877,12 @@ public struct HistoryItemSummaryDto {
     public var copyCount: UInt32
     public var byteSize: UInt64
     public var availableUtis: [String]
+    public var titleHighlights: [HighlightRangeDto]
+    public var snippetHighlights: [HighlightRangeDto]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, contentKind: String, title: String, snippet: String, isPinned: Bool, pinOrder: UInt32?, pinKey: String?, sourceBundleId: String?, firstCopiedAtMs: Int64, lastCopiedAtMs: Int64, copyCount: UInt32, byteSize: UInt64, availableUtis: [String]) {
+    public init(id: String, contentKind: String, title: String, snippet: String, isPinned: Bool, pinOrder: UInt32?, pinKey: String?, sourceBundleId: String?, firstCopiedAtMs: Int64, lastCopiedAtMs: Int64, copyCount: UInt32, byteSize: UInt64, availableUtis: [String], titleHighlights: [HighlightRangeDto], snippetHighlights: [HighlightRangeDto]) {
         self.id = id
         self.contentKind = contentKind
         self.title = title
@@ -794,6 +896,8 @@ public struct HistoryItemSummaryDto {
         self.copyCount = copyCount
         self.byteSize = byteSize
         self.availableUtis = availableUtis
+        self.titleHighlights = titleHighlights
+        self.snippetHighlights = snippetHighlights
     }
 }
 
@@ -840,6 +944,12 @@ extension HistoryItemSummaryDto: Equatable, Hashable {
         if lhs.availableUtis != rhs.availableUtis {
             return false
         }
+        if lhs.titleHighlights != rhs.titleHighlights {
+            return false
+        }
+        if lhs.snippetHighlights != rhs.snippetHighlights {
+            return false
+        }
         return true
     }
 
@@ -857,6 +967,8 @@ extension HistoryItemSummaryDto: Equatable, Hashable {
         hasher.combine(copyCount)
         hasher.combine(byteSize)
         hasher.combine(availableUtis)
+        hasher.combine(titleHighlights)
+        hasher.combine(snippetHighlights)
     }
 }
 
@@ -880,7 +992,9 @@ public struct FfiConverterTypeHistoryItemSummaryDTO: FfiConverterRustBuffer {
                 lastCopiedAtMs: FfiConverterInt64.read(from: &buf), 
                 copyCount: FfiConverterUInt32.read(from: &buf), 
                 byteSize: FfiConverterUInt64.read(from: &buf), 
-                availableUtis: FfiConverterSequenceString.read(from: &buf)
+                availableUtis: FfiConverterSequenceString.read(from: &buf), 
+                titleHighlights: FfiConverterSequenceTypeHighlightRangeDTO.read(from: &buf), 
+                snippetHighlights: FfiConverterSequenceTypeHighlightRangeDTO.read(from: &buf)
         )
     }
 
@@ -898,6 +1012,8 @@ public struct FfiConverterTypeHistoryItemSummaryDTO: FfiConverterRustBuffer {
         FfiConverterUInt32.write(value.copyCount, into: &buf)
         FfiConverterUInt64.write(value.byteSize, into: &buf)
         FfiConverterSequenceString.write(value.availableUtis, into: &buf)
+        FfiConverterSequenceTypeHighlightRangeDTO.write(value.titleHighlights, into: &buf)
+        FfiConverterSequenceTypeHighlightRangeDTO.write(value.snippetHighlights, into: &buf)
     }
 }
 
@@ -1273,6 +1389,8 @@ public enum CoreError {
     )
     case InvalidInput(details: String
     )
+    case InvalidRegex(pattern: String, errorMessage: String
+    )
     case Internal(message: String
     )
 }
@@ -1305,7 +1423,11 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
         case 5: return .InvalidInput(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 6: return .Internal(
+        case 6: return .InvalidRegex(
+            pattern: try FfiConverterString.read(from: &buf), 
+            errorMessage: try FfiConverterString.read(from: &buf)
+            )
+        case 7: return .Internal(
             message: try FfiConverterString.read(from: &buf)
             )
 
@@ -1345,8 +1467,14 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
             FfiConverterString.write(details, into: &buf)
             
         
-        case let .Internal(message):
+        case let .InvalidRegex(pattern,errorMessage):
             writeInt(&buf, Int32(6))
+            FfiConverterString.write(pattern, into: &buf)
+            FfiConverterString.write(errorMessage, into: &buf)
+            
+        
+        case let .Internal(message):
+            writeInt(&buf, Int32(7))
             FfiConverterString.write(message, into: &buf)
             
         }
@@ -1361,6 +1489,80 @@ extension CoreError: Foundation.LocalizedError {
         String(reflecting: self)
     }
 }
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Search mode defining matching behavior across clipboard history.
+ */
+
+public enum SearchMode {
+    
+    case fuzzy
+    case exact
+    case regex
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSearchMode: FfiConverterRustBuffer {
+    typealias SwiftType = SearchMode
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SearchMode {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .fuzzy
+        
+        case 2: return .exact
+        
+        case 3: return .regex
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SearchMode, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .fuzzy:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .exact:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .regex:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSearchMode_lift(_ buf: RustBuffer) throws -> SearchMode {
+    return try FfiConverterTypeSearchMode.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSearchMode_lower(_ value: SearchMode) -> RustBuffer {
+    return FfiConverterTypeSearchMode.lower(value)
+}
+
+
+
+extension SearchMode: Equatable, Hashable {}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1462,6 +1664,31 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeHighlightRangeDTO: FfiConverterRustBuffer {
+    typealias SwiftType = [HighlightRangeDto]
+
+    public static func write(_ value: [HighlightRangeDto], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHighlightRangeDTO.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HighlightRangeDto] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HighlightRangeDto]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHighlightRangeDTO.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeHistoryItemSummaryDTO: FfiConverterRustBuffer {
     typealias SwiftType = [HistoryItemSummaryDto]
 
@@ -1553,6 +1780,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_mimra_core_checksum_func_fingerprint() != 55289) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_check_search_index_integrity() != 16171) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_clear_all() != 51368) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -1575,6 +1805,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_list_page() != 26656) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_rebuild_search_index() != 2150) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_search_page() != 43715) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_set_max_unpinned() != 29999) {

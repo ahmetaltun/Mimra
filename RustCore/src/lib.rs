@@ -13,14 +13,18 @@ use uuid::Uuid;
 pub use domain::dto::{
     HistoryItemSummaryDTO, IngestResultDTO, RawCapture, RawRepresentation, StorageStatsDTO,
 };
-pub use domain::{uti, CanonicalUrl, ContentKind, HexColor, HistoryItem, Representation};
+pub use domain::{
+    fuzzy_match, score_item, uti, CanonicalUrl, ContentKind, HexColor, HighlightRangeDTO,
+    HistoryItem, Representation, SearchMode,
+};
 pub use error::CoreError;
 pub use storage::{
     clear_all_history, clear_unpinned_history, delete_item_by_id, enforce_retention_limit,
     fetch_payload, find_by_content_hash, find_by_id, get_storage_stats, ingest_clipboard_item,
     insert_item, list_history_page, load_representations, open_database, open_in_memory,
-    query_available_utis, run_migrations, set_pin_status, update_recopy, verify_database_integrity,
-    DatabaseConfig, HistoryItemSummary, IngestOutcome, StorageStats,
+    query_available_utis, rebuild_search_index, run_migrations, sanitize_fts5_query,
+    search_history_page, set_pin_status, update_recopy, verify_database_integrity,
+    verify_search_index_integrity, DatabaseConfig, HistoryItemSummary, IngestOutcome, StorageStats,
 };
 
 // Setup UniFFI scaffolding for procedural macro bindings
@@ -118,6 +122,41 @@ impl MimraCoreHandle {
             .into_iter()
             .map(HistoryItemSummaryDTO::from)
             .collect())
+    }
+
+    pub fn search_page(
+        &self,
+        query: String,
+        mode: SearchMode,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<HistoryItemSummaryDTO>, CoreError> {
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        let summaries = search_history_page(&conn, &query, mode, limit as usize, offset as usize)?;
+        Ok(summaries
+            .into_iter()
+            .map(HistoryItemSummaryDTO::from)
+            .collect())
+    }
+
+    pub fn rebuild_search_index(&self) -> Result<(), CoreError> {
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        rebuild_search_index(&conn)
+    }
+
+    pub fn check_search_index_integrity(&self) -> Result<bool, CoreError> {
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        verify_search_index_integrity(&conn)?;
+        Ok(true)
     }
 
     pub fn fetch_payload(

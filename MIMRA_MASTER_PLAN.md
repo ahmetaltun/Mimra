@@ -562,9 +562,9 @@ All settings changes persist atomically and update relevant components without r
 
 ### PHASE 4 — Search and storage power features (G4)
 
-- [ ] **P4-01 Search index:** maintain Rust FTS5 and transactional index triggers; paginate. **DoD:** 10k results fixture, index integrity and stable pagination.
-- [ ] **P4-02 Fuzzy/mixed mode:** deterministic ranker plus recency boosts, Unicode-aware highlight ranges. **DoD:** test corpus snapshots and no keyboard lag.
-- [ ] **P4-03 Exact/regex modes:** configurable modes, Rust bounded regex and error feedback; cancel stale search. **DoD:** invalid regex doesn't crash UI.
+- [x] **P4-01 Search index:** maintain Rust FTS5 and transactional index triggers; paginate. **DoD:** 10k results fixture, index integrity and stable pagination.
+- [x] **P4-02 Fuzzy/mixed mode:** deterministic ranker plus recency boosts, Unicode-aware highlight ranges. **DoD:** test corpus snapshots and no keyboard lag.
+- [x] **P4-03 Exact/regex modes:** configurable modes, Rust bounded regex and error feedback; cancel stale search. **DoD:** invalid regex doesn't crash UI.
 - [ ] **P4-04 Sorting/highlights:** pinned arrangement, recency, relevance and highlight styles. **DoD:** selection remains on same ID on updates.
 - [ ] **P4-05 History limit:** count/age/size retention and clear, preserve pins. **DoD:** 50k-event churn + 100% FK/FTS cleanup.
 - [ ] **P4-06 Storage UI:** DB size/limits/types/clear-unpinned/clear-all and confirmation. **DoD:** disk metrics update after checkpoint and cleanup.

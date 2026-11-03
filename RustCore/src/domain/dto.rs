@@ -4,6 +4,7 @@
 // ==============================================================================
 
 use crate::domain::content::Representation;
+use crate::domain::search::HighlightRangeDTO;
 use crate::storage::repository::{HistoryItemSummary, StorageStats};
 
 /// Raw representation data received from macOS pasteboard.
@@ -68,6 +69,8 @@ pub struct HistoryItemSummaryDTO {
     pub copy_count: u32,
     pub byte_size: u64,
     pub available_utis: Vec<String>,
+    pub title_highlights: Vec<HighlightRangeDTO>,
+    pub snippet_highlights: Vec<HighlightRangeDTO>,
 }
 
 impl From<HistoryItemSummary> for HistoryItemSummaryDTO {
@@ -86,6 +89,8 @@ impl From<HistoryItemSummary> for HistoryItemSummaryDTO {
             copy_count: s.copy_count,
             byte_size: s.byte_size,
             available_utis: s.available_utis,
+            title_highlights: s.title_highlights,
+            snippet_highlights: s.snippet_highlights,
         }
     }
 }

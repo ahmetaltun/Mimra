@@ -94,7 +94,21 @@
 
 ---
 
-## 7. Current Blockers & Risks
+## 7. Phase 4 Task Tracker (Gate G4)
 
-* **None.** Gate G3 (Complete Data Types) is 100% complete and verified across Rust, Swift, and Xcode.
-* **Next Task:** P4-01 (Search index: maintain Rust FTS5 and transactional index triggers; paginate, `T-SRCH-01`, `F-019`).
+| Task ID | Description | Status | Verification / Artifact |
+|---|---|---|---|
+| **P4-01** | Search index: maintain Rust FTS5 and transactional index triggers; paginate | Completed | `RustCore/src/storage/search.rs`, `RustCore/src/lib.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/UI/Panel/PanelViewModel.swift` (`tests/search_index_tests.swift`, `T-SRCH-01`, `F-019`, `F-048`) |
+| **P4-02** | Fuzzy/mixed mode: deterministic ranker plus recency boosts, Unicode-aware highlight ranges | Completed | `RustCore/src/domain/search.rs`, `RustCore/src/storage/search.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/UI/Panel/FloatingPanelView.swift` (`tests/fuzzy_search_tests.swift`, `T-SRCH-01`, `F-019`, `F-048`) |
+| **P4-03** | Exact/regex modes: configurable modes, Rust bounded regex and error feedback; cancel stale search | Completed | `RustCore/src/domain/search.rs`, `RustCore/src/storage/search.rs`, `RustCore/src/error.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift` (`tests/regex_search_tests.swift`, `T-SRCH-02`, `F-048`) |
+| **P4-04** | Sorting/highlights: pinned arrangement, recency, relevance and highlight styles | Pending | Scheduled next (`T-UI-03`, `F-019`) |
+| **P4-05** | History limit: count/age/size retention and clear, preserve pins | Pending | Scheduled (`T-HIST-03`, `T-HIST-05`, `F-025`) |
+| **P4-06** | Storage UI: DB size/limits/types/clear-unpinned/clear-all and confirmation | Pending | Scheduled (`T-HIST-01`, `F-025`) |
+| **P4-07** | Failure recovery: low disk, corrupt db, bad migration, full capacity, relaunch and backup recoverability | Pending | Scheduled (`T-DB-01`) |
+
+---
+
+## 8. Current Blockers & Risks
+
+* **None.** Gate G4 Tasks P4-01, P4-02, and P4-03 are 100% complete and verified across Rust, Swift, and Xcode.
+* **Next Task:** P4-04 (Sorting/highlights: pinned arrangement, recency, relevance and highlight styles, `T-UI-03`, `F-019`).

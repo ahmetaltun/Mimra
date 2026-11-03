@@ -25,6 +25,12 @@ pub enum CoreError {
     #[error("Invalid input: {details}")]
     InvalidInput { details: String },
 
+    #[error("Invalid regular expression '{pattern}': {error_message}")]
+    InvalidRegex {
+        pattern: String,
+        error_message: String,
+    },
+
     #[error("Internal engine failure: {message}")]
     Internal { message: String },
 }

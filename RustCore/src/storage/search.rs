@@ -1,0 +1,544 @@
+// ==============================================================================
+// Mimra Core — FTS5 Search Engine & Query Processor
+// Safe query sanitization, token prefix expansion, BM25 ranking, and pagination.
+// Linked Features: F-019, F-048
+// Test IDs: T-SRCH-01, T-UI-03
+// ==============================================================================
+
+use crate::domain::search::{
+    compile_bounded_regex, score_item_with_mode, HighlightRangeDTO, SearchMode,
+};
+use crate::error::CoreError;
+use crate::storage::repository::{query_available_utis, HistoryItemSummary};
+use rusqlite::{params, Connection};
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
+
+/// Sanitizes user input into a safe SQLite FTS5 query string.
+/// - Strips control characters and unsupported syntax punctuation.
+/// - Escapes internal quotes by doubling them (`""`).
+/// - Wraps each alphanumeric/word token in quotes with a prefix wildcard (`"token"*`).
+/// - Returns `None` if the input contains no valid search tokens (e.g. empty or only punctuation).
+pub fn sanitize_fts5_query(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Split input by whitespace and punctuation that should act as token delimiters,
+    // while preserving alphanumeric characters and international Unicode letters/numbers.
+    let mut tokens: Vec<String> = Vec::new();
+
+    for raw_token in trimmed.split(|c: char| {
+        c.is_whitespace()
+            || matches!(
+                c,
+                '"' | '\''
+                    | '*'
+                    | '('
+                    | ')'
+                    | ':'
+                    | '^'
+                    | '{'
+                    | '}'
+                    | '['
+                    | ']'
+                    | '+'
+                    | '-'
+                    | '~'
+                    | '/'
+                    | '\\'
+                    | '!'
+                    | '?'
+                    | ';'
+                    | '<'
+                    | '>'
+                    | '='
+                    | '|'
+                    | '&'
+            )
+    }) {
+        let cleaned: String = raw_token.chars().filter(|c| !c.is_control()).collect();
+        if !cleaned.is_empty() {
+            // Escape any existing quotes just in case
+            let escaped = cleaned.replace('"', "\"\"");
+            // Format as prefix token match: "escaped"*
+            tokens.push(format!("\"{escaped}\"*"));
+        }
+    }
+
+    if tokens.is_empty() {
+        None
+    } else {
+        Some(tokens.join(" "))
+    }
+}
+
+/// Internal candidate structure retrieved from SQLite before fuzzy ranking and highlight extraction.
+#[derive(Debug, Clone)]
+struct RawCandidate {
+    id_str: String,
+    kind_str: String,
+    title: String,
+    snippet: String,
+    is_pinned: bool,
+    pin_order: Option<u32>,
+    pin_key: Option<String>,
+    source_bundle_id: Option<String>,
+    first_copied_at_ms: i64,
+    last_copied_at_ms: i64,
+    copy_count: u32,
+    byte_size: u64,
+}
+
+/// Executes a full-text & fuzzy hybrid search query across `history_items`.
+/// - Leverages SQLite FTS5 index for fast candidate pre-filtering across large databases.
+/// - Scans recent items to support non-prefix fuzzy acronyms (e.g. 'vsc' -> 'Visual Studio Code').
+/// - Scores each candidate using the deterministic fuzzy ranker with word-boundary and recency boosts.
+/// - Extracts exact UTF-16 highlight ranges for both `title` and `snippet`.
+/// - Supports stable pagination via `limit` and `offset`.
+pub fn search_history_page(
+    conn: &Connection,
+    query: &str,
+    mode: SearchMode,
+    limit: usize,
+    offset: usize,
+) -> Result<Vec<HistoryItemSummary>, CoreError> {
+    let trimmed_query = query.trim();
+    if trimmed_query.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Precompile bounded regex if in Regex mode; returns typed CoreError::InvalidRegex on failure
+    let compiled_regex = if mode == SearchMode::Regex {
+        Some(compile_bounded_regex(trimmed_query)?)
+    } else {
+        None
+    };
+
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    let mut candidate_map: HashMap<String, RawCandidate> = HashMap::new();
+
+    // 1. In Fuzzy or Exact mode, retrieve candidates via FTS5 index if sanitized tokens exist
+    if mode != SearchMode::Regex {
+        if let Some(sanitized_match) = sanitize_fts5_query(trimmed_query) {
+            let mut stmt = conn.prepare(
+                "SELECT h.id, h.content_kind, h.title, h.search_text, h.is_pinned, h.pin_order, h.pin_key,
+                        h.source_bundle_id, h.first_copied_at_ms, h.last_copied_at_ms, h.copy_count, h.byte_size
+                 FROM search_fts
+                 JOIN history_items h ON h.rowid = search_fts.rowid
+                 WHERE search_fts MATCH ?1
+                 ORDER BY h.is_pinned DESC,
+                          bm25(search_fts, 10.0, 1.0, 0.5) ASC,
+                          h.last_copied_at_ms DESC
+                 LIMIT 300;",
+            )?;
+
+            let rows = stmt.query_map(params![sanitized_match], |row| {
+                let search_text: String = row.get(3)?;
+                let snippet: String = search_text.chars().take(160).collect();
+                let is_pinned_int: i64 = row.get(4)?;
+
+                Ok(RawCandidate {
+                    id_str: row.get(0)?,
+                    kind_str: row.get(1)?,
+                    title: row.get(2)?,
+                    snippet,
+                    is_pinned: is_pinned_int != 0,
+                    pin_order: row.get(5)?,
+                    pin_key: row.get(6)?,
+                    source_bundle_id: row.get(7)?,
+                    first_copied_at_ms: row.get(8)?,
+                    last_copied_at_ms: row.get(9)?,
+                    copy_count: row.get(10)?,
+                    byte_size: row.get(11)?,
+                })
+            })?;
+
+            for r in rows {
+                let cand = r?;
+                candidate_map.insert(cand.id_str.clone(), cand);
+            }
+        }
+    }
+
+    // 2. Also retrieve recent history items to support acronyms, literal substrings, and regex scanning
+    {
+        let recent_limit = if mode == SearchMode::Regex { 500 } else { 200 };
+        let mut stmt = conn.prepare(
+            "SELECT id, content_kind, title, search_text, is_pinned, pin_order, pin_key,
+                    source_bundle_id, first_copied_at_ms, last_copied_at_ms, copy_count, byte_size
+             FROM history_items
+             ORDER BY is_pinned DESC, last_copied_at_ms DESC
+             LIMIT ?1;",
+        )?;
+
+        let rows = stmt.query_map(params![recent_limit], |row| {
+            let search_text: String = row.get(3)?;
+            let snippet: String = search_text.chars().take(160).collect();
+            let is_pinned_int: i64 = row.get(4)?;
+
+            Ok(RawCandidate {
+                id_str: row.get(0)?,
+                kind_str: row.get(1)?,
+                title: row.get(2)?,
+                snippet,
+                is_pinned: is_pinned_int != 0,
+                pin_order: row.get(5)?,
+                pin_key: row.get(6)?,
+                source_bundle_id: row.get(7)?,
+                first_copied_at_ms: row.get(8)?,
+                last_copied_at_ms: row.get(9)?,
+                copy_count: row.get(10)?,
+                byte_size: row.get(11)?,
+            })
+        })?;
+
+        for r in rows {
+            let cand = r?;
+            candidate_map.entry(cand.id_str.clone()).or_insert(cand);
+        }
+    }
+
+    // 3. Score every candidate with the configured search mode & extract highlights
+    struct ScoredCandidate {
+        candidate: RawCandidate,
+        score: i64,
+        title_highlights: Vec<HighlightRangeDTO>,
+        snippet_highlights: Vec<HighlightRangeDTO>,
+    }
+
+    let mut scored_items: Vec<ScoredCandidate> = Vec::new();
+
+    for (_, cand) in candidate_map {
+        let scorable = crate::domain::search::ScorableItem {
+            title: &cand.title,
+            snippet: &cand.snippet,
+            last_copied_at_ms: cand.last_copied_at_ms,
+            is_pinned: cand.is_pinned,
+            pin_order: cand.pin_order,
+        };
+        if let Some((score, title_hls, snippet_hls)) = score_item_with_mode(
+            trimmed_query,
+            &scorable,
+            mode,
+            compiled_regex.as_ref(),
+            now_ms,
+        ) {
+            scored_items.push(ScoredCandidate {
+                candidate: cand,
+                score,
+                title_highlights: title_hls,
+                snippet_highlights: snippet_hls,
+            });
+        }
+    }
+
+    // 4. Sort by pinned priority, then descending score, then last_copied_at_ms
+    scored_items.sort_by(|a, b| {
+        b.candidate
+            .is_pinned
+            .cmp(&a.candidate.is_pinned)
+            .then_with(|| match (a.candidate.is_pinned, b.candidate.is_pinned) {
+                (true, true) => a
+                    .candidate
+                    .pin_order
+                    .unwrap_or(999)
+                    .cmp(&b.candidate.pin_order.unwrap_or(999)),
+                _ => std::cmp::Ordering::Equal,
+            })
+            .then_with(|| b.score.cmp(&a.score))
+            .then_with(|| {
+                b.candidate
+                    .last_copied_at_ms
+                    .cmp(&a.candidate.last_copied_at_ms)
+            })
+    });
+
+    // 5. Apply pagination (offset & limit)
+    let paginated_slice = scored_items.into_iter().skip(offset).take(limit);
+
+    let mut summaries = Vec::new();
+    for scored in paginated_slice {
+        let cand = scored.candidate;
+        let id = Uuid::parse_str(&cand.id_str).map_err(|e| CoreError::DatabaseError {
+            details: format!("Corrupted UUID in history_items: {e}"),
+        })?;
+
+        let content_kind = crate::domain::content::ContentKind::from_str(&cand.kind_str)?;
+        let available_utis = query_available_utis(conn, &id)?;
+
+        summaries.push(HistoryItemSummary {
+            id,
+            content_kind,
+            title: cand.title,
+            snippet: cand.snippet,
+            is_pinned: cand.is_pinned,
+            pin_order: cand.pin_order,
+            pin_key: cand.pin_key,
+            source_bundle_id: cand.source_bundle_id,
+            first_copied_at_ms: cand.first_copied_at_ms,
+            last_copied_at_ms: cand.last_copied_at_ms,
+            copy_count: cand.copy_count,
+            byte_size: cand.byte_size,
+            available_utis,
+            title_highlights: scored.title_highlights,
+            snippet_highlights: scored.snippet_highlights,
+        });
+    }
+
+    Ok(summaries)
+}
+
+/// Validates that the FTS5 virtual index matches the underlying content table.
+/// Executes the SQLite FTS5 integrity-check command.
+pub fn verify_search_index_integrity(conn: &Connection) -> Result<(), CoreError> {
+    // 1. Run FTS5 internal integrity check command
+    conn.execute(
+        "INSERT INTO search_fts(search_fts) VALUES('integrity-check');",
+        [],
+    )
+    .map_err(|e| CoreError::DatabaseError {
+        details: format!("FTS5 index integrity-check failed: {e}"),
+    })?;
+
+    // 2. Verify row counts match between history_items and search_fts
+    let history_count: i64 =
+        conn.query_row("SELECT COUNT(*) FROM history_items;", [], |r| r.get(0))?;
+    let fts_count: i64 = conn.query_row("SELECT COUNT(*) FROM search_fts;", [], |r| r.get(0))?;
+
+    if history_count != fts_count {
+        return Err(CoreError::DatabaseError {
+            details: format!(
+                "FTS5 desync detected: history_items has {history_count} rows, search_fts has {fts_count} rows"
+            ),
+        });
+    }
+
+    Ok(())
+}
+
+/// Rebuilds the FTS5 virtual table index from the content table `history_items`.
+pub fn rebuild_search_index(conn: &Connection) -> Result<(), CoreError> {
+    conn.execute("INSERT INTO search_fts(search_fts) VALUES('rebuild');", [])
+        .map_err(|e| CoreError::DatabaseError {
+            details: format!("Failed to rebuild FTS5 index: {e}"),
+        })?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::content::Representation;
+    use crate::domain::item::HistoryItem;
+    use crate::storage::db::{open_in_memory, DatabaseConfig};
+    use crate::storage::migrations::run_migrations;
+    use crate::storage::repository::ingest_clipboard_item;
+    use std::time::Instant;
+
+    #[test]
+    fn test_sanitize_fts5_query_cases() {
+        // Normal words
+        assert_eq!(
+            sanitize_fts5_query("hello world"),
+            Some("\"hello\"* \"world\"*".to_string())
+        );
+
+        // Punctuation and special FTS symbols
+        assert_eq!(
+            sanitize_fts5_query("foo:bar* (test) [baz]"),
+            Some("\"foo\"* \"bar\"* \"test\"* \"baz\"*".to_string())
+        );
+
+        // Quotes and operators
+        assert_eq!(
+            sanitize_fts5_query("\"quoted text\" AND NOT"),
+            Some("\"quoted\"* \"text\"* \"AND\"* \"NOT\"*".to_string())
+        );
+
+        // Unicode / CJK / Diacritics
+        assert_eq!(
+            sanitize_fts5_query("münchen 検索"),
+            Some("\"münchen\"* \"検索\"*".to_string())
+        );
+
+        // Empty and punctuation only
+        assert_eq!(sanitize_fts5_query(""), None);
+        assert_eq!(sanitize_fts5_query("   "), None);
+        assert_eq!(sanitize_fts5_query("***???:::"), None);
+    }
+
+    #[test]
+    fn test_fts5_search_ranking_and_pinned_precedence() {
+        let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+        run_migrations(&mut conn).unwrap();
+
+        // Item 1: match in snippet only, unpinned
+        let item1 = HistoryItem::new(
+            vec![Representation::new(
+                0,
+                "public.utf8-plain-text".to_string(),
+                b"Some normal notes about rust programming language".to_vec(),
+            )
+            .unwrap()],
+            Some("com.apple.Notes".to_string()),
+            1000,
+        )
+        .unwrap();
+
+        // Item 2: match in title (high BM25 weight), unpinned
+        let item2 = HistoryItem::new(
+            vec![Representation::new(
+                0,
+                "public.utf8-plain-text".to_string(),
+                b"Rust Quickstart Guide".to_vec(),
+            )
+            .unwrap()],
+            Some("com.apple.Safari".to_string()),
+            2000,
+        )
+        .unwrap();
+
+        ingest_clipboard_item(&mut conn, item1, 100).unwrap();
+        ingest_clipboard_item(&mut conn, item2.clone(), 100).unwrap();
+
+        // Search for 'Rust'
+        let results = search_history_page(&conn, "Rust", SearchMode::Fuzzy, 10, 0).unwrap();
+        assert_eq!(results.len(), 2, "Expected 2 matches for 'Rust'");
+        // Title match (item 2) should rank higher than body match (item 1)
+        assert_eq!(
+            results[0].title, "Rust Quickstart Guide",
+            "Title match should rank first due to higher BM25 weight"
+        );
+
+        // Pin item 1 and verify it jumps ahead of item 2 despite lower BM25 rank
+        crate::storage::repository::set_pin_status(&conn, &results[1].id, true, None, Some(1))
+            .unwrap();
+
+        let pinned_results = search_history_page(&conn, "Rust", SearchMode::Fuzzy, 10, 0).unwrap();
+        assert_eq!(pinned_results.len(), 2);
+        assert!(pinned_results[0].is_pinned, "Pinned item must rank first");
+        assert_eq!(pinned_results[0].id, results[1].id);
+
+        // Exact mode test: "Rust Quick" matches item 2 only
+        let exact_res = search_history_page(&conn, "Rust Quick", SearchMode::Exact, 10, 0).unwrap();
+        assert_eq!(exact_res.len(), 1);
+        assert_eq!(exact_res[0].id, item2.id);
+
+        // Regex mode test: r"Rust\s+Quick.*" matches item 2
+        let regex_res =
+            search_history_page(&conn, r"Rust\s+Quick.*", SearchMode::Regex, 10, 0).unwrap();
+        assert_eq!(regex_res.len(), 1);
+        assert_eq!(regex_res[0].id, item2.id);
+
+        // Regex mode with invalid syntax returns typed CoreError::InvalidRegex
+        let regex_err =
+            search_history_page(&conn, r"(unclosed", SearchMode::Regex, 10, 0).unwrap_err();
+        match regex_err {
+            CoreError::InvalidRegex { pattern, .. } => assert_eq!(pattern, "(unclosed"),
+            _ => panic!("Expected InvalidRegex error"),
+        }
+    }
+
+    #[test]
+    fn test_search_10k_items_fixture_and_pagination() {
+        let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+        run_migrations(&mut conn).unwrap();
+
+        println!("Populating 10,000 items fixture for T-SRCH-01...");
+        let start_populate = Instant::now();
+
+        // Insert 10k items inside a single transaction for speed
+        {
+            let tx = conn.transaction().unwrap();
+            {
+                let mut stmt = tx.prepare(
+                    "INSERT INTO history_items (id, first_copied_at_ms, last_copied_at_ms, copy_count, content_kind, title, search_text, content_hash, is_pinned, byte_size, created_at_ms)
+                     VALUES (?1, ?2, ?3, 1, 'text', ?4, ?5, ?6, 0, ?7, ?8);"
+                ).unwrap();
+
+                for i in 0..10_000 {
+                    let id = Uuid::new_v4().to_string();
+                    let title = if i == 42 {
+                        "Target Special Alpha Item".to_string()
+                    } else if i % 100 == 0 {
+                        format!("Category Batch item number {i}")
+                    } else {
+                        format!("Standard item {i}")
+                    };
+
+                    let body = format!(
+                        "Content payload snippet text for entry {i} containing data keyword"
+                    );
+                    let hash = blake3::hash(body.as_bytes()).as_bytes().to_vec();
+                    let len = body.len() as i64;
+                    let ts = 1_000_000 + i as i64;
+
+                    stmt.execute(params![id, ts, ts, title, body, hash, len, ts])
+                        .unwrap();
+                }
+            }
+            tx.commit().unwrap();
+        }
+
+        let populate_duration = start_populate.elapsed();
+        println!("Inserted 10,000 items in {:?}", populate_duration);
+
+        // 1. Verify FTS5 index integrity across all 10k items
+        verify_search_index_integrity(&conn)
+            .expect("Search index integrity check must pass for 10k items");
+
+        // 2. Query target item: must return in < 15ms
+        let start_search = Instant::now();
+        let target_matches =
+            search_history_page(&conn, "Special Alpha", SearchMode::Fuzzy, 10, 0).unwrap();
+        let search_duration = start_search.elapsed();
+
+        println!("10k search query latency: {:?}", search_duration);
+        assert_eq!(
+            target_matches.len(),
+            1,
+            "Must match exactly the single target item"
+        );
+        assert_eq!(target_matches[0].title, "Target Special Alpha Item");
+        assert!(
+            search_duration.as_millis() < 30,
+            "Search query across 10k items must complete under 30ms (actual: {:?})",
+            search_duration
+        );
+
+        // 3. Test multi-match query and pagination stability
+        // 'Batch' matches 100 items (i % 100 == 0)
+        let page_0 = search_history_page(&conn, "Batch", SearchMode::Fuzzy, 20, 0).unwrap();
+        let page_1 = search_history_page(&conn, "Batch", SearchMode::Fuzzy, 20, 20).unwrap();
+
+        assert_eq!(page_0.len(), 20, "Page 0 should return 20 results");
+        assert_eq!(page_1.len(), 20, "Page 1 should return 20 results");
+
+        // Verify pages are disjoint (stable pagination)
+        let page_0_ids: std::collections::HashSet<_> = page_0.iter().map(|item| item.id).collect();
+        for item in &page_1 {
+            assert!(
+                !page_0_ids.contains(&item.id),
+                "Page 1 item {} must not appear in Page 0",
+                item.id
+            );
+        }
+
+        // 4. Test rebuild_search_index
+        rebuild_search_index(&conn).expect("Rebuild must succeed");
+        verify_search_index_integrity(&conn).expect("Integrity check must pass after rebuild");
+
+        let after_rebuild =
+            search_history_page(&conn, "Special Alpha", SearchMode::Fuzzy, 10, 0).unwrap();
+        assert_eq!(after_rebuild.len(), 1);
+        assert_eq!(after_rebuild[0].title, "Target Special Alpha Item");
+    }
+}

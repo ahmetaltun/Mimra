@@ -461,6 +461,8 @@ pub struct HistoryItemSummary {
     pub copy_count: u32,
     pub byte_size: u64,
     pub available_utis: Vec<String>,
+    pub title_highlights: Vec<crate::domain::search::HighlightRangeDTO>,
+    pub snippet_highlights: Vec<crate::domain::search::HighlightRangeDTO>,
 }
 
 /// Disk and item metrics for the storage layer.
@@ -555,6 +557,8 @@ pub fn list_history_page(
             copy_count,
             byte_size,
             available_utis,
+            title_highlights: Vec::new(),
+            snippet_highlights: Vec::new(),
         });
     }
 

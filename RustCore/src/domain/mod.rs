@@ -6,6 +6,7 @@ pub mod color;
 pub mod content;
 pub mod dto;
 pub mod item;
+pub mod search;
 pub mod url_utils;
 
 pub use color::HexColor;
@@ -14,6 +15,7 @@ pub use dto::{
     HistoryItemSummaryDTO, IngestResultDTO, RawCapture, RawRepresentation, StorageStatsDTO,
 };
 pub use item::{HistoryItem, MAX_TITLE_CHARS};
+pub use search::{fuzzy_match, score_item, HighlightRangeDTO, SearchMode};
 pub use url_utils::CanonicalUrl;
 
 #[cfg(test)]

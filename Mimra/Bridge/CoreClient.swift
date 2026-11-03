@@ -18,6 +18,45 @@ extension HistoryItemSummaryDto: @unchecked Sendable {}
 extension StorageStatsDto: @unchecked Sendable {}
 extension RawRepresentation: @unchecked Sendable {}
 extension RawCapture: @unchecked Sendable {}
+extension HighlightRangeDto: @unchecked Sendable {}
+extension SearchMode: @unchecked Sendable {}
+
+extension HistoryItemSummaryDto {
+    /// Backward-compatible initializer for tests without explicit highlights.
+    public init(
+        id: String,
+        contentKind: String,
+        title: String,
+        snippet: String,
+        isPinned: Bool,
+        pinOrder: UInt32?,
+        pinKey: String?,
+        sourceBundleId: String?,
+        firstCopiedAtMs: Int64,
+        lastCopiedAtMs: Int64,
+        copyCount: UInt32,
+        byteSize: UInt64,
+        availableUtis: [String]
+    ) {
+        self.init(
+            id: id,
+            contentKind: contentKind,
+            title: title,
+            snippet: snippet,
+            isPinned: isPinned,
+            pinOrder: pinOrder,
+            pinKey: pinKey,
+            sourceBundleId: sourceBundleId,
+            firstCopiedAtMs: firstCopiedAtMs,
+            lastCopiedAtMs: lastCopiedAtMs,
+            copyCount: copyCount,
+            byteSize: byteSize,
+            availableUtis: availableUtis,
+            titleHighlights: [],
+            snippetHighlights: []
+        )
+    }
+}
 
 /// Actor managing the connection to the RustCore SQLite engine.
 public actor CoreClient {
@@ -72,6 +111,26 @@ public actor CoreClient {
     /// Lists a paginated slice of history items.
     public func listPage(limit: UInt32 = 50, offset: UInt32 = 0) throws -> [HistoryItemSummaryDto] {
         return try handle.listPage(limit: limit, offset: offset)
+    }
+
+    /// Searches history items using SQLite FTS5, deterministic fuzzy ranker, or bounded regex.
+    public func searchPage(
+        query: String,
+        mode: SearchMode = .fuzzy,
+        limit: UInt32 = 50,
+        offset: UInt32 = 0
+    ) throws -> [HistoryItemSummaryDto] {
+        return try handle.searchPage(query: query, mode: mode, limit: limit, offset: offset)
+    }
+
+    /// Rebuilds the FTS5 virtual search index.
+    public func rebuildSearchIndex() throws {
+        try handle.rebuildSearchIndex()
+    }
+
+    /// Checks FTS5 virtual search index integrity against the history_items table.
+    public func checkSearchIndexIntegrity() throws -> Bool {
+        return try handle.checkSearchIndexIntegrity()
     }
 
     /// Fetches the raw byte payload for a specific representation of an item.

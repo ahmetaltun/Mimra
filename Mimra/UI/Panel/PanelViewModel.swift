@@ -26,6 +26,17 @@ public final class PanelViewModel: ObservableObject {
     @Published public var isLoading: Bool = false
     @Published public var stats: StorageStatsDto?
     @Published public var errorMessage: String?
+    @Published public var searchMode: SearchMode = .fuzzy {
+        didSet {
+            if oldValue != searchMode {
+                regexErrorMessage = nil
+            }
+        }
+    }
+    @Published public var regexErrorMessage: String?
+
+    /// Monotonically increasing counter to discard stale asynchronous search results.
+    public private(set) var searchGeneration: UInt64 = 0
 
     /// Timestamp of last keyboard navigation to guard against accidental mouse-hover overrides.
     public private(set) var lastKeyboardNavTime: CFTimeInterval = 0
@@ -121,6 +132,52 @@ public final class PanelViewModel: ObservableObject {
                 selectedIndex = max(0, filteredItems.count - 1)
             }
         } catch {
+            self.errorMessage = error.localizedDescription
+            self.isLoading = false
+        }
+    }
+
+    /// Performs search against the SQLite engine via CoreClient under the active or specified SearchMode.
+    /// Discards stale query results if a newer keystroke has already fired.
+    public func performSearch(
+        query: String,
+        mode: SearchMode? = nil,
+        limit: UInt32 = 100,
+        offset: UInt32 = 0
+    ) async {
+        searchGeneration += 1
+        let currentGen = searchGeneration
+        let effectiveMode = mode ?? self.searchMode
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        isLoading = true
+        regexErrorMessage = nil
+
+        do {
+            if trimmed.isEmpty {
+                let loaded = try await coreClient.listPage(limit: limit, offset: offset)
+                guard currentGen == self.searchGeneration else { return }
+                self.items = loaded
+            } else {
+                let results = try await coreClient.searchPage(
+                    query: trimmed,
+                    mode: effectiveMode,
+                    limit: limit,
+                    offset: offset
+                )
+                guard currentGen == self.searchGeneration else { return }
+                self.items = results
+            }
+            self.selectedIndex = 0
+            self.isLoading = false
+        } catch let CoreError.InvalidRegex(pattern: _, errorMessage: errorMsg) {
+            guard currentGen == self.searchGeneration else { return }
+            self.regexErrorMessage = errorMsg
+            self.items = []
+            self.selectedIndex = 0
+            self.isLoading = false
+        } catch {
+            guard currentGen == self.searchGeneration else { return }
             self.errorMessage = error.localizedDescription
             self.isLoading = false
         }

@@ -41,6 +41,25 @@ public struct FloatingPanelView: View {
                     .opacity(0.4)
             }
 
+            // Regex Syntax Error Warning Banner (P4-03)
+            if let regexErr = viewModel.regexErrorMessage {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                        .font(.system(size: 11))
+                    Text("Invalid Regex: \(regexErr)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.red)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(Color.red.opacity(0.08))
+                Divider()
+                    .opacity(0.4)
+            }
+
             // 2. Main Content Area (Items list or empty state)
             Group {
                 if viewModel.isLoading && viewModel.items.isEmpty {
@@ -207,10 +226,13 @@ struct PanelItemRow: View {
             // Text title and preview snippet
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(item.title.isEmpty ? "Untitled" : item.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(isSelected ? .white : .primary)
-                        .lineLimit(1)
+                    HighlightedLabel(
+                        text: item.title.isEmpty ? "Untitled" : item.title,
+                        ranges: item.titleHighlights,
+                        isSelected: isSelected,
+                        baseFont: .system(size: 12, weight: .medium),
+                        defaultColor: .primary
+                    )
 
                     if let color = detectedColor {
                         ColorSwatchView(colorInfo: color, size: 12, cornerRadius: 2.5)
@@ -280,10 +302,13 @@ struct PanelItemRow: View {
                 }
 
                 if !item.snippet.isEmpty {
-                    Text(item.snippet)
-                        .font(.system(size: 11))
-                        .foregroundColor(isSelected ? .white.opacity(0.85) : .secondary)
-                        .lineLimit(1)
+                    HighlightedLabel(
+                        text: item.snippet,
+                        ranges: item.snippetHighlights,
+                        isSelected: isSelected,
+                        baseFont: .system(size: 11),
+                        defaultColor: .secondary
+                    )
                 }
             }
         }
@@ -356,7 +381,7 @@ struct ItemThumbnailView: View {
         .task(id: itemId) {
             guard contentKind == "image", !hasAttemptedLoad, let client = coreClient else { return }
             hasAttemptedLoad = true
-            if let cached = await ImageThumbnailService.shared.cachedThumbnail(for: itemId) {
+            if let cached = ImageThumbnailService.shared.cachedThumbnail(for: itemId) {
                 self.thumbnail = cached
                 return
             }
@@ -508,5 +533,48 @@ struct CopyOnlyBanner: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.orange.opacity(0.08))
+    }
+}
+
+// MARK: - Highlighted Label Component (P4-02)
+
+struct HighlightedLabel: View {
+    let text: String
+    let ranges: [HighlightRangeDto]
+    let isSelected: Bool
+    let baseFont: Font
+    let defaultColor: Color
+
+    var body: some View {
+        if ranges.isEmpty {
+            Text(text)
+                .font(baseFont)
+                .foregroundColor(isSelected ? .white : defaultColor)
+                .lineLimit(1)
+        } else {
+            Text(makeAttributedString())
+                .lineLimit(1)
+        }
+    }
+
+    private func makeAttributedString() -> AttributedString {
+        var attr = AttributedString(text)
+        let nsText = text as NSString
+        let highlightColor: Color = isSelected ? Color.white : Color.accentColor
+
+        attr.font = baseFont
+        attr.foregroundColor = isSelected ? .white : defaultColor
+
+        for r in ranges {
+            let nsRange = NSRange(location: Int(r.start), length: Int(r.length))
+            if nsRange.location + nsRange.length <= nsText.length,
+               let swiftRange = Range(nsRange, in: text),
+               let attrRange = Range(swiftRange, in: attr) {
+                attr[attrRange].font = .system(size: 12, weight: .bold)
+                attr[attrRange].foregroundColor = highlightColor
+                attr[attrRange].underlineStyle = .single
+            }
+        }
+        return attr
     }
 }
