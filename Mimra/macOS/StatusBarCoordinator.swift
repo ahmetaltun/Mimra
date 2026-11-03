@@ -203,6 +203,7 @@ final class StatusBarCoordinator: NSObject {
     @objc public func clearUnpinned() {
         Task {
             _ = try? await coreClient.clearUnpinned()
+            _ = try? await coreClient.checkpointWal()
         }
     }
 
@@ -217,6 +218,8 @@ final class StatusBarCoordinator: NSObject {
         if alert.runModal() == .alertFirstButtonReturn {
             Task {
                 _ = try? await coreClient.clearAll()
+                _ = try? await coreClient.checkpointWal()
+                try? await coreClient.vacuumDatabase()
             }
         }
     }
@@ -229,14 +232,14 @@ final class StatusBarCoordinator: NSObject {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 480),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
         window.center()
         window.title = "Mimra Settings"
-        window.contentView = NSHostingView(rootView: SettingsView())
+        window.contentView = NSHostingView(rootView: SettingsView(coreClient: coreClient))
         window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

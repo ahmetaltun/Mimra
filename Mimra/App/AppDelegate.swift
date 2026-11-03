@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             // 1. Initialize RustCore storage engine off-main actor
             let client = try CoreClient()
+            CoreClient.setSharedInstance(client)
             self.coreClient = client
 
             // 2. Initialize Clipboard Monitor on @MainActor

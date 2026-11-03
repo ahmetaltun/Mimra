@@ -567,7 +567,7 @@ All settings changes persist atomically and update relevant components without r
 - [x] **P4-03 Exact/regex modes:** configurable modes, Rust bounded regex and error feedback; cancel stale search. **DoD:** invalid regex doesn't crash UI.
 - [x] **P4-04 Sorting/highlights:** pinned arrangement, recency, relevance and highlight styles. **DoD:** selection remains on same ID on updates.
 - [x] **P4-05 History limit:** count/age/size retention and clear, preserve pins. **DoD:** 50k-event churn + 100% FK/FTS cleanup.
-- [ ] **P4-06 Storage UI:** DB size/limits/types/clear-unpinned/clear-all and confirmation. **DoD:** disk metrics update after checkpoint and cleanup.
+- [x] **P4-06 Storage UI:** DB size/limits/types/clear-unpinned/clear-all and confirmation. **DoD:** disk metrics update after checkpoint and cleanup.
 - [ ] **P4-07 Failure recovery:** low disk, corrupt db, bad migration, full capacity, relaunch and backup recoverability. **DoD:** user-facing safe error, no unconditional history wipe.
 
 **Phase 4 exit:** indexed, bounded, correct local history, including text and metadata search, all core operations tested.

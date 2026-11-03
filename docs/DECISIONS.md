@@ -904,5 +904,45 @@ Unbounded local clipboard storage risks disk bloat, memory exhaustion, and slow 
 * **Positive:** Complete protection against unbounded disk usage; robust pin preservation guarantees; zero orphaned blobs or search rows; sub-7 second execution for 50k churn events on Apple Silicon.
 * **Negative:** Measuring total payload size during size-budget eviction requires a `SUM(byte_size)` query across unpinned rows, indexed and completing in < 100 microseconds.
 
+---
+
+## ADR-030: Storage Settings Management, Live Disk Metrics, and Distinct Clear Confirmations
+
+* **Status:** Accepted
+* **Date:** 2026-11-03
+* **Linked Feature / Task:** `F-025`, `F-055` / `P4-06` (Gate G4)
+* **Linked Tests:** `T-HIST-01`, `T-HIST-05`
+
+### Context
+Users require full visibility into clipboard history disk usage and fine-grained control over retention limits, supported formats, and history deletion (`F-025`, `F-055`, `T-HIST-01`, `T-HIST-05`). A reliable storage management UI requires:
+1. **Live Disk Metrics:** Display formatted database file size on disk (`ByteCountFormatter`), total items, pinned items, unpinned items, and data representation counts.
+2. **Immediate DoD Metric Updates:** Disk metrics must update live after retention cleanup, WAL checkpointing, database vacuuming, or clear operations.
+3. **Distinct Clear Confirmations:** Deleting unpinned history versus wiping all history (including pinned anchors) requires two completely distinct alert dialogs with explicit warning copy to prevent accidental data loss (`F-025`, `T-HIST-01`).
+4. **Strict Concurrency Safety:** UniFFI calls must remain off-main thread; state updates must be coordinated through an observable view model conforming to Swift 6 strict concurrency (`-strict-concurrency=complete`).
+
+### Decision
+1. **Modular Storage ViewModel (`StorageSettingsViewModel`):**
+   - Implemented as `@MainActor public final class StorageSettingsViewModel: ObservableObject` in `Mimra/UI/Settings/SettingsView.swift`.
+   - Manages live `stats: StorageStatsDto?`, `isLoading`, `isPerformingAction`, and operation status messages (`statusMessage`).
+   - Persists user preferences for `retentionMaxCount`, `retentionMaxAgeDays`, and `retentionMaxSizeBytes` in `UserDefaults`, while automatically synchronizing active policies with the Rust engine via `CoreClient.setRetentionPolicy(policy:)`.
+2. **Double-Checked Shared CoreClient Access:**
+   - Added thread-safe `CoreClient.shared` and `CoreClient.setSharedInstance()` to `Mimra/Bridge/CoreClient.swift` to allow SwiftUI views to cleanly access the storage client without blocking the main actor.
+   - `AppDelegate` registers the active `CoreClient` on launch; `SettingsView(coreClient:)` and `StorageSettingsViewModel(coreClient:)` permit injection of mock or in-memory clients for isolated integration testing.
+3. **Storage Settings UI Layout (`StorageSettingsTab`):**
+   - Four structured sections:
+     - **Database Metrics:** Live DB disk size, item counts, pinned count (highlighted as protected), and buttons for "Optimize Database" and "Refresh".
+     - **History Retention Limits:** Pickers for Item Count (50, 100, 200, 500, 1000, Unlimited), Retention Duration (7, 14, 30, 90, 180, 365 days, Unlimited), Storage Budget (25MB, 50MB, 100MB, 250MB, 500MB, 1GB, Unlimited), and "Apply & Enforce Retention Now" action.
+     - **Supported Formats:** Format enablement toggles for Plain Text, Rich Text (HTML/RTF), Images, and File references (`F-013`, `F-015`, `T-TYPE-05`).
+     - **History Clear Actions:** Side-by-side action buttons for "Clear Unpinned..." and "Clear All History..." with explanatory captions.
+4. **Distinct Confirmation Safeguards (`F-025`, `T-HIST-01`):**
+   - `showClearUnpinnedAlert`: Confirms deletion of unpinned items and explicitly reassures the user that pinned clips will NOT be deleted.
+   - `showClearAllAlert`: High-impact critical confirmation requiring explicit affirmation to wipe all history items, including all pinned clips.
+   - Both actions trigger immediate WAL checkpoint / vacuum and refresh `stats` live so disk metrics reflect the new state immediately.
+
+### Consequences
+* **Positive:** Complete visibility into storage utilization; instant reclamation of disk space via on-demand checkpoint and vacuum; zero ambiguity between clearing unpinned history and wiping pinned anchors; 100% test coverage under automated test runner `tests/storage_ui_tests.swift`.
+* **Negative:** None.
+
+
 
 

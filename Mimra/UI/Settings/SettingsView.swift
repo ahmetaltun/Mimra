@@ -1,12 +1,170 @@
 import SwiftUI
+import Foundation
+import AppKit
 
-public struct SettingsView: View {
-    @State private var engineVersion: String = coreVersion()
-    @ObservedObject private var accessibilityService = AccessibilityService.shared
-    @AppStorage("pasteAutomatically") private var pasteAutomatically: Bool = true
-    @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
-    @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
-    @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
+// ==============================================================================
+// Mimra — Storage Settings View Model (P4-06 / F-025, F-055, T-HIST-01, T-HIST-05)
+// Off-main actor storage metrics, retention sweeps, and distinct clear confirmations.
+// ==============================================================================
+
+@MainActor
+public final class StorageSettingsViewModel: ObservableObject {
+    public let coreClient: CoreClient
+
+    @Published public var stats: StorageStatsDto? = nil
+    @Published public var isLoading: Bool = false
+    @Published public var isPerformingAction: Bool = false
+    @Published public var statusMessage: String? = nil
+    @Published public var isErrorMessage: Bool = false
+
+    // Alerts for distinct confirmations (F-025, T-HIST-01)
+    @Published public var showClearUnpinnedAlert: Bool = false
+    @Published public var showClearAllAlert: Bool = false
+
+    // Retention policy settings (F-055, P4-05)
+    // 0 represents unlimited / disabled for that dimension
+    @Published public var maxCount: Int {
+        didSet {
+            UserDefaults.standard.set(maxCount, forKey: "retentionMaxCount")
+            syncPolicyToEngine()
+        }
+    }
+    @Published public var maxAgeDays: Int {
+        didSet {
+            UserDefaults.standard.set(maxAgeDays, forKey: "retentionMaxAgeDays")
+            syncPolicyToEngine()
+        }
+    }
+    @Published public var maxSizeBytes: Int64 {
+        didSet {
+            UserDefaults.standard.set(maxSizeBytes, forKey: "retentionMaxSizeBytes")
+            syncPolicyToEngine()
+        }
+    }
+
+    public init(coreClient: CoreClient? = nil) {
+        self.coreClient = coreClient ?? CoreClient.shared
+
+        // Load persisted preferences or fallback to sensible defaults
+        let savedCount = UserDefaults.standard.object(forKey: "retentionMaxCount") as? Int ?? 200
+        let savedAge = UserDefaults.standard.object(forKey: "retentionMaxAgeDays") as? Int ?? 30
+        let savedSize = UserDefaults.standard.object(forKey: "retentionMaxSizeBytes") as? Int64 ?? (100 * 1024 * 1024)
+
+        self.maxCount = savedCount
+        self.maxAgeDays = savedAge
+        self.maxSizeBytes = savedSize
+
+        // Sync initial policy to engine
+        syncPolicyToEngine()
+    }
+
+    public var formattedDbSize: String {
+        guard let stats = stats else { return "Calculating..." }
+        return ByteCountFormatter.string(fromByteCount: Int64(stats.dbSizeBytes), countStyle: .file)
+    }
+
+    public var currentPolicyDto: RetentionPolicyDto {
+        RetentionPolicyDto(
+            maxCount: maxCount > 0 ? UInt32(maxCount) : nil,
+            maxAgeDays: maxAgeDays > 0 ? UInt32(maxAgeDays) : nil,
+            maxSizeBytes: maxSizeBytes > 0 ? UInt64(maxSizeBytes) : nil
+        )
+    }
+
+    public func syncPolicyToEngine() {
+        let policy = currentPolicyDto
+        Task {
+            await coreClient.setRetentionPolicy(policy: policy)
+        }
+    }
+
+    public func loadStats() async {
+        isLoading = true
+        do {
+            let s = try await coreClient.getStats()
+            self.stats = s
+        } catch {
+            self.statusMessage = "Failed to load database stats: \(error.localizedDescription)"
+            self.isErrorMessage = true
+        }
+        isLoading = false
+    }
+
+    public func applyRetentionPolicy() async {
+        isPerformingAction = true
+        statusMessage = nil
+        do {
+            let policy = currentPolicyDto
+            await coreClient.setRetentionPolicy(policy: policy)
+            let report = try await coreClient.enforceRetention(policy: policy)
+            _ = try? await coreClient.checkpointWal()
+            await loadStats()
+            let freedStr = ByteCountFormatter.string(fromByteCount: Int64(report.freedBytes), countStyle: .file)
+            self.statusMessage = "Retention policy applied: Evicted \(report.totalEvicted) unpinned items, freed \(freedStr)."
+            self.isErrorMessage = false
+        } catch {
+            self.statusMessage = "Failed to enforce retention: \(error.localizedDescription)"
+            self.isErrorMessage = true
+        }
+        isPerformingAction = false
+    }
+
+    public func optimizeDatabase() async {
+        isPerformingAction = true
+        statusMessage = nil
+        do {
+            _ = try await coreClient.checkpointWal()
+            try await coreClient.vacuumDatabase()
+            await loadStats()
+            self.statusMessage = "Database optimization completed. WAL checkpointed and freed pages reclaimed."
+            self.isErrorMessage = false
+        } catch {
+            self.statusMessage = "Failed to optimize database: \(error.localizedDescription)"
+            self.isErrorMessage = true
+        }
+        isPerformingAction = false
+    }
+
+    public func confirmClearUnpinned() async {
+        isPerformingAction = true
+        statusMessage = nil
+        do {
+            let count = try await coreClient.clearUnpinned()
+            _ = try? await coreClient.checkpointWal()
+            await loadStats()
+            self.statusMessage = "Cleared \(count) unpinned items. Pinned items were preserved."
+            self.isErrorMessage = false
+        } catch {
+            self.statusMessage = "Failed to clear unpinned items: \(error.localizedDescription)"
+            self.isErrorMessage = true
+        }
+        isPerformingAction = false
+    }
+
+    public func confirmClearAll() async {
+        isPerformingAction = true
+        statusMessage = nil
+        do {
+            let count = try await coreClient.clearAll()
+            _ = try? await coreClient.checkpointWal()
+            try? await coreClient.vacuumDatabase()
+            await loadStats()
+            self.statusMessage = "Permanently cleared all \(count) history items and pinned clips."
+            self.isErrorMessage = false
+        } catch {
+            self.statusMessage = "Failed to clear all history: \(error.localizedDescription)"
+            self.isErrorMessage = true
+        }
+        isPerformingAction = false
+    }
+}
+
+// ==============================================================================
+// Mimra — Storage Settings Tab View
+// ==============================================================================
+
+public struct StorageSettingsTab: View {
+    @ObservedObject public var viewModel: StorageSettingsViewModel
 
     // Format enablement settings (F-013, F-015, T-TYPE-05)
     @AppStorage(ClipboardTypeConfiguration.storePlainTextKey) private var storePlainText: Bool = true
@@ -14,13 +172,178 @@ public struct SettingsView: View {
     @AppStorage(ClipboardTypeConfiguration.storeImagesKey) private var storeImages: Bool = true
     @AppStorage(ClipboardTypeConfiguration.storeFilesKey) private var storeFiles: Bool = true
 
+    public init(viewModel: StorageSettingsViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
+        Form {
+            if let message = viewModel.statusMessage {
+                Section {
+                    HStack(spacing: 8) {
+                        Image(systemName: viewModel.isErrorMessage ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            .foregroundColor(viewModel.isErrorMessage ? .red : .green)
+                        Text(message)
+                            .font(.callout)
+                            .foregroundColor(viewModel.isErrorMessage ? .red : .primary)
+                        Spacer()
+                        Button(action: { viewModel.statusMessage = nil }) {
+                            Image(systemName: "xmark.circle")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+
+            Section("Database Metrics") {
+                LabeledContent("Database Disk Size", value: viewModel.formattedDbSize)
+                LabeledContent("Total History Items", value: "\(viewModel.stats?.totalItems ?? 0)")
+                LabeledContent("Pinned Items (Protected)", value: "\(viewModel.stats?.pinnedItems ?? 0)")
+                LabeledContent("Unpinned Items", value: "\(viewModel.stats?.unpinnedItems ?? 0)")
+                LabeledContent("Data Representations", value: "\(viewModel.stats?.totalRepresentations ?? 0)")
+
+                HStack {
+                    Button(action: {
+                        Task { await viewModel.optimizeDatabase() }
+                    }) {
+                        Label("Optimize Database", systemImage: "sparkles")
+                    }
+                    .disabled(viewModel.isPerformingAction || viewModel.isLoading)
+
+                    Button(action: {
+                        Task { await viewModel.loadStats() }
+                    }) {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(viewModel.isLoading)
+                }
+            }
+
+            Section("History Retention Limits") {
+                Picker("Item Count Limit", selection: $viewModel.maxCount) {
+                    Text("50 items").tag(50)
+                    Text("100 items").tag(100)
+                    Text("200 items (Recommended)").tag(200)
+                    Text("500 items").tag(500)
+                    Text("1,000 items").tag(1000)
+                    Text("Unlimited").tag(0)
+                }
+
+                Picker("Retention Duration", selection: $viewModel.maxAgeDays) {
+                    Text("7 days").tag(7)
+                    Text("14 days").tag(14)
+                    Text("30 days (Recommended)").tag(30)
+                    Text("90 days").tag(90)
+                    Text("180 days").tag(180)
+                    Text("365 days (1 Year)").tag(365)
+                    Text("Unlimited").tag(0)
+                }
+
+                Picker("Storage Budget", selection: $viewModel.maxSizeBytes) {
+                    Text("25 MB").tag(Int64(25 * 1024 * 1024))
+                    Text("50 MB").tag(Int64(50 * 1024 * 1024))
+                    Text("100 MB (Recommended)").tag(Int64(100 * 1024 * 1024))
+                    Text("250 MB").tag(Int64(250 * 1024 * 1024))
+                    Text("500 MB").tag(Int64(500 * 1024 * 1024))
+                    Text("1 GB").tag(Int64(1024 * 1024 * 1024))
+                    Text("Unlimited").tag(Int64(0))
+                }
+
+                HStack {
+                    Button(action: {
+                        Task { await viewModel.applyRetentionPolicy() }
+                    }) {
+                        Label("Apply & Enforce Retention", systemImage: "tray.and.arrow.down")
+                    }
+                    .disabled(viewModel.isPerformingAction || viewModel.isLoading)
+                }
+
+                Text("Unpinned items exceeding count, age, or storage limits are automatically pruned. Pinned items are 100% immune to retention eviction.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Supported Formats") {
+                Toggle("Plain text & URLs", isOn: $storePlainText)
+                Toggle("Rich text (HTML & RTF)", isOn: $storeRichText)
+                Toggle("Images (PNG, TIFF, JPEG, HEIC)", isOn: $storeImages)
+                Toggle("File references", isOn: $storeFiles)
+            }
+
+            Section("History Clear Actions") {
+                HStack(spacing: 12) {
+                    Button(action: {
+                        viewModel.showClearUnpinnedAlert = true
+                    }) {
+                        Label("Clear Unpinned...", systemImage: "trash")
+                    }
+                    .disabled(viewModel.isPerformingAction)
+
+                    Button(role: .destructive, action: {
+                        viewModel.showClearAllAlert = true
+                    }) {
+                        Label("Clear All History...", systemImage: "trash.fill")
+                    }
+                    .disabled(viewModel.isPerformingAction)
+                }
+
+                Text("Clearing unpinned history keeps pinned items intact. Clearing all permanently erases all clips including pinned anchors.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .alert("Clear Unpinned History?", isPresented: $viewModel.showClearUnpinnedAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear Unpinned", role: .destructive) {
+                Task {
+                    await viewModel.confirmClearUnpinned()
+                }
+            }
+        } message: {
+            Text("This will permanently remove all unpinned items from clipboard history. Pinned clips will not be deleted.")
+        }
+        .alert("Clear All History (Including Pinned)?", isPresented: $viewModel.showClearAllAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear All Items", role: .destructive) {
+                Task {
+                    await viewModel.confirmClearAll()
+                }
+            }
+        } message: {
+            Text("This will permanently delete ALL clipboard history items, including all pinned clips. This action cannot be undone.")
+        }
+        .task {
+            await viewModel.loadStats()
+        }
+    }
+}
+
+// ==============================================================================
+// Mimra — Main Settings View
+// ==============================================================================
+
+public struct SettingsView: View {
+    @State private var engineVersion: String = coreVersion()
+    @ObservedObject private var accessibilityService = AccessibilityService.shared
+    @StateObject private var storageViewModel: StorageSettingsViewModel
+
+    @AppStorage("pasteAutomatically") private var pasteAutomatically: Bool = true
+    @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
+    @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
+    @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
+
     // Search and sorting preferences (P4-04 / F-019, F-024, F-050, F-054)
     @AppStorage("searchHighlightStyle") private var searchHighlightStyleRaw: String = SearchHighlightStyle.bold.rawValue
     @AppStorage("pinArrangement") private var pinArrangementRaw: String = "top"
     @AppStorage("historySortMode") private var historySortModeRaw: String = "recency"
     @AppStorage("searchByRelevance") private var searchByRelevance: Bool = true
 
-    public init() {}
+    public init(coreClient: CoreClient? = nil) {
+        _storageViewModel = StateObject(wrappedValue: StorageSettingsViewModel(coreClient: coreClient))
+    }
 
     public var body: some View {
         TabView {
@@ -129,24 +452,10 @@ public struct SettingsView: View {
                 Label("Search & Sorting", systemImage: "arrow.up.arrow.down.circle")
             }
 
-            Form {
-                Section("Supported Formats") {
-                    Toggle("Plain text & URLs", isOn: $storePlainText)
-                    Toggle("Rich text (HTML & RTF)", isOn: $storeRichText)
-                    Toggle("Images (PNG, TIFF, JPEG, HEIC)", isOn: $storeImages)
-                    Toggle("File references", isOn: $storeFiles)
+            StorageSettingsTab(viewModel: storageViewModel)
+                .tabItem {
+                    Label("Storage", systemImage: "cylinder.split.1x2")
                 }
-
-                Section("Information") {
-                    Text("Disabled formats are dropped at the pasteboard boundary in Swift and never stored in SQLite or written to disk. If an item contains multiple formats, only enabled formats are retained.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .formStyle(.grouped)
-            .tabItem {
-                Label("Storage", systemImage: "cylinder.split.1x2")
-            }
 
             Form {
                 Section("Security & Privacy") {
@@ -163,7 +472,7 @@ public struct SettingsView: View {
                 Label("Privacy", systemImage: "hand.raised")
             }
         }
-        .frame(width: 520, height: 380)
+        .frame(width: 540, height: 480)
         .task {
             accessibilityService.startObserving()
         }

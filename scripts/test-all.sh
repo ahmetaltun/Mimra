@@ -571,7 +571,33 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 /tmp/mimra_history_limit_test_runner
 rm -f /tmp/mimra_history_limit_test_runner
 
-echo -e "\n=== 31. Building Native macOS App (Mimra.app) via Xcode ==="
+echo -e "\n=== 31. Running Storage UI & Metrics Update Tests (P4-06 / F-025, F-055, T-HIST-01, T-HIST-05) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Settings/SettingsView.swift" \
+    "$PROJECT_ROOT/tests/storage_ui_tests.swift" \
+    -o /tmp/mimra_storage_ui_test_runner
+
+/tmp/mimra_storage_ui_test_runner
+rm -f /tmp/mimra_storage_ui_test_runner
+
+echo -e "\n=== 32. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \
     -scheme Mimra \

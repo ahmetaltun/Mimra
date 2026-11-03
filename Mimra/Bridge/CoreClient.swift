@@ -65,6 +65,31 @@ extension HistoryItemSummaryDto {
 /// Actor managing the connection to the RustCore SQLite engine.
 public actor CoreClient {
     private let handle: MimraCoreHandle
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var _shared: CoreClient?
+
+    /// Shared singleton instance for application components.
+    public static var shared: CoreClient {
+        lock.lock()
+        defer { lock.unlock() }
+        if let existing = _shared {
+            return existing
+        }
+        do {
+            let client = try CoreClient()
+            _shared = client
+            return client
+        } catch {
+            fatalError("Failed to initialize default CoreClient: \(error)")
+        }
+    }
+
+    /// Overrides the shared CoreClient instance (e.g. for testing).
+    public static func setSharedInstance(_ client: CoreClient) {
+        lock.lock()
+        defer { lock.unlock() }
+        _shared = client
+    }
 
     /// Standard database directory in Application Support.
     public static var defaultDatabasePath: String {
