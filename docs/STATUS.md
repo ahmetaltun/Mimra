@@ -54,7 +54,7 @@
 | Task ID | Description | Status | Verification / Artifact |
 |---|---|---|---|
 | **P1-01** | Rust domain models: Representations, UUIDs, timestamps, size limits, NFC normalization | Completed | [RustCore/src/domain/](../RustCore/src/domain/) (12 passing tests) |
-| **P1-02** | SQLite migrations: Normalized tables, content representations, indexes and FTS5 | Planned | `RustCore/src/storage/` |
+| **P1-02** | SQLite migrations: Normalized tables, content representations, indexes and FTS5 | Completed | [RustCore/src/storage/](../RustCore/src/storage/) (16 passing tests) |
 | **P1-03** | Core ingestion: Transactional insert, dedupe, recopy timestamps, pin preservation | Planned | `RustCore/src/services/` |
 | **P1-04** | Rust repository API: list-page, fetch, delete, clear, stats, retention with error codes | Planned | `RustCore/src/storage/` |
 | **P1-05** | Clipboard reader: `changeCount` polling, lifecycle, snapshots, allowlist supported UTIs | Planned | `Mimra/macOS/ClipboardMonitor.swift` |

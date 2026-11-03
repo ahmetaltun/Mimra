@@ -4,9 +4,13 @@
 
 pub mod domain;
 pub mod error;
+pub mod storage;
 
 pub use domain::{uti, ContentKind, HistoryItem, Representation};
 pub use error::CoreError;
+pub use storage::{
+    open_database, open_in_memory, run_migrations, verify_database_integrity, DatabaseConfig,
+};
 
 // Setup UniFFI scaffolding for procedural macro bindings
 uniffi::setup_scaffolding!();

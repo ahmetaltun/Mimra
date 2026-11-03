@@ -38,3 +38,6 @@ RustCore/**/*.rs.bk
 *~
 .idea/
 .vscode/
+
+# Graphify cache
+graphify-out/cache/
