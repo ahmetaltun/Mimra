@@ -9,8 +9,10 @@ pub mod repository;
 pub use db::{open_database, open_in_memory, DatabaseConfig};
 pub use migrations::{run_migrations, verify_database_integrity, ALL_MIGRATIONS};
 pub use repository::{
-    enforce_retention_limit, find_by_content_hash, find_by_id, ingest_clipboard_item, insert_item,
-    load_representations, update_recopy, IngestOutcome,
+    clear_all_history, clear_unpinned_history, delete_item_by_id, enforce_retention_limit,
+    fetch_payload, find_by_content_hash, find_by_id, get_storage_stats, ingest_clipboard_item,
+    insert_item, list_history_page, load_representations, query_available_utis, set_pin_status,
+    update_recopy, HistoryItemSummary, IngestOutcome, StorageStats,
 };
 
 #[cfg(test)]
@@ -299,4 +301,213 @@ fn test_retention_limit_and_pinned_protection() {
     assert_eq!(total_count, 3);
 
     verify_database_integrity(&conn).expect("Database integrity check must pass");
+}
+
+#[test]
+fn test_list_history_page_ordering_and_pins() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    // 1. Insert unpinned item (older)
+    let rep1 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Older Unpinned".to_vec()).unwrap();
+    let item1 = HistoryItem::new(vec![rep1], None, 1000).unwrap();
+    ingest_clipboard_item(&mut conn, item1, 200).unwrap();
+
+    // 2. Insert unpinned item (newer)
+    let rep2 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Newer Unpinned".to_vec()).unwrap();
+    let item2 = HistoryItem::new(vec![rep2], None, 2000).unwrap();
+    ingest_clipboard_item(&mut conn, item2, 200).unwrap();
+
+    // 3. Insert pinned item (pin_order = 1)
+    let rep3 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"First Pin".to_vec()).unwrap();
+    let mut item3 = HistoryItem::new(vec![rep3], None, 1500).unwrap();
+    item3.is_pinned = true;
+    item3.pin_order = Some(1);
+    item3.pin_key = Some("1".to_string());
+    ingest_clipboard_item(&mut conn, item3, 200).unwrap();
+
+    // 4. Query page
+    let page = list_history_page(&conn, 10, 0).unwrap();
+    assert_eq!(page.len(), 3);
+
+    // Pinned item must come FIRST despite not having the latest timestamp
+    assert_eq!(page[0].title, "First Pin");
+    assert!(page[0].is_pinned);
+    assert_eq!(page[0].pin_key, Some("1".to_string()));
+
+    // Newer unpinned must come SECOND
+    assert_eq!(page[1].title, "Newer Unpinned");
+    assert!(!page[1].is_pinned);
+
+    // Older unpinned must come THIRD
+    assert_eq!(page[2].title, "Older Unpinned");
+    assert!(!page[2].is_pinned);
+}
+
+#[test]
+fn test_fetch_payload_and_available_utis() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    let rep_text =
+        Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Plain text payload".to_vec()).unwrap();
+    let rep_rtf = Representation::new(0, uti::RTF, b"{\\rtf1 RTF payload}".to_vec()).unwrap();
+
+    let item = HistoryItem::new(vec![rep_text, rep_rtf], None, 1000).unwrap();
+    let item_id = item.id;
+    ingest_clipboard_item(&mut conn, item, 200).unwrap();
+
+    // Query available UTIs
+    let utis = query_available_utis(&conn, &item_id).unwrap();
+    assert_eq!(utis.len(), 2);
+    assert!(utis.contains(&uti::UTF8_PLAIN_TEXT.to_string()));
+    assert!(utis.contains(&uti::RTF.to_string()));
+
+    // Fetch plain text payload
+    let text_bytes = fetch_payload(&conn, &item_id, uti::UTF8_PLAIN_TEXT).unwrap();
+    assert_eq!(text_bytes, Some(b"Plain text payload".to_vec()));
+
+    // Fetch RTF payload
+    let rtf_bytes = fetch_payload(&conn, &item_id, uti::RTF).unwrap();
+    assert_eq!(rtf_bytes, Some(b"{\\rtf1 RTF payload}".to_vec()));
+
+    // Fetch absent UTI returns None
+    let png_bytes = fetch_payload(&conn, &item_id, uti::PNG).unwrap();
+    assert_eq!(png_bytes, None);
+}
+
+#[test]
+fn test_delete_and_clear_operations() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    // Ingest 2 unpinned items and 1 pinned item
+    let rep1 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Delete Me".to_vec()).unwrap();
+    let item1 = HistoryItem::new(vec![rep1], None, 1000).unwrap();
+    let id1 = item1.id;
+    ingest_clipboard_item(&mut conn, item1, 200).unwrap();
+
+    let rep2 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Unpinned 2".to_vec()).unwrap();
+    let item2 = HistoryItem::new(vec![rep2], None, 2000).unwrap();
+    ingest_clipboard_item(&mut conn, item2, 200).unwrap();
+
+    let rep3 = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Keep Pinned".to_vec()).unwrap();
+    let mut item3 = HistoryItem::new(vec![rep3], None, 3000).unwrap();
+    item3.is_pinned = true;
+    let id3 = item3.id;
+    ingest_clipboard_item(&mut conn, item3, 200).unwrap();
+
+    // 1. Delete single item by ID
+    let deleted = delete_item_by_id(&conn, &id1).unwrap();
+    assert!(deleted, "Item 1 must be deleted");
+    assert!(find_by_id(&conn, &id1).unwrap().is_none());
+
+    // 2. Clear unpinned history
+    let cleared = clear_unpinned_history(&conn).unwrap();
+    assert_eq!(cleared, 1, "Expected 1 unpinned item cleared");
+
+    // Pinned item remains intact
+    assert!(
+        find_by_id(&conn, &id3).unwrap().is_some(),
+        "Pinned item must survive clear_unpinned"
+    );
+
+    // 3. Clear all history
+    let cleared_all = clear_all_history(&conn).unwrap();
+    assert_eq!(cleared_all, 1, "Expected pinned item cleared in clear_all");
+
+    let stats = get_storage_stats(&conn, None).unwrap();
+    assert_eq!(stats.total_items, 0);
+    assert_eq!(stats.total_representations, 0);
+
+    verify_database_integrity(&conn).expect("Integrity check must pass after clears");
+}
+
+#[test]
+fn test_crash_safe_reopen_on_disk() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::item::HistoryItem;
+    use tempfile::NamedTempFile;
+    use uuid::Uuid;
+
+    let temp_file = NamedTempFile::new().unwrap();
+    let db_path = temp_file.path().to_path_buf();
+
+    let item_id: Uuid;
+
+    // Scope 1: Open, write items, pin an item, then close (drop connection)
+    {
+        let mut conn = open_database(&db_path, &DatabaseConfig::default()).unwrap();
+        run_migrations(&mut conn).unwrap();
+
+        let rep = Representation::new(
+            0,
+            uti::UTF8_PLAIN_TEXT,
+            b"Crash safe persistent data".to_vec(),
+        )
+        .unwrap();
+        let mut item =
+            HistoryItem::new(vec![rep], Some("com.apple.Terminal".to_string()), 1000).unwrap();
+        item.is_pinned = true;
+        item.pin_key = Some("p".to_string());
+        item_id = item.id;
+
+        ingest_clipboard_item(&mut conn, item, 200).unwrap();
+        // Connection is cleanly dropped at the end of this block, closing DB
+    }
+
+    // Scope 2: Reopen the database from disk, verify persistence and schema
+    {
+        let mut conn = open_database(&db_path, &DatabaseConfig::default()).unwrap();
+        let newly_applied = run_migrations(&mut conn).unwrap();
+        assert!(
+            newly_applied.is_empty(),
+            "Migrations must be idempotent upon reopen"
+        );
+
+        // Verify integrity
+        verify_database_integrity(&conn).expect("Database on disk must pass integrity check");
+
+        // Verify item survived
+        let item = find_by_id(&conn, &item_id)
+            .unwrap()
+            .expect("Item must exist after reopening database");
+        assert_eq!(item.title, "Crash safe persistent data");
+        assert!(item.is_pinned);
+        assert_eq!(item.pin_key, Some("p".to_string()));
+        assert_eq!(
+            item.source_bundle_id,
+            Some("com.apple.Terminal".to_string())
+        );
+
+        // Verify FTS5 query works across reopen
+        let fts_matches: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM search_fts WHERE search_fts MATCH 'persistent';",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            fts_matches, 1,
+            "FTS5 index must be fully searchable across restart"
+        );
+
+        let stats = get_storage_stats(&conn, Some(&db_path)).unwrap();
+        assert_eq!(stats.total_items, 1);
+        assert_eq!(stats.pinned_items, 1);
+        assert!(
+            stats.db_size_bytes > 0,
+            "DB file size must be greater than 0"
+        );
+    }
 }

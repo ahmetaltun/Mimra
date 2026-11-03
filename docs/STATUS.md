@@ -56,7 +56,7 @@
 | **P1-01** | Rust domain models: Representations, UUIDs, timestamps, size limits, NFC normalization | Completed | [RustCore/src/domain/](../RustCore/src/domain/) (12 passing tests) |
 | **P1-02** | SQLite migrations: Normalized tables, content representations, indexes and FTS5 | Completed | [RustCore/src/storage/](../RustCore/src/storage/) (16 passing tests) |
 | **P1-03** | Core ingestion: Transactional insert, dedupe, recopy timestamps, pin preservation | Completed | [RustCore/src/storage/repository.rs](../RustCore/src/storage/repository.rs) (18 passing tests) |
-| **P1-04** | Rust repository API: list-page, fetch, delete, clear, stats, retention with error codes | Planned | `RustCore/src/storage/` |
+| **P1-04** | Rust repository API: list-page, fetch, delete, clear, stats, retention with error codes | Completed | [RustCore/src/storage/repository.rs](../RustCore/src/storage/repository.rs) (22 passing tests) |
 | **P1-05** | Clipboard reader: `changeCount` polling, lifecycle, snapshots, allowlist supported UTIs | Planned | `Mimra/macOS/ClipboardMonitor.swift` |
 | **P1-06** | Privacy prefilter: Mandatory deny markers, user UTI deny, ignored apps, pause/ignore-next | Planned | `Mimra/macOS/PrivacyFilter.swift` |
 | **P1-07** | Self-recapture protection: Provenance marker, sync `changeCount`, loop guard | Planned | `Mimra/macOS/PasteCoordinator.swift` |

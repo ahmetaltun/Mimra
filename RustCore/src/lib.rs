@@ -9,8 +9,11 @@ pub mod storage;
 pub use domain::{uti, ContentKind, HistoryItem, Representation};
 pub use error::CoreError;
 pub use storage::{
-    find_by_content_hash, find_by_id, ingest_clipboard_item, load_representations, open_database,
-    open_in_memory, run_migrations, verify_database_integrity, DatabaseConfig, IngestOutcome,
+    clear_all_history, clear_unpinned_history, delete_item_by_id, enforce_retention_limit,
+    fetch_payload, find_by_content_hash, find_by_id, get_storage_stats, ingest_clipboard_item,
+    insert_item, list_history_page, load_representations, open_database, open_in_memory,
+    query_available_utis, run_migrations, set_pin_status, update_recopy, verify_database_integrity,
+    DatabaseConfig, HistoryItemSummary, IngestOutcome, StorageStats,
 };
 
 // Setup UniFFI scaffolding for procedural macro bindings

@@ -372,3 +372,251 @@ pub fn ingest_clipboard_item(
     tx.commit()?;
     Ok(IngestOutcome::NewItem(item))
 }
+
+/// Summary DTO for displaying an item in UI list rows without loading large binary payloads into memory.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HistoryItemSummary {
+    pub id: Uuid,
+    pub content_kind: ContentKind,
+    pub title: String,
+    pub snippet: String,
+    pub is_pinned: bool,
+    pub pin_order: Option<u32>,
+    pub pin_key: Option<String>,
+    pub source_bundle_id: Option<String>,
+    pub first_copied_at_ms: i64,
+    pub last_copied_at_ms: i64,
+    pub copy_count: u32,
+    pub byte_size: u64,
+    pub available_utis: Vec<String>,
+}
+
+/// Disk and item metrics for the storage layer.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct StorageStats {
+    pub total_items: usize,
+    pub pinned_items: usize,
+    pub unpinned_items: usize,
+    pub total_representations: usize,
+    pub db_size_bytes: u64,
+}
+
+/// Retrieves a paginated list of history item summaries.
+/// Pinned items appear first (ordered by `pin_order ASC, last_copied_at_ms DESC`),
+/// followed by unpinned items (`last_copied_at_ms DESC`).
+pub fn list_history_page(
+    conn: &Connection,
+    limit: usize,
+    offset: usize,
+) -> Result<Vec<HistoryItemSummary>, CoreError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, content_kind, title, search_text, is_pinned, pin_order, pin_key,
+                source_bundle_id, first_copied_at_ms, last_copied_at_ms, copy_count, byte_size
+         FROM history_items
+         ORDER BY is_pinned DESC,
+                  CASE WHEN is_pinned = 1 THEN pin_order END ASC,
+                  last_copied_at_ms DESC
+         LIMIT ?1 OFFSET ?2;",
+    )?;
+
+    let rows = stmt.query_map(params![limit as i64, offset as i64], |row| {
+        let id_str: String = row.get(0)?;
+        let kind_str: String = row.get(1)?;
+        let title: String = row.get(2)?;
+        let search_text: String = row.get(3)?;
+        let is_pinned_int: i64 = row.get(4)?;
+
+        // Snippet is first ~160 characters of search_text
+        let snippet: String = search_text.chars().take(160).collect();
+
+        Ok((
+            id_str,
+            kind_str,
+            title,
+            snippet,
+            is_pinned_int != 0,
+            row.get(5)?,
+            row.get(6)?,
+            row.get(7)?,
+            row.get(8)?,
+            row.get(9)?,
+            row.get(10)?,
+            row.get(11)?,
+        ))
+    })?;
+
+    let mut summaries = Vec::new();
+    for row in rows {
+        let (
+            id_str,
+            kind_str,
+            title,
+            snippet,
+            is_pinned,
+            pin_order,
+            pin_key,
+            source_bundle_id,
+            first_copied_at_ms,
+            last_copied_at_ms,
+            copy_count,
+            byte_size,
+        ) = row?;
+
+        let id = Uuid::parse_str(&id_str).map_err(|e| CoreError::DatabaseError {
+            details: format!("Corrupted UUID in history_items: {e}"),
+        })?;
+
+        let content_kind = ContentKind::from_str(&kind_str)?;
+        let available_utis = query_available_utis(conn, &id)?;
+
+        summaries.push(HistoryItemSummary {
+            id,
+            content_kind,
+            title,
+            snippet,
+            is_pinned,
+            pin_order,
+            pin_key,
+            source_bundle_id,
+            first_copied_at_ms,
+            last_copied_at_ms,
+            copy_count,
+            byte_size,
+            available_utis,
+        });
+    }
+
+    Ok(summaries)
+}
+
+/// Helper to query available UTIs for an item without loading byte payloads.
+pub fn query_available_utis(conn: &Connection, item_id: &Uuid) -> Result<Vec<String>, CoreError> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT uti FROM item_representations WHERE item_id = ?1 ORDER BY group_index ASC, id ASC;",
+    )?;
+
+    let rows = stmt.query_map(params![item_id.to_string()], |row| row.get(0))?;
+    let mut utis = Vec::new();
+    for row in rows {
+        utis.push(row?);
+    }
+    Ok(utis)
+}
+
+/// Fetches the raw payload bytes for a specific item and UTI (e.g. for paste or preview).
+pub fn fetch_payload(
+    conn: &Connection,
+    item_id: &Uuid,
+    uti: &str,
+) -> Result<Option<Vec<u8>>, CoreError> {
+    let mut stmt = conn.prepare(
+        "SELECT payload FROM item_representations WHERE item_id = ?1 AND uti = ?2 LIMIT 1;",
+    )?;
+
+    let payload: Option<Vec<u8>> = stmt
+        .query_row(params![item_id.to_string(), uti], |row| row.get(0))
+        .optional()?;
+
+    Ok(payload)
+}
+
+/// Deletes a single item by its ID.
+/// Foreign-key cascading automatically removes representation rows and triggers update FTS5.
+/// Returns true if an item was deleted, false if not found.
+pub fn delete_item_by_id(conn: &Connection, item_id: &Uuid) -> Result<bool, CoreError> {
+    let deleted = conn.execute(
+        "DELETE FROM history_items WHERE id = ?1;",
+        params![item_id.to_string()],
+    )?;
+    Ok(deleted > 0)
+}
+
+/// Clears all unpinned history items.
+/// Pinned items are strictly protected and remain intact.
+/// Returns the number of cleared items.
+pub fn clear_unpinned_history(conn: &Connection) -> Result<usize, CoreError> {
+    let deleted = conn.execute("DELETE FROM history_items WHERE is_pinned = 0;", [])?;
+    Ok(deleted)
+}
+
+/// Clears all history items, including pinned items.
+/// Used when the user explicitly confirms a full reset.
+/// Returns the number of cleared items.
+pub fn clear_all_history(conn: &Connection) -> Result<usize, CoreError> {
+    let deleted = conn.execute("DELETE FROM history_items;", [])?;
+    Ok(deleted)
+}
+
+/// Sets or unsets the pinned status, ordering, and shortcut key for an item.
+pub fn set_pin_status(
+    conn: &Connection,
+    item_id: &Uuid,
+    is_pinned: bool,
+    pin_key: Option<String>,
+    pin_order: Option<u32>,
+) -> Result<(), CoreError> {
+    let affected = conn.execute(
+        "UPDATE history_items
+         SET is_pinned = ?1,
+             pin_key = ?2,
+             pin_order = ?3
+         WHERE id = ?4;",
+        params![
+            if is_pinned { 1 } else { 0 },
+            pin_key,
+            pin_order,
+            item_id.to_string(),
+        ],
+    )?;
+
+    if affected == 0 {
+        return Err(CoreError::ItemNotFound {
+            id: item_id.to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Computes current storage metrics: item counts, representation counts, and database size.
+pub fn get_storage_stats(
+    conn: &Connection,
+    db_file_path: Option<&std::path::Path>,
+) -> Result<StorageStats, CoreError> {
+    let total_items: usize =
+        conn.query_row("SELECT COUNT(*) FROM history_items;", [], |r| r.get(0))?;
+
+    let pinned_items: usize = conn.query_row(
+        "SELECT COUNT(*) FROM history_items WHERE is_pinned = 1;",
+        [],
+        |r| r.get(0),
+    )?;
+
+    let unpinned_items = total_items.saturating_sub(pinned_items);
+
+    let total_representations: usize =
+        conn.query_row("SELECT COUNT(*) FROM item_representations;", [], |r| {
+            r.get(0)
+        })?;
+
+    let db_size_bytes = if let Some(path) = db_file_path {
+        std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+    } else {
+        // For in-memory database, compute approximate page size * page count
+        let page_size: i64 = conn
+            .query_row("PRAGMA page_size;", [], |r| r.get(0))
+            .unwrap_or(4096);
+        let page_count: i64 = conn
+            .query_row("PRAGMA page_count;", [], |r| r.get(0))
+            .unwrap_or(0);
+        (page_size * page_count) as u64
+    };
+
+    Ok(StorageStats {
+        total_items,
+        pinned_items,
+        unpinned_items,
+        total_representations,
+        db_size_bytes,
+    })
+}
