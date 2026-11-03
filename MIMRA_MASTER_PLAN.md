@@ -768,33 +768,6 @@ For a performance regression: retain baseline report, reproduce with fixed fixtu
 - [ ] New setting localized; VoiceOver and keyboard navigation checked.
 - [ ] `docs/STATUS.md` and parity matrix updated, with exact test commands/results.
 
-### PR / agent report format (mandatory)
-
-```markdown
-## Task
-P#-## — <one concise objective>
-
-## Scope
-Files/modules changed, related F IDs, constraints and dependencies.
-
-## Implementation
-Key choices and behavior, including fallback/error paths.
-
-## Verification
-- Environment: Xcode, SDK, macOS, hardware, Rust versions.
-- Commands actually run: ...
-- Tests passed: ...
-- Tests not run: ... with why and exact commands for Mac.
-- Manual steps and observed outcome: ...
-
-## Privacy & quality
-Clipboard contents in logs? [No/Explain]. New permissions? [No/Explain].
-FFI/DB migration changes? [No/Explain]. Potential regressions? ...
-
-## Remaining work
-Open issues, risks and next unblocked task.
-```
-
 ### Release blockade criteria (must have zero)
 
 - Known path to capture concealed, excluded or transient entries into persistent history.

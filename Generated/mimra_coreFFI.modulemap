@@ -1,0 +1,4 @@
+module mimra_coreFFI {
+    header "mimra_coreFFI.h"
+    export *
+}

@@ -1,0 +1,305 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		10000001 /* MimraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000001 /* MimraApp.swift */; };
+		10000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000002 /* AppDelegate.swift */; };
+		10000003 /* StatusBarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000003 /* StatusBarCoordinator.swift */; };
+		10000004 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000004 /* SettingsView.swift */; };
+		10000005 /* mimra_core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000005 /* mimra_core.swift */; };
+		10000006 /* libmimra_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 20000006 /* libmimra_core.a */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		00000001 /* Mimra.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mimra.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		20000001 /* MimraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MimraApp.swift; sourceTree = "<group>"; };
+		20000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		20000003 /* StatusBarCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarCoordinator.swift; sourceTree = "<group>"; };
+		20000004 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		20000005 /* mimra_core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = mimra_core.swift; path = Generated/mimra_core.swift; sourceTree = "<group>"; };
+		20000006 /* libmimra_core.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libmimra_core.a; path = RustCore/target/aarch64-apple-darwin/debug/libmimra_core.a; sourceTree = "<group>"; };
+		20000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		20000008 /* mimra_coreFFI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = mimra_coreFFI.h; path = Generated/mimra_coreFFI.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		30000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10000006 /* libmimra_core.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		40000001 /* MainGroup */ = {
+			isa = PBXGroup;
+			children = (
+				40000002 /* Mimra */,
+				40000003 /* Generated */,
+				40000004 /* Frameworks */,
+				40000005 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		40000002 /* Mimra */ = {
+			isa = PBXGroup;
+			children = (
+				40000006 /* App */,
+				40000007 /* macOS */,
+				40000008 /* UI */,
+				20000007 /* Info.plist */,
+			);
+			path = Mimra;
+			sourceTree = "<group>";
+		};
+		40000003 /* Generated */ = {
+			isa = PBXGroup;
+			children = (
+				20000005 /* mimra_core.swift */,
+				20000008 /* mimra_coreFFI.h */,
+			);
+			name = Generated;
+			sourceTree = "<group>";
+		};
+		40000004 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				20000006 /* libmimra_core.a */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		40000005 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				00000001 /* Mimra.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		40000006 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				20000001 /* MimraApp.swift */,
+				20000002 /* AppDelegate.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		40000007 /* macOS */ = {
+			isa = PBXGroup;
+			children = (
+				20000003 /* StatusBarCoordinator.swift */,
+			);
+			path = macOS;
+			sourceTree = "<group>";
+		};
+		40000008 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				40000009 /* Settings */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		40000009 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				20000004 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		50000001 /* Mimra */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 60000001 /* Build configuration list for PBXNativeTarget "Mimra" */;
+			buildPhases = (
+				30000002 /* Sources */,
+				30000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Mimra;
+			productName = Mimra;
+			productReference = 00000001 /* Mimra.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		70000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 60000002 /* Build configuration list for PBXProject "Mimra" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 40000001 /* MainGroup */;
+			productRefGroup = 40000005 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				50000001 /* Mimra */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		30000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10000001 /* MimraApp.swift in Sources */,
+				10000002 /* AppDelegate.swift in Sources */,
+				10000003 /* StatusBarCoordinator.swift in Sources */,
+				10000004 /* SettingsView.swift in Sources */,
+				10000005 /* mimra_core.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		80000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Generated",
+				);
+				INFOPLIST_FILE = Mimra/Info.plist;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/RustCore/target/aarch64-apple-darwin/debug",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lmimra_core",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mimra.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OBJC_BRIDGING_HEADER = "$(PROJECT_DIR)/Generated/mimra_coreFFI.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		80000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Generated",
+				);
+				INFOPLIST_FILE = Mimra/Info.plist;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/RustCore/target/aarch64-apple-darwin/release",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_FAST_MATH = YES;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lmimra_core",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mimra.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = "wholemodule";
+				SWIFT_OBJC_BRIDGING_HEADER = "$(PROJECT_DIR)/Generated/mimra_coreFFI.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		60000001 /* Build configuration list for PBXNativeTarget "Mimra" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				80000001 /* Debug */,
+				80000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		60000002 /* Build configuration list for PBXProject "Mimra" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				80000001 /* Debug */,
+				80000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 70000001 /* Project object */;
+}

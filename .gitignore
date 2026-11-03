@@ -1,0 +1,40 @@
+# macOS / OS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Xcode / Apple development
+build/
+DerivedData/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+*.xcscmblueprint
+*.bundle
+
+# Rust / Cargo
+RustCore/target/
+RustCore/**/*.rs.bk
+# Cargo.lock is intentionally committed for reproducible builds per MIMRA_MASTER_PLAN.md
+
+# Bindings and build artifacts
+*.a
+*.dylib
+
+# Temporary & Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
