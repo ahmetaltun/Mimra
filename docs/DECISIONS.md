@@ -1615,6 +1615,362 @@ In asynchronous clipboard architectures where image OCR inference executes concu
 * **Positive:** Complete fulfillment of `P6-07` and successful exit of **Phase 6**; mathematically guaranteed zero item resurrection on deleted or cleared items; immediate hardware cancellation saves battery and CPU; 1,000-operation high-concurrency stress test verified in automated test suite.
 * **Negative:** None.
 
+---
+
+## ADR-046: Modern SMAppService.mainApp Launch-at-Login, Sound Feedback Integration, and System Clipboard Cleansing
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In Phase 7, Task `P7-01` addresses essential general preferences (`F-020`, `F-035`, `F-056`, `F-062`, `F-064`, `T-SET-01`, `T-REL-01`):
+1. **Launch at Login:** Legacy macOS launch-at-login approaches (such as `SMLoginItemSetEnabled` or helper app bundles inside `Contents/Library/LoginItems`) are deprecated on macOS 13+ and macOS 15+. Apple introduced `SMAppService.mainApp`, which requires handling specific service statuses: `.enabled`, `.notRegistered`, `.requiresApproval`, and `.notFound` (when running unbundled/in development).
+2. **Audio Feedback:** Providing subtle acoustic tactile feedback upon committing clipboard items or copy operations improves accessibility and user confidence. Playback must be non-blocking and safe across headless test environments.
+3. **System Clipboard Cleansing:** Power users requiring strict privacy need the ability to wipe the active macOS system clipboard (`NSPasteboard.general`) when clearing history unpinned or all items (`clearSystemClipboard`), ensuring no remnant remains in the OS pasteboard buffer.
+4. **Auto-Paste Runtime Synchronization:** The `pasteAutomatically` preference stored in `UserDefaults` must be dynamically and consistently observed by `PasteCoordinator` without hard couplings across modules.
+
+### Decision
+1. **LaunchAtLoginService (`Mimra/macOS/LaunchAtLoginService.swift`):**
+   - Implemented protocol `LaunchAtLoginProvider` to abstract `SMAppService.mainApp` for deterministic sandbox and unit test verification.
+   - Observable `@MainActor` service providing status tracking (`.enabled`, `.notRegistered`, `.requiresApproval`, `.notFound`) and explanatory localized errors (`LaunchAtLoginError`).
+   - Surfaces direct links to macOS System Settings Login Items (`SMAppService.openSystemSettingsLoginItems()`) when approval is required.
+2. **SoundFeedbackService (`Mimra/macOS/SoundFeedbackService.swift`):**
+   - Decoupled sound playback via `SoundPlaying` protocol and native `AppKitSoundPlayer` utilizing standard system sounds (`Pop`, `Tink`, `Purr`, `Blow`).
+   - Persists `playSounds` and `soundEffect` in `UserDefaults`.
+   - Connected via decoupled closure callback `PasteCoordinator.onAudioFeedback` in `AppDelegate.swift`, preventing unwanted cross-dependencies in unit tests.
+3. **System Clipboard Cleansing (`clearSystemClipboard`):**
+   - Added conditional `NSPasteboard.general.clearContents()` execution across `StatusBarCoordinator`, `PanelViewModel`, and `StorageSettingsViewModel` when the `clearSystemClipboard` preference toggle is active.
+4. **GeneralSettingsTab (`Mimra/UI/Settings/SettingsView.swift`):**
+   - Extracted modular `GeneralSettingsTab` presenting launch at login, paste mode, audio feedback, clipboard cleansing, quick switcher cycling, and core engine diagnostics.
+5. **Automated Verification:**
+   - Implemented `tests/general_settings_tests.swift` (Step 47 in `scripts/test-all.sh`), verifying all 4 launch-at-login state transitions, error handling, sound playback persistence, system clipboard clearing, and paste coordinator synchronization.
+
+### Consequences
+* **Positive:** Clean fulfillment of `P7-01` (`F-020`, `F-035`, `F-056`, `F-062`, `F-064`); robust, non-deprecated ServiceManagement launch-at-login; seamless audio feedback; reliable system clipboard purging.
+* **Negative:** None.
+
+---
+
+## ADR-047: Appearance Customization, Positioning Modes, Dynamic Sizing, and Display Disconnect Resilience
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In Phase 7, Task `P7-02` addresses comprehensive visual preferences and window presentation mechanics (`F-028`, `F-032`, `F-034`, `F-035`, `F-058`, `T-UI-05`, `T-UI-07`, `T-UI-08`, `T-UI-09`, `T-SET-03`):
+1. **Window Element Visibility:** Users must have the option to show or hide the search field, header title, and footer toolbar without losing functionality (e.g. typing directly into history continues to search; keyboard navigation and `⌘,` settings remain accessible when footer is hidden).
+2. **Flexible Screen Positioning:** Summoning the panel must support diverse multi-monitor and user workflows: Center of Active Screen, At Mouse Cursor, Center of Main Screen, Directly Below Status Bar Icon, or Remembering Last Position.
+3. **Display Disconnect Recovery (`T-UI-07`):** When external monitors are unplugged while Mimra is closed or in `.rememberLast` mode, geometric placement must automatically clamp coordinates to the remaining visible display frame (`visibleFrame`), preventing windows from becoming stranded off-screen.
+4. **Menu Bar Customization:** Configurable menu bar icon styles (Default clipboard, list clipboard, minimal paperclip, scissors, or completely hidden for hotkey-only users) and live preview snippet of the most recent copied clip.
+5. **Theme Switching:** Instant switching between System, Light (`.aqua`), and Dark (`.darkAqua`) without application restart.
+
+### Decision
+1. **AppearanceConfiguration (`Mimra/macOS/AppearanceConfiguration.swift`):**
+   - Implemented centralized `@MainActor` observable singleton managing `AppearanceTheme`, `PanelPositionMode`, `MenuBarIconStyle`, element toggles (`showSearchField`, `showTitle`, `showFooter`), and dimension constraints (`panelWidth`, `panelHeight`, `previewWidth`).
+   - Defined pure geometric function `AppearanceConfiguration.computePanelOrigin(...)` enforcing mathematical boundary clamping within `screenVisibleFrame` across all positioning modes.
+   - Live theme application via `NSApp?.appearance` and notification broadcast `MimraAppearanceDidChangeNotification`.
+2. **StatusBarCoordinator Live Updates:**
+   - Observes `AppearanceConfiguration.didChangeNotification` to instantly reflect icon style and title snippet updates without relaunch.
+3. **FloatingPanel & FloatingPanelView Integration:**
+   - Panel frame sizing dynamically reflects `panelWidth` and `panelHeight`.
+   - `FloatingPanelView` conditionally presents `PanelSearchBar` and `PanelFooterBar`, maintaining 100% keyboard and hotkey discoverability.
+   - `PreviewCoordinator.previewWidth` dynamically reads from and synchronizes with `AppearanceConfiguration`.
+4. **AppearanceSettingsTab (`Mimra/UI/Settings/SettingsView.swift`):**
+   - Modular tab exposing theme picker, window element toggles, positioning picker, menu bar icon choices, width/height sliders, and slideout preview controls.
+5. **Automated Verification:**
+   - Implemented `tests/appearance_settings_tests.swift` (Step 48 in `scripts/test-all.sh`), verifying theme switching, pure geometric placement calculation, screen edge clamping, display disconnect recovery, menu bar styles, element visibility, and sizing bounds.
+
+### Consequences
+* **Positive:** Complete fulfillment of `P7-02` (`F-028`, `F-032`, `F-034`, `F-035`, `F-058`); live observability without app restart; robust multi-monitor disconnect safety; clean SwiftUI architecture.
+* **Negative:** None.
+
+---
+
+## ADR-048: Search and Storage Settings Synchronization, Match Highlighting, and Format Allowlisting
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In Phase 7, Task `P7-03` requires end-to-end synchronization between user preferences and the core search/storage engines (`F-013`, `F-049`, `F-050`, `F-055`, `T-SRCH-02`, `T-SRCH-03`, `T-HIST-05`):
+1. **Search Modes & Engine Synchronization (`F-049`, `T-SRCH-02`):** Users can configure default search behavior (Fuzzy, Exact Substring, or Rust bounded Regex) in Settings. When settings change, `PanelViewModel` must immediately reload its algorithm, pin arrangement (`.top`, `.bottom`, `.inline`), history sort mode (`.recency`, `.copyCount`, `.firstCopied`), and relevance ranking toggle without requiring application restart.
+2. **Search Highlights (`F-050`, `T-SRCH-03`):** Match highlight styling across title and snippet must support selectable styles (`bold`, `underline`, `italic`, `boldUnderline`, `accent`, `none`) with instant visual updates via `@AppStorage("searchHighlightStyle")`.
+3. **Format Allowlisting (`F-013`, `T-TYPE-05`):** Format enablement toggles (Plain Text, Rich Text HTML/RTF, Images, File references) in `StorageSettingsTab` govern `ClipboardTypeConfiguration`. When a category is disabled, raw clipboard representations of that category are rejected in Swift before reaching memory or SQLite disk storage.
+4. **Retention Policies & Storage Metrics (`F-055`, `T-HIST-05`):** History limit pickers (Item count, age in days, storage budget in bytes) convert deterministically to `RetentionPolicyDto`, enforced transactionally by RustCore's retention sweeper with immediate WAL checkpointing, database vacuuming, and stats refreshes.
+5. **OCR Ingestion Toggle (`F-051`, `T-SRCH-04`):** Background Apple Vision text recognition on captured images can be toggled via `includeOcrInSearch`, avoiding unnecessary background CPU/GPU processing when disabled.
+
+### Decision
+1. **SearchSettingsTab (`Mimra/UI/Settings/SettingsView.swift`):**
+   - Implemented modular `SearchSettingsTab` integrated into `SettingsView` with tabs for General, Appearance, Search & Sorting, Storage, and Privacy.
+   - Exposes pickers for search algorithm (`fuzzy`, `exact`, `regex`), OCR index inclusion toggle, match highlight style picker, pin placement picker, history sort mode picker, and relevance ranking toggle.
+2. **PanelViewModel Synchronization (`PanelViewModel.reloadSearchSettings()`):**
+   - Synchronizes `searchMode`, `pinArrangement`, `sortMode`, and `searchByRelevance` from `UserDefaults.standard`.
+   - Invoked on initialization and when the history panel opens (`FloatingPanelView.task`), guaranteeing that preferences edited in Settings immediately dictate history panel search and layout behavior.
+3. **StorageSettingsViewModel & Type Configuration:**
+   - Standardized `currentPolicyDto` translation mapping integer selections to `RetentionPolicyDto` (treating 0 as unbounded/unlimited).
+   - Wired `ClipboardTypeConfiguration` allowlist checks directly into `ClipboardMonitor.swift`.
+   - Wired `includeOcrInSearch` toggle into `ClipboardMonitor.swift` image ingestion pipeline to guard background Vision OCR execution.
+4. **Automated Verification:**
+   - Created `tests/search_storage_settings_tests.swift` (added as Step 49 in `scripts/test-all.sh`), verifying highlight styles, `PanelViewModel.reloadSearchSettings()` mapping, search mode execution across fuzzy, exact, and regex queries, retention policy DTO conversion, format allowlisting, and unpinned history clearing.
+
+### Consequences
+* **Positive:** Complete fulfillment of `P7-03` (`F-013`, `F-049`, `F-050`, `F-055`); settings precisely govern core search and storage operations; verified with dedicated automated tests.
+* **Negative:** None.
+
+---
+
+## ADR-049: Privacy Management, Application Exclusions Outside /Applications, Custom Ignored UTIs, and Pause Controls
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In Phase 7, Task `P7-04` addresses comprehensive user privacy preferences, application deny lists, custom pasteboard type exclusions, and capture pausing (`F-009`, `F-010`, `F-057`, `T-PRIV-02`, `T-PRIV-03`, `T-SET-02`):
+1. **Application Exclusions Outside `/Applications` (`F-010`, `T-PRIV-03`):** In addition to selecting standard applications installed in `/Applications` or currently running, users need the ability to browse and exclude any executable bundle or binary located anywhere on disk (e.g. `~/Downloads`, `~/Applications`, `/opt`, `/usr/local`). When a copied item originates from an excluded application (checked via bundle ID or binary file path), the pasteboard event must be dropped in Swift before inspecting or reading any payload bytes into memory or disk.
+2. **Custom Ignored UTIs (`F-009`, `T-PRIV-02`):** Users can define arbitrary pasteboard format identifiers (e.g. `com.company.secret` or wildcard patterns like `org.custom.*`) to ignore. The filter must evaluate candidate types case-insensitively and match prefix wildcards before reading payload data.
+3. **Capture State Controls (`F-026`, `F-057`):** Instant pausing of clipboard recording, single-shot "Ignore Next Copy" with automatic disarming after one drop, and remote Universal Clipboard rejection (`com.apple.is-remote-clipboard`).
+4. **Validation & Confirmation (`F-057`, `T-SET-02`):** Adding UTIs must validate syntax and reject duplicates; removing applications or UTIs from the deny list requires distinct alert dialog confirmations to prevent accidental capture resumption.
+
+### Decision
+1. **IgnoredApplication Model (`Mimra/macOS/PrivacyFilter.swift`):**
+   - Defined `IgnoredApplication` conforming to `Codable`, `Identifiable`, and `Sendable`, storing `bundleId`, `name`, and optional `path` to track binaries outside `/Applications`.
+2. **PrivacyConfiguration (`Mimra/macOS/PrivacyConfiguration.swift`):**
+   - `@MainActor` observable singleton managing `isPaused`, `ignoreNextCopy`, `ignoreUniversalClipboard`, `ignoredApplications`, and `customIgnoredUtis`.
+   - Persists state to `UserDefaults` and notifies listeners via `MimraPrivacyConfigurationDidChange`.
+   - Includes `browseAndAddApplication()` leveraging `NSOpenPanel` restricted to `.application` and `.unixExecutable` to pick external binaries.
+   - Enforces UTI syntax validation and duplicate detection with typed `PrivacyConfigurationError`.
+3. **PrivacyFilter Pre-Read Filtering:**
+   - Evaluates `sourceBundleId` and `sourcePath` against `_ignoredAppBundleIds` and `_ignoredAppPaths`.
+   - Implemented wildcard pattern matching `matchesCustomIgnoredUti(_:)` for custom types.
+   - Evaluates metadata only; byte contents are never read when an exclusion matches.
+4. **PrivacySettingsTab (`Mimra/UI/Settings/SettingsView.swift`):**
+   - Replaced placeholder Privacy tab with a dedicated management interface displaying running app picker, file browser, custom UTI input with inline error feedback, removal confirmation alerts, and documented list of built-in sensitive markers.
+5. **Automated Verification:**
+   - Implemented `tests/privacy_settings_tests.swift` (Step 50 in `scripts/test-all.sh`), verifying UTI validation, exact/wildcard UTI rejection, bundle and path-based application exclusions, pause state, single-shot ignore-next disarming, and persistence across re-instantiation.
+
+### Consequences
+* **Positive:** Complete fulfillment of `P7-04` (`F-009`, `F-010`, `F-057`); pre-read privacy guarantees preserved; non-`/Applications` binary exclusions fully supported; confirmed with automated test runner.
+* **Negative:** None.
+
+---
+
+## ADR-050: Hotkey Configuration, Collision Prevention, Reserved Shortcut Guards, and Carbon Re-Registration
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In Phase 7, Task `P7-05` addresses configurable global and in-panel shortcuts (`F-023`, `T-KEY-02`):
+1. **Shortcut Customization:** Users can view, record, change, and reset shortcuts for key workflows:
+   - `summon`: Global shortcut to summon Mimra history panel (default: `⇧⌘C`).
+   - `pin`: In-panel shortcut to pin/unpin selected clip (default: `⌥P`).
+   - `delete`: In-panel shortcut to delete selected clip (default: `⌥Delete`).
+   - `preview`: In-panel shortcut to toggle slideout preview (default: `⌃Space`).
+   - `plainPaste`: In-panel shortcut to paste stripped plain text (default: `⇧Return`).
+2. **Zero Global Keystroke Sniffing:** Strictly adhering to ADR-008 and Definition of Done, global summon uses native Carbon `RegisterEventHotKey`. In-panel shortcuts operate strictly locally inside the active history window via local monitors (`NSEvent.addLocalMonitorForEvents`). No global `CGEventTap` or accessibility keylogger permissions are ever requested or installed.
+3. **Collision Detection & Reserved System Shortcut Protection (`T-KEY-02`):**
+   - Global summon requires at least one modifier key (⌘, ⌥, ⌃, or ⇧) to prevent trapping regular typing.
+   - Rejects macOS reserved shortcuts (⌘Q, ⌘W, ⌘H, ⌘,, ⌘C, ⌘V, ⌘X, ⌘Z, ⌘A).
+   - Prevents assignment collisions across actions (e.g. attempting to assign summon to the same shortcut as pin).
+4. **Dynamic Re-Registration:** When the global summon shortcut changes in Settings, the old Carbon hotkey is unregistered and the new hotkey is registered immediately without requiring an app restart.
+
+### Decision
+1. **KeyShortcut & HotkeyConfiguration (`Mimra/macOS/HotkeyConfiguration.swift`):**
+   - Implemented `KeyShortcut` value type tracking `keyCode`, `modifierFlags`, Carbon modifier bitmasks, and display strings (`⇧⌘C`, `⌥P`, `⌥Delete`, `⌃Space`, `⇧Return`).
+   - Implemented `HotkeyConfiguration` observable singleton persisting shortcuts in `UserDefaults` and broadcasting `MimraHotkeyConfigurationDidChange`.
+   - Built collision engine validating candidates against reserved system combinations and active assignments before committing.
+2. **HotkeyManager Registration Bridge (`Mimra/macOS/HotkeyManager.swift`):**
+   - Added `registerSummonShortcut(_:action:)` translating `KeyShortcut` directly into Carbon `RegisterEventHotKey`.
+   - `AppDelegate` observes `HotkeyConfiguration.didChangeNotification` on `@MainActor` to update `PanelCoordinator.summonKeyCode` and re-register the global Carbon hotkey.
+3. **PanelCoordinator Integration (`Mimra/UI/Panel/FloatingPanel.swift`):**
+   - Dynamic checking in `handlePanelKeyDown` matches against `HotkeyConfiguration.shared.pinShortcut`, `deleteShortcut`, `previewShortcut`, and `plainPasteShortcut` with backward-compatible defaults.
+4. **HotkeysSettingsTab (`Mimra/UI/Settings/SettingsView.swift`):**
+   - Interactive settings tab displaying current badges, recording state with Escape cancellation, per-item reset, and global "Restore All Default Shortcuts".
+5. **Automated Verification:**
+   - Implemented `tests/hotkey_settings_tests.swift` (Step 51 in `scripts/test-all.sh`), verifying default shortcut representations, missing modifiers rejection, reserved shortcut rejection, collision detection, dynamic Carbon registration, and persistence across re-instantiation.
+
+### Consequences
+* **Positive:** Complete fulfillment of `P7-05` (`F-023`, `T-KEY-02`); robust collision safeguards; zero keylogger permissions; verified with dedicated automated tests and native Xcode build.
+* **Negative:** None.
+
+---
+
+## ADR-051: Internationalization, String Catalogs, RTL Layout Direction, and CJK IME Composition Delegation
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In Phase 7, Task `P7-06` addresses comprehensive internationalization, keyboard layout adaptations, and CJK input method editor (IME) composition safety (`F-033`, `F-059`, `T-I18N-01`, `T-I18N-02`):
+1. **Multi-Language Support & String Catalogs (`F-059`, `T-I18N-02`):**
+   - Provide complete translations for initial launch languages: English (`en`), Japanese (`ja`), German (`de`), Turkish (`tr`), and Arabic (`ar`).
+   - Use Apple's modern `.xcstrings` String Catalog JSON format (`Mimra/Resources/Localizable.xcstrings`).
+   - Support dynamic in-app language switching and layout adaptation.
+2. **Right-to-Left (RTL) Layout Direction (`F-059`):**
+   - Correctly identify RTL languages (Arabic) and adjust UI layout directions and leading/trailing alignment accordingly.
+   - Ensure German and Arabic expansion (>30-50% longer strings than English) renders cleanly without truncation or clipping.
+3. **Japanese / CJK IME Marked Text Safety (`F-033`, `T-I18N-01`):**
+   - When typing Japanese (Kanji/Hiragana/Katakana), Chinese (Pinyin), or Korean (Hangul) into the search bar, pressing `Return` converts/commits candidate text, and `Space` steps through candidates.
+   - If the window intercepts `Return` as "commit item selection and paste" or `Escape` as "close panel" during marked text composition, IME input is broken and characters are prematurely committed or discarded.
+   - AppKit's `NSTextInputClient.hasMarkedText()` must be checked. If active, `handlePanelKeyDown(event:)` must immediately return `false` to delegate the event directly to the input method.
+4. **Alternative Keyboard Layouts: Dvorak & French AZERTY (`F-033`, `T-I18N-01`):**
+   - On French AZERTY keyboards, numbers 1-9 on the top row require holding the Shift key or using physical key positions. Virtual keycodes (18-26, 83-92) must reliably route to quick-pick numbers 1-9 without layout confusion.
+   - Provide `KeyCodeHelper` mapping virtual keycodes to logical characters across QWERTY, Dvorak, and AZERTY.
+
+### Decision
+1. **LocalizationService & Catalog (`Mimra/macOS/LocalizationService.swift`):**
+   - Implemented `LocalizationService` managing active language (`AppLanguage`: `english`, `japanese`, `german`, `turkish`, `arabic`), RTL detection (`isRTL`), and lookup with English fallback.
+   - Created Apple String Catalog `Mimra/Resources/Localizable.xcstrings` covering panel empty states, action buttons, settings tabs, and options.
+   - Added Language Picker to `GeneralSettingsTab` in `SettingsView.swift`.
+2. **IME Composition Guard in `FloatingPanel.swift`:**
+   - Added `isImeComposingOverride` hook and `isImeComposing` property checking `(panel?.firstResponder as? NSTextInputClient)?.hasMarkedText() == true`.
+   - At the entry of `handlePanelKeyDown(event:)`, when `isImeComposing` is true, immediately return `false`.
+3. **Layout-Independent Quick-Pick Numbers (`FloatingPanel.swift`):**
+   - `PanelCoordinator.quickPickNumber(for:)` maps hardware virtual keycodes (18..25, 83..92) directly to numbers 1..9, preserving AZERTY and Dvorak compatibility.
+4. **Automated Verification:**
+   - Implemented `tests/localization_ime_tests.swift` (Step 52 in `scripts/test-all.sh`), verifying 5-language catalog lookup, RTL flag detection, layout expansion, CJK IME marked text delegation, Dvorak/AZERTY translations, and persistence across relaunch.
+
+### Consequences
+* **Positive:** Complete fulfillment of `P7-06` (`F-033`, `F-059`, `T-I18N-01`, `T-I18N-02`); IME composition completely protected from panel interception; full support for Dvorak, AZERTY, and RTL languages; 100% verified with automated tests and native Xcode build.
+* **Negative:** None.
+
+---
+
+## ADR-052: VoiceOver Accessibility Semantics, Action Rotors, and Keyboard Alternatives for Pin Drag-and-Drop
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In Phase 7, Task `P7-07` addresses VoiceOver accessibility, item metadata announcements, action rotor shortcuts, and keyboard accessibility alternatives (`F-060`, `T-A11Y-01`):
+1. **VoiceOver Item Semantics (`F-060`, `T-A11Y-01`):**
+   - Individual clipboard items comprise multiple visual elements (thumbnail, icon, text labels, color swatches, badges, and shortcut indicators). Without explicit combining, screen readers announce disconnected, fragmented subviews.
+   - Rows must be declared as a single unified element (`.accessibilityElement(children: .combine)`).
+   - The primary accessibility label must coherently describe title, content kind (Text, Formatted text, Image, File, Color `#HEX`, Web link `domain`), and source application (`from AppName`).
+   - The status value must announce pinned status, custom pin shortcut (`Option+X`), multi-copy count (`copied 3 times`), vanished file warnings (`missing on disk`), and quick-pick index (`Quick-pick Command+1`).
+   - VoiceOver hints must clearly explain keyboard controls (`Return to paste, Shift-Return for plain text, Option-P to pin/unpin, Option-Delete to delete, Option-Command-Up/Down to reorder`).
+2. **Custom Accessibility Action Rotors:**
+   - Screen reader users rely on VoiceOver actions to interact with list rows without moving focus.
+   - Actions required: "Paste", "Copy", "Paste as Plain Text", "Pin / Unpin Item", "Edit Pin Content", "Move Pin Up", "Move Pin Down", "Delete Item".
+3. **Keyboard Drag-and-Drop Alternative for Pinned Items (`F-046`, `F-060`):**
+   - VoiceOver users cannot drag and drop pinned items using a mouse.
+   - Full keyboard shortcuts (`⌥⌘↑` to move pin up, `⌥⌘↓` to move pin down) and programmatic rotor actions must provide a 100% functional alternative to mouse dragging.
+4. **SwiftUI Type Checker Optimization:**
+   - Chaining 10+ `.accessibilityAction` modifiers directly to complex view hierarchies triggers Swift compiler type-checking timeouts.
+   - Encapsulating accessibility properties in an isolated `RowAccessibilityModifier` keeps view builder expression complexity linear.
+
+### Decision
+1. **Unified Accessibility Semantics (`PanelItemRow` in `Mimra/UI/Panel/FloatingPanelView.swift`):**
+   - Implemented `accessibilityDescription`, `accessibilityStatusValue`, and `accessibilityRowHint` covering plain text, images, files, hex colors, and URLs.
+   - Encapsulated rotor actions and accessibility traits in `RowAccessibilityModifier`.
+2. **Keyboard Pin Reordering Support:**
+   - `PanelCoordinator` catches `⌥⌘↑` (key code 126 with Option and Command) and `⌥⌘↓` (key code 125 with Option and Command), calling `viewModel.moveSelectedPinUp()` and `moveSelectedPinDown()`.
+   - Wired `accessibilityAction(named: "Move Pin Up")` and `accessibilityAction(named: "Move Pin Down")` to `viewModel.movePinUp(item:)` and `movePinDown(item:)`.
+3. **Controls and Preview Accessibility:**
+   - Added descriptive accessibility labels to Search Bar text field and clear button.
+   - Added accessibility labels to Preview close button, monospace toggle, quick copy image/text, and OCR text copy buttons.
+   - Added accessibility labels to Pin Editor text view and Save/Cancel buttons.
+4. **Automated Verification:**
+   - Implemented `tests/voiceover_accessibility_tests.swift` (Step 53 in `scripts/test-all.sh`), verifying label generation across all content kinds, status values, hints, rotor actions, and keyboard pin reordering.
+
+### Consequences
+* **Positive:** Complete fulfillment of `P7-07` (`F-060`, `T-A11Y-01`); complete copy/paste lifecycle available via VoiceOver; fully accessible drag-and-drop alternatives for pinned items; verified with automated tests and native Xcode build.
+* **Negative:** None.
+
+---
+
+## ADR-053: Educational Onboarding, Accessibility Consent, and Copy-Only Fallback Mode Architecture
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In Phase 7, Task `P7-08` addresses first-launch educational onboarding, permissions transparency, and reliable copy-only fallback mode (`F-061`, `T-PASTE-03`):
+1. **User Education & Privacy Transparency:**
+   - Users need clear explanations regarding what continuous clipboard history is, where data is stored (100% locally in SQLite on-device with zero telemetry or network calls), and how sensitive items are safeguarded (automatic pre-read discarding of 1Password, Bitwarden, Keychain, and concealed markers).
+2. **Accessibility Permission Clarity & Non-Coercive Fallback (`F-061`):**
+   - macOS Accessibility permission is required *only* to simulate ⌘V into the previously active application.
+   - If Accessibility permission is denied, revoked, or withheld by user choice, Mimra must **not** refuse to launch, crash, or present blocking modal traps.
+   - Mimra must seamlessly operate in **Copy-Only Mode**: selecting an item copies it faithfully to `NSPasteboard`, allowing the user to paste manually with ⌘V.
+3. **Dynamic Permission Transitions (`T-PASTE-03`):**
+   - The application must gracefully handle runtime permission state transitions:
+     - Starting in denied/revoked state: pastes degrade to `.copiedOnly(reason: .accessibilityPermissionDenied)`.
+     - Granted in macOS System Settings: transitions live to auto-pasting with synthetic keystroke injection.
+     - Revoked in macOS System Settings: degrades immediately and safely back to copy-only mode with zero crashes.
+4. **Onboarding Access in Settings:**
+   - The educational onboarding guide must be accessible at any time from General Settings, not just upon initial launch.
+
+### Decision
+1. **OnboardingService (`Mimra/macOS/OnboardingService.swift`):**
+   - Implemented `OnboardingService` with `hasCompletedOnboarding` persistence in `UserDefaults`.
+   - Structured 4 educational topics: `continuousHistory`, `accessibilityAndPaste`, `privacyAndExclusions`, and `shortcutsAndUsage`.
+2. **OnboardingView & Window Controller (`Mimra/UI/Onboarding/OnboardingView.swift`):**
+   - Built modern AppKit/SwiftUI onboarding window controller with step indicator progress, SF Symbols, interactive permission status badge with inline grant action, skip/dismiss controls, and full VoiceOver accessibility.
+   - Added "Welcome & Privacy Guide..." action in `GeneralSettingsTab`.
+   - In `AppDelegate.swift`, conditionally presented on first launch when `shouldShowOnboarding` is true.
+3. **Copy-Only Degradation Engine (`PasteCoordinator.swift`):**
+   - When `accessibilityChecker()` returns false, writes item representation payloads to `NSPasteboard` and returns `.copiedOnly(reason: .accessibilityPermissionDenied)`.
+   - Verified that no synthetic keystroke is posted and system clipboard receives the copied data.
+4. **Automated Verification:**
+   - Implemented `tests/onboarding_permissions_tests.swift` (Step 54 in `scripts/test-all.sh`), verifying onboarding state machine, topic contents, persistence, usable copy-only fallback with denied permission, and dynamic grant/revoke state transitions.
+
+### Consequences
+* **Positive:** Complete fulfillment of `P7-08` (`F-061`, `T-PASTE-03`); non-coercive privacy-first onboarding; copy-only mode independently usable; verified with automated tests and native Xcode build.
+* **Negative:** None.
+
+---
+
+## ADR-054: Appearance Accessibility, Full-Screen Auxiliary Clamping, and VoiceOver Focus Handover
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In Phase 7, Task `P7-09` addresses accessibility appearance features, high-contrast states, Reduce Motion, VoiceOver focus restoration, and full-screen auxiliary space clamping (`F-029`, `F-034`, `T-UI-06`, `T-UI-08`):
+1. **Reduce Motion Compliance (`F-029`):**
+   - Respect user preference `accessibilityReduceMotion` across all animations and transitions (e.g. spring progress dots in Onboarding and slideout previews).
+2. **High-Contrast Selection & Differentiate Without Color (`F-034`):**
+   - When macOS high contrast or differentiate without color settings are active, item selection must not rely purely on subtle accent color changes.
+   - Distinct solid border outlines (`stroke(Color.primary, lineWidth: 2)`) and high-contrast text tags must be provided.
+3. **VoiceOver & System Focus Restoration (`F-029`, `T-UI-06`):**
+   - When the panel is dismissed via Escape, mouse click outside, or item commit, the previously frontmost application must be reactivated (`targetApp?.activate()`). This guarantees VoiceOver focus returns to the user's active document or text editor rather than leaving the screen reader focus stranded.
+4. **Full-Screen Space Overlay & Boundary Clamping (`F-029`, `T-UI-06`):**
+   - When summoned over a full-screen application or space:
+     - Window must declare collection behaviors `.canJoinAllSpaces` and `.fullScreenAuxiliary` with window level `.floating` to float above document overlays without triggering disruptive space transitions.
+     - `computePanelOrigin` must clamp coordinates strictly within `screen.visibleFrame` (preventing panel from extending offscreen or obscuring autohiding menu bar or dock regions).
+     - If the user had previously remembered a panel position on a large external display that has since been disconnected, coordinates must be clamped safely back inside the visible bounds of the primary screen.
+
+### Decision
+1. **Accessibility Environment Observers (`FloatingPanelView.swift` & `OnboardingView.swift`):**
+   - Integrated `@Environment(\.accessibilityReduceMotion)` to eliminate spring animations when Reduce Motion is enabled.
+   - Integrated `@Environment(\.colorSchemeContrast)` and `@Environment(\.accessibilityDifferentiateWithoutColor)` to render high-contrast 2pt solid stroke outlines on selected items.
+2. **Focus Restoration Engine (`FloatingPanel.swift`):**
+   - In `FloatingPanel.hide()`, reactivates `targetApp` via `target.activate()`, ensuring clean focus restoration for VoiceOver and keyboard users.
+3. **Multi-Monitor and Full-Screen Boundary Clamping (`AppearanceConfiguration.computePanelOrigin`):**
+   - Clamps `x` to `[visibleFrame.minX, visibleFrame.maxX - width]` and `y` to `[visibleFrame.minY, visibleFrame.maxY - height]`.
+4. **Automated Verification:**
+   - Implemented `tests/appearance_accessibility_tests.swift` (Step 55 in `scripts/test-all.sh`), verifying `.canJoinAllSpaces` and `.fullScreenAuxiliary` collection behaviors, `.floating` window level, extreme boundary clamping (top-right, bottom-left, stranded disconnected monitors), focus restoration handover, and native appearance mode switching.
+
+### Consequences
+* **Positive:** Complete fulfillment of `P7-09` (`F-029`, `F-034`, `T-UI-06`, `T-UI-08`); Gate G5 exit criteria satisfied; verified with automated test suites and native Xcode build.
+* **Negative:** None.
+
+
+
+
+
+
+
+
 
 
 

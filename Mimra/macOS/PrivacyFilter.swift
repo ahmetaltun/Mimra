@@ -45,6 +45,20 @@ public enum DropReason: Equatable, Sendable, CustomStringConvertible {
     }
 }
 
+/// Model representing an excluded application by bundle identity, display name, and optional binary path (F-010, T-PRIV-03).
+public struct IgnoredApplication: Codable, Equatable, Hashable, Identifiable, Sendable {
+    public var id: String { bundleId }
+    public let bundleId: String
+    public let name: String
+    public let path: String?
+
+    public init(bundleId: String, name: String, path: String? = nil) {
+        self.bundleId = bundleId
+        self.name = name
+        self.path = path
+    }
+}
+
 /// Evaluation result from the privacy filter.
 public enum FilterDecision: Equatable, Sendable {
     case capture
@@ -61,7 +75,9 @@ public final class PrivacyFilter: @unchecked Sendable {
     private var _ignoreUniversalClipboard: Bool = false
 
     // Configurable ignore sets
+    private var _ignoredApplications: [IgnoredApplication] = []
     private var _ignoredAppBundleIds: Set<String> = []
+    private var _ignoredAppPaths: Set<String> = []
     private var _customIgnoredUtis: Set<String> = []
 
     // Format enablement configuration (F-013, F-015)
@@ -148,6 +164,21 @@ public final class PrivacyFilter: @unchecked Sendable {
         }
     }
 
+    public var ignoredApplications: [IgnoredApplication] {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _ignoredApplications
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _ignoredApplications = newValue
+            _ignoredAppBundleIds = Set(newValue.map(\.bundleId))
+            _ignoredAppPaths = Set(newValue.compactMap(\.path))
+        }
+    }
+
     public var ignoredAppBundleIds: Set<String> {
         get {
             lock.lock()
@@ -158,6 +189,19 @@ public final class PrivacyFilter: @unchecked Sendable {
             lock.lock()
             defer { lock.unlock() }
             _ignoredAppBundleIds = newValue
+        }
+    }
+
+    public var ignoredAppPaths: Set<String> {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _ignoredAppPaths
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _ignoredAppPaths = newValue
         }
     }
 
@@ -174,13 +218,28 @@ public final class PrivacyFilter: @unchecked Sendable {
         }
     }
 
+    private func matchesCustomIgnoredUti(_ uti: String) -> Bool {
+        for pattern in _customIgnoredUtis {
+            if pattern.hasSuffix("*") {
+                let prefix = String(pattern.dropLast())
+                if uti.lowercased().hasPrefix(prefix.lowercased()) {
+                    return true
+                }
+            } else if uti.caseInsensitiveCompare(pattern) == .orderedSame {
+                return true
+            }
+        }
+        return false
+    }
+
     // MARK: - Filter Evaluation
 
     /// Evaluates pasteboard metadata to decide if the clipboard event should be captured.
     /// CRITICAL: This method inspects ONLY types and source app metadata, NOT byte contents!
     public func shouldCapture(
         pasteboard: NSPasteboard,
-        sourceBundleId: String?
+        sourceBundleId: String?,
+        sourcePath: String? = nil
     ) -> FilterDecision {
         lock.lock()
         defer { lock.unlock() }
@@ -197,9 +256,14 @@ public final class PrivacyFilter: @unchecked Sendable {
             return .drop(.ignoreNextCopy)
         }
 
-        // 3. Check source application exclusion (F-010)
-        if let bundleId = sourceBundleId, _ignoredAppBundleIds.contains(bundleId) {
-            return .drop(.ignoredSourceApp(bundleId))
+        // 3. Check source application exclusion (F-010, T-PRIV-03)
+        if let bundleId = sourceBundleId {
+            if _ignoredAppBundleIds.contains(bundleId) || _ignoredAppPaths.contains(bundleId) {
+                return .drop(.ignoredSourceApp(bundleId))
+            }
+        }
+        if let path = sourcePath, _ignoredAppPaths.contains(path) {
+            return .drop(.ignoredSourceApp(path))
         }
 
         // 4. Check for empty pasteboard
@@ -221,9 +285,9 @@ public final class PrivacyFilter: @unchecked Sendable {
             }
         }
 
-        // 7. Check user-defined custom ignored UTIs (F-009)
-        for customUti in _customIgnoredUtis {
-            if typeStrings.contains(customUti) {
+        // 7. Check user-defined custom ignored UTIs (F-009, T-PRIV-02)
+        for customUti in typeStrings {
+            if matchesCustomIgnoredUti(customUti) {
                 return .drop(.ignoredType(customUti))
             }
         }
@@ -237,8 +301,8 @@ public final class PrivacyFilter: @unchecked Sendable {
                         return .drop(.concealedMarker(marker))
                     }
                 }
-                for customUti in _customIgnoredUtis {
-                    if itemTypes.contains(customUti) {
+                for customUti in itemTypes {
+                    if matchesCustomIgnoredUti(customUti) {
                         return .drop(.ignoredType(customUti))
                     }
                 }

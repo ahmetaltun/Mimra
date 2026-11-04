@@ -50,19 +50,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 monitor?.reloadTypeConfiguration()
             }
 
+            // Sync initial privacy configuration and observe updates (F-009, F-010, F-057)
+            PrivacyConfiguration.shared.sync(to: monitor.privacyFilter)
+            NotificationCenter.default.addObserver(
+                forName: PrivacyConfiguration.didChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak monitor] _ in
+                MainActor.assumeIsolated {
+                    if let monitor = monitor {
+                        PrivacyConfiguration.shared.sync(to: monitor.privacyFilter)
+                    }
+                }
+            }
+
             // 3. Initialize Panel Coordinator
             let panelCoord = PanelCoordinator(coreClient: client)
+            panelCoord.pasteCoordinator.onAudioFeedback = {
+                SoundFeedbackService.shared.playFeedbackSound()
+            }
             self.panelCoordinator = panelCoord
 
-            // 4. Initialize Hotkey Manager and Register Shift-Command-C (F-017, F-023, F-031)
+            // 4. Initialize Hotkey Manager and Register Summon Shortcut (F-017, F-023, F-031)
             let hotkey = HotkeyManager()
-            panelCoord.summonKeyCode = hotkey.summonKeyCode
-            panelCoord.summonModifiers = hotkey.summonModifierFlags
+            let summonShortcut = HotkeyConfiguration.shared.summonShortcut
+            panelCoord.summonKeyCode = summonShortcut.keyCode
+            panelCoord.summonModifiers = summonShortcut.modifierFlags
 
-            hotkey.registerSummonHotkey { [weak panelCoord] in
+            hotkey.registerSummonShortcut(summonShortcut) { [weak panelCoord] in
                 panelCoord?.handleSummonHotkey()
             }
             self.hotkeyManager = hotkey
+
+            // Observe hotkey configuration updates from Settings (P7-05 / F-023)
+            NotificationCenter.default.addObserver(
+                forName: HotkeyConfiguration.didChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self, weak panelCoord] _ in
+                MainActor.assumeIsolated {
+                    guard let self = self, let hotkey = self.hotkeyManager else { return }
+                    let updatedSummon = HotkeyConfiguration.shared.summonShortcut
+                    panelCoord?.summonKeyCode = updatedSummon.keyCode
+                    panelCoord?.summonModifiers = updatedSummon.modifierFlags
+                    hotkey.registerSummonShortcut(updatedSummon) { [weak panelCoord] in
+                        panelCoord?.handleSummonHotkey()
+                    }
+                }
+            }
 
             // 5. Initialize Status Bar Coordinator
             let coordinator = StatusBarCoordinator(
@@ -72,6 +107,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             coordinator.setup()
             self.statusBarCoordinator = coordinator
+
+            // 6. Present Educational Onboarding Guide on First Launch (P7-08 / F-061)
+            if OnboardingService.shared.shouldShowOnboarding {
+                OnboardingWindowController.shared.show()
+            }
         } catch {
             let errorMsg: String
             if case let CoreError.SchemaMismatch(details) = error {

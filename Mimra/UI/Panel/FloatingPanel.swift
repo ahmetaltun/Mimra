@@ -124,6 +124,7 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
     public var onCycleChanged: ((Int, HistoryItemSummaryDto?) -> Void)?
     public var onCycleCommitted: ((HistoryItemSummaryDto) -> Void)?
     public var onCycleCancelled: (() -> Void)?
+    public var statusItemFrame: CGRect? = nil
 
     private let keyMonitorState = KeyMonitorState()
 
@@ -276,8 +277,34 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
         return nil
     }
 
+    /// Provider hook for testing or inspecting whether IME marked text is currently active (P7-06 / F-033, T-I18N-01).
+    public var isImeComposingOverride: (() -> Bool)? = nil
+
+    /// Checks whether the active window's first responder has active IME marked text (composition in progress).
+    public var isImeComposing: Bool {
+        if let override = isImeComposingOverride {
+            return override()
+        }
+        guard let window = panel else { return false }
+        if let responder = window.firstResponder as? NSTextInputClient {
+            return responder.hasMarkedText()
+        }
+        if let fieldEditor = window.fieldEditor(false, for: nil) as? NSTextInputClient {
+            return fieldEditor.hasMarkedText()
+        }
+        return false
+    }
+
     /// Handles keyboard events directed at the floating panel.
     public func handlePanelKeyDown(event: NSEvent) -> Bool {
+        // -1. Active IME Composition Protection (P7-06 / F-033, T-I18N-01)
+        // If the user has active marked text composition in progress (e.g. Japanese Hiragana/Kanji or
+        // Chinese Pinyin candidate conversion), pass keystrokes directly to NSTextInputClient so Return/Space
+        // commits candidates and Escape cancels marked text without dismissing or committing the panel.
+        if isImeComposing {
+            return false
+        }
+
         // 0. Active Pin Editing Shortcuts (P5-04 / F-045, T-PIN-02)
         if viewModel.editingPinItem != nil {
             if event.keyCode == 53 { // Escape cancels edit
@@ -388,7 +415,9 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
         if event.keyCode == 36 || event.keyCode == 76 {
             cancelCycle()
             let isOption = event.modifierFlags.contains(.option)
-            let isShift = event.modifierFlags.contains(.shift)
+            let plainShortcut = HotkeyConfiguration.shared.plainPasteShortcut
+            let isPlainShortcut = (event.keyCode == plainShortcut.keyCode && event.modifierFlags.contains(plainShortcut.modifierFlags))
+            let isShift = event.modifierFlags.contains(.shift) || isPlainShortcut
             let mode: PasteMode = isShift ? .plainText : .original
             let forcePaste: Bool? = isOption ? !pasteCoordinator.pasteAutomatically : nil
             viewModel.commitSelection(mode: mode, forcePaste: forcePaste)
@@ -423,8 +452,11 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             return true
         }
 
-        // 14. Option-Delete / Command-Delete (keyCode 51, T-KEY-03)
-        if event.keyCode == 51 && (event.modifierFlags.contains(.option) || event.modifierFlags.contains(.command)) {
+        // 14. Delete Selected Item (P7-05 / F-023, T-KEY-03)
+        let deleteShortcut = HotkeyConfiguration.shared.deleteShortcut
+        let matchesDelete = (event.keyCode == deleteShortcut.keyCode && event.modifierFlags.contains(deleteShortcut.modifierFlags)) ||
+                            (event.keyCode == 51 && (event.modifierFlags.contains(.option) || event.modifierFlags.contains(.command)))
+        if matchesDelete {
             cancelCycle()
             Task {
                 _ = await viewModel.deleteSelectedItem()
@@ -432,8 +464,11 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             return true
         }
 
-        // 15. Option-P (Toggle Pin/Unpin on Selected Item, P5-01 / F-020, F-024, T-PIN-01)
-        if event.modifierFlags.contains(.option) && event.charactersIgnoringModifiers?.lowercased() == "p" {
+        // 15. Toggle Pin/Unpin on Selected Item (P5-01 / P7-05 / F-020, F-023, F-024, T-PIN-01)
+        let pinShortcut = HotkeyConfiguration.shared.pinShortcut
+        let matchesPin = (event.keyCode == pinShortcut.keyCode && event.modifierFlags.contains(pinShortcut.modifierFlags)) ||
+                         (event.modifierFlags.contains(.option) && event.charactersIgnoringModifiers?.lowercased() == "p")
+        if matchesPin {
             cancelCycle()
             Task {
                 _ = await viewModel.togglePinSelectedItem()
@@ -462,8 +497,11 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             }
         }
 
-        // 17. Control-Space (Toggle Slideout Preview, P6-01 / P6-02 / F-039, T-PREV-01)
-        if event.keyCode == 49 && event.modifierFlags.contains(.control) {
+        // 17. Toggle Slideout Preview (P6-01 / P6-02 / P7-05 / F-023, F-039, T-PREV-01)
+        let previewShortcut = HotkeyConfiguration.shared.previewShortcut
+        let matchesPreview = (event.keyCode == previewShortcut.keyCode && event.modifierFlags.contains(previewShortcut.modifierFlags)) ||
+                             (event.keyCode == 49 && event.modifierFlags.contains(.control))
+        if matchesPreview {
             cancelCycle()
             togglePreview()
             return true
@@ -510,7 +548,9 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             return existing
         }
 
-        let initialRect = NSRect(x: 0, y: 0, width: 440, height: 540)
+        let width = AppearanceConfiguration.shared.panelWidth
+        let height = AppearanceConfiguration.shared.panelHeight
+        let initialRect = NSRect(x: 0, y: 0, width: width, height: height)
         let panel = FloatingPanel(contentRect: initialRect)
         panel.delegate = self
 
@@ -558,8 +598,8 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             await viewModel.loadData()
         }
 
-        // 3. Center on the active screen containing the mouse cursor
-        centerOnActiveScreen(panel: p)
+        // 3. Position the panel according to AppearanceConfiguration (F-032, T-UI-07)
+        positionPanel(panel: p)
 
         // 4. Make key and order front
         p.makeKeyAndOrderFront(nil)
@@ -574,6 +614,10 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
         if !viewModel.searchText.isEmpty {
             viewModel.searchText = ""
         }
+        // VoiceOver & system focus restoration: reactivate target application (P7-09 / F-029, T-UI-06)
+        if let target = targetApp, !target.isTerminated {
+            target.activate()
+        }
     }
 
     /// Toggles the slideout preview panel for the currently selected item.
@@ -582,13 +626,47 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
         previewCoordinator.toggle(for: viewModel.selectedItem, parent: p)
     }
 
-    /// NSWindowDelegate: Keep preview aligned when parent moves.
+    /// NSWindowDelegate: Keep preview aligned and record last position when parent moves.
     public func windowDidMove(_ notification: Notification) {
+        if let p = panel {
+            AppearanceConfiguration.shared.saveLastPosition(origin: p.frame.origin)
+        }
         previewCoordinator.updateLayout()
     }
 
     /// NSWindowDelegate: Keep preview aligned when parent resizes.
     public func windowDidResize(_ notification: Notification) {
+        previewCoordinator.updateLayout()
+    }
+
+    /// Positions the floating panel on the target display according to active AppearanceConfiguration.
+    public func positionPanel(panel: FloatingPanel) {
+        let config = AppearanceConfiguration.shared
+        let mouseLocation = NSEvent.mouseLocation
+        let targetScreen: NSScreen?
+        if config.positionMode == .centerMain {
+            targetScreen = NSScreen.main ?? NSScreen.screens.first
+        } else {
+            targetScreen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
+                ?? NSScreen.main
+                ?? NSScreen.screens.first
+        }
+
+        guard let screen = targetScreen else { return }
+        let vf = screen.visibleFrame
+        let panelSize = panel.frame.size
+
+        let lastPos = config.lastSavedPosition()
+        let origin = AppearanceConfiguration.computePanelOrigin(
+            panelSize: panelSize,
+            mode: config.positionMode,
+            mouseLocation: mouseLocation,
+            screenVisibleFrame: vf,
+            statusItemFrame: statusItemFrame,
+            lastPosition: lastPos
+        )
+
+        panel.setFrameOrigin(origin)
         previewCoordinator.updateLayout()
     }
 

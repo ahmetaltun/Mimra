@@ -133,6 +133,7 @@ public struct PreviewContainerView: View {
                         .font(.system(size: 13))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close preview")
                 .help("Close preview (^Space)")
             }
         }
@@ -167,6 +168,7 @@ public struct PreviewContainerView: View {
                         .foregroundColor(isMonospaced ? .accentColor : .secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isMonospaced ? "Switch to proportional font" : "Switch to monospaced font")
                 .help(isMonospaced ? "Switch to proportional font" : "Switch to monospaced font")
 
                 // Quick copy full text button
@@ -191,6 +193,7 @@ public struct PreviewContainerView: View {
                     .foregroundColor(isCopiedNotificationShown ? .green : .secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Copy full text to clipboard")
                 .help("Copy full text to clipboard")
             }
             .padding(.horizontal, 12)

@@ -121,6 +121,7 @@ public final class PasteCoordinator {
 
     /// Callback invoked with the final outcome of a paste operation.
     public var onPasteResult: ((PasteResult) -> Void)?
+    public var onAudioFeedback: (@MainActor () -> Void)?
 
     /// Default accessibility checker querying macOS system trust.
     nonisolated public static let defaultAccessibilityChecker: AccessibilityChecker = {
@@ -180,7 +181,7 @@ public final class PasteCoordinator {
         coreClient: CoreClient,
         pasteboard: NSPasteboard = .general,
         provenanceGuard: ClipboardProvenance = .shared,
-        pasteAutomatically: Bool = true,
+        pasteAutomatically: Bool = (UserDefaults.standard.object(forKey: "pasteAutomatically") as? Bool) ?? true,
         activationDelayNanoseconds: UInt64 = 30_000_000,
         accessibilityChecker: @escaping AccessibilityChecker = PasteCoordinator.defaultAccessibilityChecker,
         keystrokePoster: @escaping KeystrokePoster = PasteCoordinator.defaultKeystrokePoster,
@@ -491,8 +492,15 @@ public final class PasteCoordinator {
         // 1. Always load the item into NSPasteboard first
         try await writeToPasteboard(itemId: itemId, mode: mode)
 
+        // Play subtle audio feedback on copy/paste commit (P7-01 / F-035, F-056)
+        await MainActor.run {
+            onAudioFeedback?()
+        }
+
         // 2. Determine whether auto-paste should execute
-        let shouldAutoPaste = forcePaste ?? pasteAutomatically
+        let userDefaultPaste = UserDefaults.standard.object(forKey: "pasteAutomatically") as? Bool
+        let effectivePaste = userDefaultPaste ?? pasteAutomatically
+        let shouldAutoPaste = forcePaste ?? effectivePaste
         guard shouldAutoPaste else {
             logger.debug("Auto-paste disabled. Replay concluded in copy-only mode.")
             let res = PasteResult.copiedOnly(reason: .autoPasteDisabled)

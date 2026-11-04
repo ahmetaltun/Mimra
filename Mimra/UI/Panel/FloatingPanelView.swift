@@ -14,6 +14,10 @@ public struct FloatingPanelView: View {
     @ObservedObject public var accessibilityService: AccessibilityService
     @FocusState private var isSearchFocused: Bool
 
+    @AppStorage("showSearchField") private var showSearchField: Bool = true
+    @AppStorage("showTitle") private var showTitle: Bool = false
+    @AppStorage("showFooter") private var showFooter: Bool = true
+
     public init(viewModel: PanelViewModel, accessibilityService: AccessibilityService? = nil) {
         self.viewModel = viewModel
         self.accessibilityService = accessibilityService ?? AccessibilityService.shared
@@ -21,17 +25,35 @@ public struct FloatingPanelView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // 1. Search Header Bar
-            PanelSearchBar(
-                text: $viewModel.searchText,
-                isFocused: $isSearchFocused,
-                onClear: {
-                    viewModel.searchText = ""
+            // 0. Optional Header Title Bar (F-028, T-UI-05)
+            if showTitle {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.on.clipboard")
+                        .foregroundColor(.accentColor)
+                        .font(.system(size: 11))
+                    Text("Mimra Clipboard")
+                        .font(.system(size: 11, weight: .semibold))
+                    Spacer()
                 }
-            )
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                Divider()
+                    .opacity(0.4)
+            }
 
-            Divider()
-                .opacity(0.4)
+            // 1. Search Header Bar (F-028, T-UI-05)
+            if showSearchField {
+                PanelSearchBar(
+                    text: $viewModel.searchText,
+                    isFocused: $isSearchFocused,
+                    onClear: {
+                        viewModel.searchText = ""
+                    }
+                )
+
+                Divider()
+                    .opacity(0.4)
+            }
 
             // Copy-Only Mode Informational Banner (when Accessibility is not granted)
             if !accessibilityService.isTrusted {
@@ -214,20 +236,22 @@ public struct FloatingPanelView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Divider()
-                .opacity(0.4)
+            // 3. Compact Footer Action Bar (F-028, T-UI-05)
+            if showFooter {
+                Divider()
+                    .opacity(0.4)
 
-            // 3. Compact Footer Action Bar
-            PanelFooterBar(
-                itemCount: viewModel.filteredItems.count,
-                totalCount: viewModel.items.count,
-                onSettings: {
-                    viewModel.onOpenSettings?()
-                },
-                onDismiss: {
-                    viewModel.onDismiss?()
-                }
-            )
+                PanelFooterBar(
+                    itemCount: viewModel.filteredItems.count,
+                    totalCount: viewModel.items.count,
+                    onSettings: {
+                        viewModel.onOpenSettings?()
+                    },
+                    onDismiss: {
+                        viewModel.onDismiss?()
+                    }
+                )
+            }
         }
         .frame(minWidth: 340, idealWidth: 440, maxWidth: 800, minHeight: 320, idealHeight: 540, maxHeight: 1000)
         .background(.ultraThinMaterial)
@@ -240,24 +264,8 @@ public struct FloatingPanelView: View {
             PinEditorOverlay(viewModel: viewModel)
         )
         .task {
-            // Apply persisted sorting & pin arrangement preferences
-            if let pinArr = UserDefaults.standard.string(forKey: "pinArrangement") {
-                switch pinArr {
-                case "bottom": viewModel.pinArrangement = .bottom
-                case "inline": viewModel.pinArrangement = .inline
-                default: viewModel.pinArrangement = .top
-                }
-            }
-            if let sortMode = UserDefaults.standard.string(forKey: "historySortMode") {
-                switch sortMode {
-                case "copyCount": viewModel.sortMode = .copyCount
-                case "firstCopied": viewModel.sortMode = .firstCopied
-                default: viewModel.sortMode = .recency
-                }
-            }
-            if UserDefaults.standard.object(forKey: "searchByRelevance") != nil {
-                viewModel.searchByRelevance = UserDefaults.standard.bool(forKey: "searchByRelevance")
-            }
+            // Apply persisted search, sorting & pin arrangement preferences (P7-03 / F-049)
+            viewModel.reloadSearchSettings()
 
             await viewModel.loadData()
             isSearchFocused = true
@@ -284,11 +292,13 @@ struct PanelSearchBar: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
 
             TextField("Search clipboard history...", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .focused(isFocused)
+                .accessibilityLabel("Search clipboard history")
 
             if !text.isEmpty {
                 Button(action: onClear) {
@@ -297,6 +307,7 @@ struct PanelSearchBar: View {
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search text")
             }
         }
         .padding(.horizontal, 14)
@@ -345,6 +356,7 @@ struct PinEditorOverlay: View {
                                 .font(.system(size: 14))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Cancel editing")
                         .help("Cancel editing (Esc)")
                     }
 
@@ -352,6 +364,7 @@ struct PinEditorOverlay: View {
                     TextEditor(text: $viewModel.editingPinText)
                         .font(.system(size: 12, design: .monospaced))
                         .focused($isTextEditorFocused)
+                        .accessibilityLabel("Pinned item text editor")
                         .padding(6)
                         .background(Color(NSColor.textBackgroundColor))
                         .cornerRadius(6)
@@ -366,6 +379,7 @@ struct PinEditorOverlay: View {
                         Text("\(viewModel.editingPinText.count) characters")
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
+                            .accessibilityLabel("\(viewModel.editingPinText.count) characters in editor")
 
                         Spacer()
 
@@ -374,6 +388,7 @@ struct PinEditorOverlay: View {
                         }
                         .buttonStyle(.bordered)
                         .keyboardShortcut(.cancelAction)
+                        .accessibilityLabel("Cancel editing")
 
                         Button("Save Changes") {
                             Task {
@@ -381,6 +396,7 @@ struct PinEditorOverlay: View {
                             }
                         }
                         .buttonStyle(.borderedProminent)
+                        .accessibilityLabel("Save pinned item changes")
                         .disabled(viewModel.editingPinText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
@@ -465,7 +481,51 @@ struct PanelItemRow: View {
         showUrlPreviews ? UrlDetector.detect(in: item.title) : nil
     }
 
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+
+    private var backgroundView: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isSelected ? Color.accentColor : Color.clear)
+
+            if isSelected && (colorSchemeContrast == .increased || differentiateWithoutColor) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.primary, lineWidth: 2)
+            }
+        }
+    }
+
     var body: some View {
+        rowContent
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(backgroundView)
+            .contentShape(Rectangle())
+            .help(item.title)
+            .onHover { hovering in
+                self.isHovered = hovering
+            }
+            .contextMenu {
+                contextMenuItems
+            }
+            .modifier(RowAccessibilityModifier(
+                item: item,
+                isSelected: isSelected,
+                description: accessibilityDescription,
+                statusValue: accessibilityStatusValue,
+                rowHint: accessibilityRowHint,
+                onCommit: onCommit,
+                onTogglePin: onTogglePin,
+                onEditPin: onEditPin,
+                onMovePinUp: onMovePinUp,
+                onMovePinDown: onMovePinDown,
+                onDelete: onDelete
+            ))
+    }
+
+    @ViewBuilder
+    private var rowContent: some View {
         HStack(alignment: .center, spacing: 10) {
             // Type icon, cached image thumbnail, or color swatch (P3-02, P3-04)
             ItemThumbnailView(
@@ -595,58 +655,118 @@ struct PanelItemRow: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isSelected ? Color.accentColor : Color.clear)
-        )
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            self.isHovered = hovering
+    }
+
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        Button(item.isPinned ? "Unpin Item (⌥P)" : "Pin Item (⌥P)") {
+            onTogglePin?()
         }
-        .contextMenu {
-            Button(item.isPinned ? "Unpin Item (⌥P)" : "Pin Item (⌥P)") {
-                onTogglePin?()
+        if item.isPinned, let key = item.pinKey, !key.isEmpty {
+            Button("Remove Shortcut (⌥\(key.uppercased()))") {
+                onSetPinKey?(nil)
             }
-            if item.isPinned, let key = item.pinKey, !key.isEmpty {
-                Button("Remove Shortcut (⌥\(key.uppercased()))") {
-                    onSetPinKey?(nil)
-                }
-            }
-            if item.isPinned {
-                Divider()
-                Button("Edit Pin Content... (⌘E)") {
-                    onEditPin?()
-                }
-                Button("Move Pin Up (⌥⌘↑)") {
-                    onMovePinUp?()
-                }
-                Button("Move Pin Down (⌥⌘↓)") {
-                    onMovePinDown?()
-                }
-            }
+        }
+        if item.isPinned {
             Divider()
-            Button("Copy to Clipboard") {
-                onCommit?(.original, false)
+            Button("Edit Pin Content... (⌘E)") {
+                onEditPin?()
             }
-            Button("Paste as Plain Text (⇧↵)") {
-                onCommit?(.plainText, nil)
+            Button("Move Pin Up (⌥⌘↑)") {
+                onMovePinUp?()
             }
-            Divider()
-            Button("Delete Item (⌥⌫)", role: .destructive) {
-                onDelete?()
+            Button("Move Pin Down (⌥⌘↓)") {
+                onMovePinDown?()
             }
         }
-        .accessibilityAction(named: "Edit Pin Content") {
-            onEditPin?()
+        Divider()
+        Button("Copy to Clipboard") {
+            onCommit?(.original, false)
         }
-        .accessibilityAction(named: "Move Pin Up") {
-            onMovePinUp?()
+        Button("Paste as Plain Text (⇧↵)") {
+            onCommit?(.plainText, nil)
         }
-        .accessibilityAction(named: "Move Pin Down") {
-            onMovePinDown?()
+        Divider()
+        Button("Delete Item (⌥⌫)", role: .destructive) {
+            onDelete?()
         }
+    }
+
+    // MARK: - VoiceOver Accessibility (P7-07 / F-060, T-A11Y-01)
+
+    var accessibilityDescription: String {
+        var parts: [String] = []
+
+        // 1. Content Title or Fallback
+        let titleText = item.title.isEmpty ? "Untitled item" : item.title
+        parts.append(titleText)
+
+        // 2. Content Type Description
+        let typeDescription: String
+        switch item.contentKind {
+        case "image":
+            typeDescription = "Image"
+        case "file_urls":
+            typeDescription = "File"
+        case "rich_text":
+            typeDescription = "Formatted text"
+        default:
+            if let color = detectedColor {
+                typeDescription = "Color \(color.hexString)"
+            } else if let url = detectedUrl {
+                typeDescription = "Web link \(url.host)"
+            } else {
+                typeDescription = "Text"
+            }
+        }
+        parts.append(typeDescription)
+
+        // 3. Source Application
+        if let bundleId = item.sourceBundleId, !bundleId.isEmpty {
+            let appName = bundleId.split(separator: ".").last.map(String.init) ?? bundleId
+            parts.append("from \(appName)")
+        }
+
+        return parts.joined(separator: ", ")
+    }
+
+    var accessibilityStatusValue: String {
+        var values: [String] = []
+
+        if item.isPinned {
+            if let pinKey = item.pinKey, !pinKey.isEmpty {
+                values.append("Pinned, shortcut Option+\(pinKey.uppercased())")
+            } else {
+                values.append("Pinned")
+            }
+        }
+
+        if item.copyCount > 1 {
+            values.append("copied \(item.copyCount) times")
+        }
+
+        if item.contentKind == "file_urls" && isFileVanished(path: item.snippet) {
+            values.append("missing on disk")
+        }
+
+        if let shortcut = shortcutIndex {
+            values.append("Quick-pick Command+\(shortcut)")
+        }
+
+        return values.joined(separator: ", ")
+    }
+
+    var accessibilityRowHint: String {
+        var hints: [String] = [
+            "Press Return to paste",
+            "Shift-Return for plain text",
+            "Option-P to \(item.isPinned ? "unpin" : "pin")",
+            "Option-Delete to delete"
+        ]
+        if item.isPinned {
+            hints.append("Option-Command-Up or Down to reorder")
+        }
+        return hints.joined(separator: ", ")
     }
 
     private func isFileVanished(path: String) -> Bool {
@@ -663,6 +783,39 @@ struct PanelItemRow: View {
             return false
         }
         return !FileManager.default.fileExists(atPath: cleanPath)
+    }
+}
+
+// MARK: - Row Accessibility Modifier (P7-07 / F-060, T-A11Y-01)
+
+private struct RowAccessibilityModifier: ViewModifier {
+    let item: HistoryItemSummaryDto
+    let isSelected: Bool
+    let description: String
+    let statusValue: String
+    let rowHint: String
+    let onCommit: ((PasteMode, Bool?) -> Void)?
+    let onTogglePin: (() -> Void)?
+    let onEditPin: (() -> Void)?
+    let onMovePinUp: (() -> Void)?
+    let onMovePinDown: (() -> Void)?
+    let onDelete: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(description)
+            .accessibilityValue(statusValue)
+            .accessibilityHint(rowHint)
+            .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+            .accessibilityAction(named: "Paste") { onCommit?(.original, nil) }
+            .accessibilityAction(named: "Copy") { onCommit?(.original, false) }
+            .accessibilityAction(named: "Paste as Plain Text") { onCommit?(.plainText, nil) }
+            .accessibilityAction(named: item.isPinned ? "Unpin Item" : "Pin Item") { onTogglePin?() }
+            .accessibilityAction(named: "Edit Pin Content") { onEditPin?() }
+            .accessibilityAction(named: "Move Pin Up") { onMovePinUp?() }
+            .accessibilityAction(named: "Move Pin Down") { onMovePinDown?() }
+            .accessibilityAction(named: "Delete Item") { onDelete?() }
     }
 }
 
@@ -784,6 +937,7 @@ struct PanelFooterBar: View {
             Text("\(itemCount) of \(totalCount) items")
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
+                .accessibilityLabel("\(itemCount) of \(totalCount) items in history")
 
             Spacer()
 
@@ -793,6 +947,7 @@ struct PanelFooterBar: View {
                 ShortcutHint(key: "↵", label: "Paste")
                 ShortcutHint(key: "⎋", label: "Dismiss")
             }
+            .accessibilityHidden(true)
 
             Button(action: onSettings) {
                 Image(systemName: "gearshape")
@@ -800,6 +955,7 @@ struct PanelFooterBar: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Open Mimra Settings")
             .help("Open Mimra Settings (⌘,)")
         }
         .padding(.horizontal, 12)
@@ -854,6 +1010,7 @@ struct CopyOnlyBanner: View {
             .buttonStyle(.bordered)
             .controlSize(.mini)
             .font(.system(size: 10, weight: .medium))
+            .accessibilityLabel("Enable auto-paste in Accessibility Settings")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)

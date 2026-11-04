@@ -135,24 +135,56 @@ final class StatusBarCoordinator: NSObject {
         self.contextMenu = menu
         self.statusItem = item
         updateStatusItemAppearance()
+
+        // Observe live appearance and menu bar customization changes (P7-02 / F-035, T-UI-09)
+        NotificationCenter.default.addObserver(
+            forName: AppearanceConfiguration.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.updateStatusItemAppearance()
+            }
+        }
+
+        // Observe privacy configuration changes (P7-04 / F-057)
+        NotificationCenter.default.addObserver(
+            forName: PrivacyConfiguration.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.updateStatusItemAppearance()
+            }
+        }
     }
 
-    /// Updates the menu bar icon and accessibility description according to the pause state.
+    /// Updates the menu bar icon and accessibility description according to the pause state and preferences.
     public func updateStatusItemAppearance() {
-        guard let button = statusItem?.button else { return }
+        guard let item = statusItem, let button = item.button else { return }
+        let config = AppearanceConfiguration.shared
         let isPaused = monitor.privacyFilter.isPaused
-        if isPaused {
-            button.image = NSImage(
-                systemSymbolName: "pause.circle",
-                accessibilityDescription: "Mimra Clipboard Manager (Capture Paused)"
-            )
-        } else {
-            button.image = NSImage(
-                systemSymbolName: "doc.on.clipboard",
-                accessibilityDescription: "Mimra Clipboard Manager"
-            )
+
+        if config.iconStyle == .hidden {
+            item.isVisible = false
+            return
         }
+        item.isVisible = true
+
+        let iconSymbol = isPaused ? "pause.circle" : (config.iconStyle.systemSymbolName ?? "doc.on.clipboard")
+        button.image = NSImage(
+            systemSymbolName: iconSymbol,
+            accessibilityDescription: isPaused ? "Mimra Clipboard Manager (Capture Paused)" : "Mimra Clipboard Manager"
+        )
         button.image?.isTemplate = true
+
+        if config.showRecentCopyInMenuBar, let recent = panelCoordinator.viewModel.items.first {
+            let titleSnippet = String(recent.title.prefix(20))
+            button.title = " \(titleSnippet)"
+        } else {
+            button.title = ""
+        }
+
         pauseMenuItem?.title = isPaused ? "Resume Capture" : "Pause Capture"
     }
 
@@ -192,17 +224,23 @@ final class StatusBarCoordinator: NSObject {
 
     @objc public func togglePause() {
         let currentlyPaused = monitor.privacyFilter.isPaused
-        monitor.privacyFilter.isPaused = !currentlyPaused
+        let newPaused = !currentlyPaused
+        monitor.privacyFilter.isPaused = newPaused
+        PrivacyConfiguration.shared.isPaused = newPaused
         updateStatusItemAppearance()
     }
 
     @objc public func triggerIgnoreNextCopy() {
         monitor.privacyFilter.ignoreNextCopy = true
+        PrivacyConfiguration.shared.ignoreNextCopy = true
     }
 
     @objc public func clearUnpinned() {
         Task {
             await OCRService.shared.cancelAll()
+            if UserDefaults.standard.bool(forKey: "clearSystemClipboard") {
+                NSPasteboard.general.clearContents()
+            }
             _ = try? await coreClient.clearUnpinned()
             _ = try? await coreClient.checkpointWal()
         }
@@ -219,6 +257,9 @@ final class StatusBarCoordinator: NSObject {
         if alert.runModal() == .alertFirstButtonReturn {
             Task {
                 await OCRService.shared.cancelAll()
+                if UserDefaults.standard.bool(forKey: "clearSystemClipboard") {
+                    NSPasteboard.general.clearContents()
+                }
                 _ = try? await coreClient.clearAll()
                 _ = try? await coreClient.checkpointWal()
                 try? await coreClient.vacuumDatabase()

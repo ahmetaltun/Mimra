@@ -77,6 +77,35 @@ public final class PanelViewModel: ObservableObject {
 
     public init(coreClient: CoreClient) {
         self.coreClient = coreClient
+        reloadSearchSettings()
+    }
+
+    /// Synchronizes active search algorithm, sort mode, and pin placement from UserDefaults (P7-03 / F-049).
+    public func reloadSearchSettings() {
+        if let modeStr = UserDefaults.standard.string(forKey: "searchMode") {
+            switch modeStr {
+            case "exact": self.searchMode = .exact
+            case "regex": self.searchMode = .regex
+            default: self.searchMode = .fuzzy
+            }
+        }
+        if let pinArr = UserDefaults.standard.string(forKey: "pinArrangement") {
+            switch pinArr {
+            case "bottom": self.pinArrangement = .bottom
+            case "inline": self.pinArrangement = .inline
+            default: self.pinArrangement = .top
+            }
+        }
+        if let sortMode = UserDefaults.standard.string(forKey: "historySortMode") {
+            switch sortMode {
+            case "copyCount": self.sortMode = .copyCount
+            case "firstCopied": self.sortMode = .firstCopied
+            default: self.sortMode = .recency
+            }
+        }
+        if UserDefaults.standard.object(forKey: "searchByRelevance") != nil {
+            self.searchByRelevance = UserDefaults.standard.bool(forKey: "searchByRelevance")
+        }
     }
 
     /// Items filtered in real-time by search text matching title or snippet.
@@ -500,6 +529,9 @@ public final class PanelViewModel: ObservableObject {
     @discardableResult
     public func clearUnpinned() async -> UInt64 {
         await OCRService.shared.cancelAll()
+        if UserDefaults.standard.bool(forKey: "clearSystemClipboard") {
+            NSPasteboard.general.clearContents()
+        }
         do {
             let count = try await coreClient.clearUnpinned()
             await loadData()
@@ -514,6 +546,9 @@ public final class PanelViewModel: ObservableObject {
     @discardableResult
     public func clearAll() async -> UInt64 {
         await OCRService.shared.cancelAll()
+        if UserDefaults.standard.bool(forKey: "clearSystemClipboard") {
+            NSPasteboard.general.clearContents()
+        }
         do {
             let count = try await coreClient.clearAll()
             await loadData()

@@ -78,6 +78,7 @@ public struct ImagePreviewView: View {
                     Image(nsImage: payload.image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
+                        .accessibilityLabel("Image preview: \(payload.metadata.format), \(payload.metadata.width) by \(payload.metadata.height)")
                         .padding(16)
                         .shadow(color: Color.black.opacity(0.18), radius: 6, x: 0, y: 3)
                 } else if isLoading {
@@ -190,6 +191,7 @@ public struct ImagePreviewView: View {
                 .foregroundColor(isCopiedNotificationShown ? .green : .secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Copy image to clipboard")
             .help("Copy original image to clipboard")
         }
         .padding(.horizontal, 12)
@@ -223,6 +225,7 @@ public struct ImagePreviewView: View {
                     .foregroundColor(isOcrCopiedNotificationShown ? .green : .secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Copy OCR extracted text to clipboard")
                 .help("Copy extracted OCR text to clipboard")
             }
         case .noTextDetected:

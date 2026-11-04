@@ -1,6 +1,7 @@
 import SwiftUI
 import Foundation
 import AppKit
+import Carbon
 
 // ==============================================================================
 // Mimra — Storage Settings View Model (P4-06 / F-025, F-055, T-HIST-01, T-HIST-05)
@@ -129,6 +130,9 @@ public final class StorageSettingsViewModel: ObservableObject {
         isPerformingAction = true
         statusMessage = nil
         await OCRService.shared.cancelAll()
+        if UserDefaults.standard.bool(forKey: "clearSystemClipboard") {
+            NSPasteboard.general.clearContents()
+        }
         do {
             let count = try await coreClient.clearUnpinned()
             _ = try? await coreClient.checkpointWal()
@@ -146,6 +150,9 @@ public final class StorageSettingsViewModel: ObservableObject {
         isPerformingAction = true
         statusMessage = nil
         await OCRService.shared.cancelAll()
+        if UserDefaults.standard.bool(forKey: "clearSystemClipboard") {
+            NSPasteboard.general.clearContents()
+        }
         do {
             let count = try await coreClient.clearAll()
             _ = try? await coreClient.checkpointWal()
@@ -402,6 +409,763 @@ public struct StorageSettingsTab: View {
 }
 
 // ==============================================================================
+// Mimra — General Settings Tab (P7-01 / F-020, F-056, F-062, F-064, T-SET-01, T-REL-01)
+// Launch at login, paste mode, audio feedback, and system clipboard cleansing.
+// ==============================================================================
+
+public struct GeneralSettingsTab: View {
+    @ObservedObject var launchAtLoginService = LaunchAtLoginService.shared
+    @ObservedObject var soundService = SoundFeedbackService.shared
+    @ObservedObject var accessibilityService = AccessibilityService.shared
+    @ObservedObject var localizationService = LocalizationService.shared
+
+    @AppStorage("pasteAutomatically") private var pasteAutomatically: Bool = true
+    @AppStorage("clearSystemClipboard") private var clearSystemClipboard: Bool = false
+    @AppStorage("cycleModeEnabled") private var cycleModeEnabled: Bool = true
+
+    let engineVersion: String
+
+    public init(engineVersion: String = coreVersion()) {
+        self.engineVersion = engineVersion
+    }
+
+    public var body: some View {
+        Form {
+            Section("Launch & Startup") {
+                Toggle("Launch Mimra at login", isOn: Binding(
+                    get: { launchAtLoginService.isEnabled },
+                    set: { launchAtLoginService.setEnabled($0) }
+                ))
+                .disabled(!launchAtLoginService.isSupported)
+
+                if launchAtLoginService.requiresApproval {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("Approval required in macOS System Settings.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button("Open Login Items") {
+                            launchAtLoginService.openSystemSettings()
+                        }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                    }
+                } else if !launchAtLoginService.isSupported {
+                    Text("Launch at login requires Mimra to run as a packaged application bundle.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                if let errorMsg = launchAtLoginService.lastErrorMessage {
+                    Text(errorMsg)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
+
+            Section("Language & Localization") {
+                Picker("Language", selection: $localizationService.currentLanguage) {
+                    ForEach(AppLanguage.allCases) { lang in
+                        Text(lang.displayName).tag(lang)
+                    }
+                }
+
+                Text("Supports English, Japanese, German, Turkish, and Arabic with automatic layout expansion and RTL text direction.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Paste Behavior & Permissions") {
+                Toggle("Paste automatically into target app", isOn: $pasteAutomatically)
+
+                Text("When enabled, selecting an item pastes it directly into the previous app. Hold ⌥ (Option) to copy without pasting. When disabled, selecting copies to clipboard.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Text("Accessibility Permission")
+                    Spacer()
+                    if accessibilityService.isTrusted {
+                        Label("Granted", systemImage: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                    } else {
+                        Button("Grant Permission...") {
+                            accessibilityService.promptForPermission()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                }
+
+                if !accessibilityService.isTrusted {
+                    HStack {
+                        Text("Copy-Only Mode active until permission is granted in macOS System Settings.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button("Open System Settings") {
+                            accessibilityService.openSystemSettings()
+                        }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                    }
+                }
+            }
+
+            Section("Audio Feedback") {
+                Toggle("Play sound on copy and paste", isOn: $soundService.isEnabled)
+
+                if soundService.isEnabled {
+                    HStack {
+                        Picker("Sound Effect", selection: $soundService.selectedSound) {
+                            ForEach(SoundEffect.allCases) { effect in
+                                Text(effect.displayName).tag(effect)
+                            }
+                        }
+                        .frame(maxWidth: 220)
+
+                        Spacer()
+
+                        Button("Test Sound") {
+                            soundService.testSound()
+                        }
+                        .controlSize(.small)
+                    }
+                }
+            }
+
+            Section("Clipboard Cleansing") {
+                Toggle("Clear system clipboard when clearing history", isOn: $clearSystemClipboard)
+
+                Text("When clearing unpinned items or clearing all history, also clear macOS's active system pasteboard so no content remains in the system clipboard.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Summon & Keyboard Cycling") {
+                Toggle("Cycle through history with summon key", isOn: $cycleModeEnabled)
+                Text("Hold the summon shortcut modifier and press the summon key again to cycle through items. Releasing the modifier commits the selection (Quick Switcher).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Educational Guide & Privacy") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Welcome & Privacy Guide")
+                            .font(.body)
+                        Text("Review continuous history, Accessibility auto-paste, sensitive exclusions, and privacy safeguards.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Open Guide...") {
+                        OnboardingWindowController.shared.show()
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Open Welcome & Privacy Guide")
+                }
+            }
+
+            Section("Application & Engine Core") {
+                LabeledContent("Platform", value: "macOS 15.0+ (Apple Silicon)")
+                LabeledContent("Status", value: "Menu Bar Agent Active")
+                LabeledContent("RustCore Engine", value: "v\(engineVersion)")
+                LabeledContent("Deduplication", value: "BLAKE3 Cryptographic Hashing")
+                LabeledContent("Search & Storage", value: "SQLite + FTS5 (WAL Mode)")
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// ==============================================================================
+// Mimra — Appearance Settings Tab (P7-02 / F-028, F-032, F-034, F-035, F-058, T-SET-03)
+// Visual customization: theme, elements visibility, position, menu bar, and dimensions.
+// ==============================================================================
+
+public struct AppearanceSettingsTab: View {
+    @ObservedObject var appearanceConfig = AppearanceConfiguration.shared
+
+    @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
+    @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
+    @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
+
+    // Slideout Preview preferences
+    @AppStorage("previewAutoOpenEnabled") private var previewAutoOpenEnabled: Bool = false
+    @AppStorage("previewDelayMs") private var previewDelayMs: Int = 400
+
+    public init() {}
+
+    public var body: some View {
+        Form {
+            Section("Theme & Display") {
+                Picker("Application Theme", selection: $appearanceConfig.theme) {
+                    ForEach(AppearanceTheme.allCases) { theme in
+                        Text(theme.displayName).tag(theme)
+                    }
+                }
+            }
+
+            Section("Window Layout & Elements") {
+                Toggle("Show search bar", isOn: $appearanceConfig.showSearchField)
+                Toggle("Show window header title", isOn: $appearanceConfig.showTitle)
+                Toggle("Show footer toolbar", isOn: $appearanceConfig.showFooter)
+
+                Text("When the search bar or footer is hidden, searching by typing, keyboard navigation, and ⌘, (Command-,) settings remain fully accessible.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Panel Positioning") {
+                Picker("Position", selection: $appearanceConfig.positionMode) {
+                    ForEach(PanelPositionMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+
+                Text("Controls where the history panel appears when summoned via global shortcut.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Menu Bar Customization") {
+                Picker("Status Bar Icon", selection: $appearanceConfig.iconStyle) {
+                    ForEach(MenuBarIconStyle.allCases) { style in
+                        Text(style.displayName).tag(style)
+                    }
+                }
+
+                Toggle("Show recent copy snippet in menu bar", isOn: $appearanceConfig.showRecentCopyInMenuBar)
+            }
+
+            Section("Item Previews in List") {
+                Toggle("Show HEX color swatch", isOn: $showColorSwatches)
+                Toggle("Show URL domain badges", isOn: $showUrlPreviews)
+                Toggle("Show source application icon", isOn: $showSourceAppIcon)
+            }
+
+            Section("Dimensions & Sizing") {
+                HStack {
+                    Text("Panel Width: \(Int(appearanceConfig.panelWidth)) pt")
+                    Spacer()
+                    Slider(value: Binding(
+                        get: { Double(appearanceConfig.panelWidth) },
+                        set: { appearanceConfig.panelWidth = CGFloat($0) }
+                    ), in: 340...640, step: 20)
+                    .frame(width: 160)
+                }
+
+                HStack {
+                    Text("Panel Height: \(Int(appearanceConfig.panelHeight)) pt")
+                    Spacer()
+                    Slider(value: Binding(
+                        get: { Double(appearanceConfig.panelHeight) },
+                        set: { appearanceConfig.panelHeight = CGFloat($0) }
+                    ), in: 360...800, step: 20)
+                    .frame(width: 160)
+                }
+
+                HStack {
+                    Text("Preview Width: \(Int(appearanceConfig.previewWidth)) pt")
+                    Spacer()
+                    Slider(value: Binding(
+                        get: { Double(appearanceConfig.previewWidth) },
+                        set: { appearanceConfig.previewWidth = CGFloat($0) }
+                    ), in: 280...540, step: 20)
+                    .frame(width: 160)
+                }
+            }
+
+            Section("Slideout Preview") {
+                Toggle("Open preview automatically on selection", isOn: $previewAutoOpenEnabled)
+
+                if previewAutoOpenEnabled {
+                    Picker("Auto-Open Delay", selection: $previewDelayMs) {
+                        Text("Fast (200 ms)").tag(200)
+                        Text("Normal (400 ms)").tag(400)
+                        Text("Relaxed (600 ms)").tag(600)
+                        Text("Slow (1000 ms)").tag(1000)
+                    }
+                }
+
+                Text("Toggle manually anytime inside history using ⌃Space (Control-Space).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// ==============================================================================
+// Mimra — Search & Sorting Settings Tab (P7-03 / F-049, F-050, F-051, F-054)
+// Search algorithms, match highlights, OCR indexing inclusion, and ordering.
+// ==============================================================================
+
+public struct SearchSettingsTab: View {
+    @AppStorage("searchMode") private var searchModeRaw: String = "fuzzy"
+    @AppStorage("searchHighlightStyle") private var searchHighlightStyleRaw: String = SearchHighlightStyle.bold.rawValue
+    @AppStorage("pinArrangement") private var pinArrangementRaw: String = "top"
+    @AppStorage("historySortMode") private var historySortModeRaw: String = "recency"
+    @AppStorage("searchByRelevance") private var searchByRelevance: Bool = true
+    @AppStorage("includeOcrInSearch") private var includeOcrInSearch: Bool = true
+
+    public init() {}
+
+    public var body: some View {
+        Form {
+            Section("Search Mode & Engine") {
+                Picker("Algorithm", selection: $searchModeRaw) {
+                    Text("Mixed / Fuzzy (Subsequence + Substring)").tag("fuzzy")
+                    Text("Exact Substring").tag("exact")
+                    Text("Regular Expression (Rust Regex)").tag("regex")
+                }
+
+                Toggle("Include recognized image text (OCR)", isOn: $includeOcrInSearch)
+
+                Text("Fuzzy search matches acronyms and consecutive letters with recency boosts. Exact search requires strict substring matches. Regex supports Rust linear-time regex syntax.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Search Highlights") {
+                Picker("Match Highlight Style", selection: $searchHighlightStyleRaw) {
+                    ForEach(SearchHighlightStyle.allCases, id: \.rawValue) { style in
+                        Text(style.displayName).tag(style.rawValue)
+                    }
+                }
+
+                Text("Styling used to highlight matching characters in titles and content snippets.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("History Sorting & Pins") {
+                Picker("Pin Placement", selection: $pinArrangementRaw) {
+                    Text("Top of list").tag("top")
+                    Text("Bottom of list").tag("bottom")
+                    Text("Inline (mixed)").tag("inline")
+                }
+
+                Picker("Sort History By", selection: $historySortModeRaw) {
+                    Text("Recency (last copied)").tag("recency")
+                    Text("Number of copies").tag("copyCount")
+                    Text("First copied (creation)").tag("firstCopied")
+                }
+
+                Toggle("Rank search results by relevance", isOn: $searchByRelevance)
+            }
+
+            Section("Information") {
+                Text("Pin placement controls whether pinned items stay grouped at the top or bottom of the history list, or mixed naturally in chronological order.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// ==============================================================================
+// Mimra — Privacy Settings Tab (P7-04 / F-009, F-010, F-057, T-SET-02)
+// Excluded applications, custom ignored UTIs, pause controls, and built-in protections.
+// ==============================================================================
+
+public struct PrivacySettingsTab: View {
+    @ObservedObject var privacyConfig = PrivacyConfiguration.shared
+
+    @State private var newUtiText: String = ""
+    @State private var utiErrorMessage: String? = nil
+    @State private var appToRemove: IgnoredApplication? = nil
+    @State private var utiToRemove: String? = nil
+
+    public init() {}
+
+    public var body: some View {
+        Form {
+            Section("Capture Controls & State") {
+                Toggle("Pause clipboard capture", isOn: $privacyConfig.isPaused)
+
+                HStack {
+                    Button(action: {
+                        privacyConfig.ignoreNextCopy = true
+                    }) {
+                        Label(
+                            privacyConfig.ignoreNextCopy ? "Ignore Next Copy (Armed)" : "Ignore Next Copy",
+                            systemImage: privacyConfig.ignoreNextCopy ? "shield.fill" : "shield"
+                        )
+                    }
+                    .disabled(privacyConfig.isPaused)
+
+                    if privacyConfig.ignoreNextCopy {
+                        Text("Next copy event will be dropped without storing.")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
+
+                Toggle("Ignore remote Universal Clipboard payloads", isOn: $privacyConfig.ignoreUniversalClipboard)
+
+                Text("When paused, Mimra stops recording all clipboard items. 'Ignore Next Copy' silently drops only the immediate next copy action.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Excluded Applications (Never Recorded)") {
+                if privacyConfig.ignoredApplications.isEmpty {
+                    Text("No applications excluded. Copies from all apps will be recorded.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    List {
+                        ForEach(privacyConfig.ignoredApplications) { app in
+                            HStack(spacing: 10) {
+                                if let icon = AppIconService.shared.cachedIcon(for: app.bundleId) {
+                                    Image(nsImage: icon)
+                                        .resizable()
+                                        .frame(width: 18, height: 18)
+                                } else {
+                                    Image(systemName: "app.dashed")
+                                        .frame(width: 18, height: 18)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(app.name)
+                                        .font(.body)
+                                    Text(app.bundleId)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                Button(action: {
+                                    appToRemove = app
+                                }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Remove exclusion for \(app.name)")
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                    .frame(minHeight: 80, maxHeight: 140)
+                }
+
+                HStack(spacing: 12) {
+                    Menu {
+                        let available = privacyConfig.getRunningApplications()
+                        if available.isEmpty {
+                            Text("No other running applications found")
+                        } else {
+                            ForEach(available) { running in
+                                Button(running.name) {
+                                    try? privacyConfig.addApplication(
+                                        bundleId: running.bundleId,
+                                        name: running.name,
+                                        path: running.path
+                                    )
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Add Running Application...", systemImage: "plus.app")
+                    }
+
+                    Button(action: {
+                        _ = try? privacyConfig.browseAndAddApplication()
+                    }) {
+                        Label("Browse File...", systemImage: "folder")
+                    }
+                }
+
+                Text("Supports applications located anywhere on disk, including outside /Applications (F-010, T-PRIV-03).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Custom Ignored Pasteboard Types (UTIs)") {
+                if privacyConfig.customIgnoredUtis.isEmpty {
+                    Text("No custom UTIs defined. Only standard formats and concealed markers are evaluated.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    List {
+                        ForEach(privacyConfig.customIgnoredUtis, id: \.self) { uti in
+                            HStack {
+                                Image(systemName: "tag.slash")
+                                    .foregroundColor(.orange)
+                                Text(uti)
+                                    .font(.system(.body, design: .monospaced))
+
+                                Spacer()
+
+                                Button(action: {
+                                    utiToRemove = uti
+                                }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Remove ignored UTI \(uti)")
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                    .frame(minHeight: 60, maxHeight: 110)
+                }
+
+                HStack {
+                    TextField("e.g. com.company.secret or org.custom.*", text: $newUtiText)
+                        .textFieldStyle(.roundedBorder)
+
+                    Button("Add UTI") {
+                        do {
+                            try privacyConfig.addCustomUti(newUtiText)
+                            newUtiText = ""
+                            utiErrorMessage = nil
+                        } catch {
+                            utiErrorMessage = error.localizedDescription
+                        }
+                    }
+                    .disabled(newUtiText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                if let err = utiErrorMessage {
+                    Text(err)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+
+                Text("Matching pasteboard items (exact or prefix wildcards like *.secret) are dropped before payload bytes are read into memory (F-009, T-PRIV-02).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Built-In Sensitive Marker Guards") {
+                Text("Password managers and secure apps tag sensitive copies. Mimra automatically filters all known concealed markers before data touches memory or disk:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("• 1Password (`com.agilebits.onepassword`)\n• Bitwarden (`com.bitwarden.desktop`, `com.8bit.bitwarden`)\n• KeePassXC (`org.keepassxc.keepassxc`)\n• Apple System Markers (`org.nspasteboard.ConcealedType`, `AutoGeneratedType`, `TransientType`)\n• Strongbox, LastPass, Dashlane, Enpass, NordPass, RoboForm")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+
+                LabeledContent("Network Access", value: "Zero (Strictly Offline)")
+                LabeledContent("Telemetry / Analytics", value: "Disabled")
+            }
+        }
+        .formStyle(.grouped)
+        .alert("Remove Application Exclusion?", isPresented: Binding(
+            get: { appToRemove != nil },
+            set: { if !$0 { appToRemove = nil } }
+        )) {
+            Button("Cancel", role: .cancel) { appToRemove = nil }
+            Button("Remove", role: .destructive) {
+                if let app = appToRemove {
+                    privacyConfig.removeApplication(bundleId: app.bundleId)
+                    appToRemove = nil
+                }
+            }
+        } message: {
+            if let app = appToRemove {
+                Text("Copies from '\(app.name)' will once again be recorded into clipboard history.")
+            }
+        }
+        .alert("Remove Ignored UTI?", isPresented: Binding(
+            get: { utiToRemove != nil },
+            set: { if !$0 { utiToRemove = nil } }
+        )) {
+            Button("Cancel", role: .cancel) { utiToRemove = nil }
+            Button("Remove", role: .destructive) {
+                if let uti = utiToRemove {
+                    privacyConfig.removeCustomUti(uti)
+                    utiToRemove = nil
+                }
+            }
+        } message: {
+            if let uti = utiToRemove {
+                Text("Pasteboard representations matching '\(uti)' will no longer be excluded.")
+            }
+        }
+    }
+}
+
+// ==============================================================================
+// Mimra — Hotkeys Settings Tab (P7-05 / F-023, T-KEY-02)
+// Record, modify, validate, and reset global and in-panel shortcuts.
+// ==============================================================================
+
+public struct HotkeysSettingsTab: View {
+    @ObservedObject var hotkeyConfig = HotkeyConfiguration.shared
+
+    @State private var recordingAction: HotkeyActionType? = nil
+    @State private var errorMessage: String? = nil
+    @State private var keyMonitor: Any? = nil
+
+    public init() {}
+
+    public var body: some View {
+        Form {
+            if let err = errorMessage {
+                Section {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                        Text(err)
+                            .font(.callout)
+                            .foregroundColor(.red)
+                        Spacer()
+                        Button(action: { errorMessage = nil }) {
+                            Image(systemName: "xmark.circle")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+
+            Section("Global System Shortcut") {
+                hotkeyRow(for: .summon)
+
+                Text("Summon shortcut is registered natively using macOS Carbon HIToolbox. Does not require Accessibility or keystroke monitoring permissions.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("In-Panel Keyboard Shortcuts") {
+                hotkeyRow(for: .pin)
+                hotkeyRow(for: .delete)
+                hotkeyRow(for: .preview)
+                hotkeyRow(for: .plainPaste)
+
+                Text("Panel shortcuts are local to the history window and never intercept keystrokes in other applications.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Quick-Pick & System Workflows") {
+                LabeledContent("Quick Pick Items 1–9", value: "⌘1 … ⌘9")
+                LabeledContent("Plain Text Quick Pick", value: "⇧⌘1 … ⇧⌘9")
+                LabeledContent("Quick Switcher (Cycle Mode)", value: "Hold modifier + Summon")
+                LabeledContent("Edit Pinned Clip", value: "⌘E")
+                LabeledContent("Reorder Pinned Item", value: "⌥⌘↑ / ⌥⌘↓")
+            }
+
+            Section {
+                Button("Restore All Default Shortcuts") {
+                    hotkeyConfig.resetAllToDefaults()
+                    errorMessage = nil
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear {
+            setupMonitor()
+        }
+        .onDisappear {
+            teardownMonitor()
+        }
+    }
+
+    @ViewBuilder
+    private func hotkeyRow(for action: HotkeyActionType) -> some View {
+        let current = hotkeyConfig.shortcut(for: action)
+        let isRecording = recordingAction == action
+        let isDefault = current == hotkeyConfig.defaultShortcut(for: action)
+
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(action.title)
+                    .font(.body)
+                Text(action.description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if isRecording {
+                Text("Press shortcut… (Esc to cancel)")
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.15))
+                    .cornerRadius(6)
+            } else {
+                Text(current.displayString)
+                    .font(.system(.body, design: .monospaced, weight: .bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.secondary.opacity(0.15))
+                    .cornerRadius(6)
+            }
+
+            Button(isRecording ? "Cancel" : "Record") {
+                if isRecording {
+                    recordingAction = nil
+                } else {
+                    errorMessage = nil
+                    recordingAction = action
+                }
+            }
+            .controlSize(.small)
+
+            if !isDefault {
+                Button("Reset") {
+                    hotkeyConfig.resetToDefault(for: action)
+                    errorMessage = nil
+                }
+                .controlSize(.small)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func setupMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard let action = self.recordingAction else { return event }
+
+            // Escape cancels recording
+            if event.keyCode == UInt32(kVK_Escape) && event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty {
+                self.recordingAction = nil
+                return nil
+            }
+
+            // Must have meaningful key press
+            let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+            let newShortcut = KeyShortcut(keyCode: UInt32(event.keyCode), modifierFlags: flags)
+
+            do {
+                try self.hotkeyConfig.setShortcut(newShortcut, for: action)
+                self.recordingAction = nil
+                self.errorMessage = nil
+            } catch {
+                self.errorMessage = error.localizedDescription
+                self.recordingAction = nil
+            }
+
+            return nil
+        }
+    }
+
+    private func teardownMonitor() {
+        if let mon = keyMonitor {
+            NSEvent.removeMonitor(mon)
+            keyMonitor = nil
+        }
+    }
+}
+
+// ==============================================================================
 // Mimra — Main Settings View
 // ==============================================================================
 
@@ -432,154 +1196,35 @@ public struct SettingsView: View {
 
     public var body: some View {
         TabView {
-            Form {
-                Section("Application") {
-                    LabeledContent("Name", value: "Mimra")
-                    LabeledContent("Platform", value: "macOS 15.0+ (Apple Silicon)")
-                    LabeledContent("Status", value: "Menu Bar Agent Active")
+            GeneralSettingsTab(engineVersion: engineVersion)
+                .tabItem {
+                    Label("General", systemImage: "gear")
                 }
 
-                Section("Paste Behavior & Permissions") {
-                    Toggle("Paste automatically into target app", isOn: $pasteAutomatically)
-
-                    HStack {
-                        Text("Accessibility Permission")
-                        Spacer()
-                        if accessibilityService.isTrusted {
-                            Label("Granted", systemImage: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                        } else {
-                            Button("Grant Permission...") {
-                                accessibilityService.promptForPermission()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                        }
-                    }
-
-                    if !accessibilityService.isTrusted {
-                        HStack {
-                            Text("Copy-Only Mode active until permission is granted in macOS System Settings.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Button("Open System Settings") {
-                                accessibilityService.openSystemSettings()
-                            }
-                            .buttonStyle(.link)
-                            .font(.caption)
-                        }
-                    }
+            AppearanceSettingsTab()
+                .tabItem {
+                    Label("Appearance", systemImage: "paintpalette")
                 }
 
-                Section("Summon & Keyboard Cycling") {
-                    Toggle("Cycle through history with summon key", isOn: $cycleModeEnabled)
-                    Text("Hold the summon shortcut modifier and press the summon key again to cycle through items. Releasing the modifier commits the selection (Quick Switcher).")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            HotkeysSettingsTab()
+                .tabItem {
+                    Label("Hotkeys", systemImage: "command")
                 }
 
-                Section("Engine Core") {
-                    LabeledContent("RustCore Engine", value: "v\(engineVersion)")
-                    LabeledContent("Deduplication", value: "BLAKE3 Cryptographic Hashing")
-                    LabeledContent("Search & Storage", value: "SQLite + FTS5 (WAL Mode)")
+            SearchSettingsTab()
+                .tabItem {
+                    Label("Search & Sorting", systemImage: "arrow.up.arrow.down.circle")
                 }
-            }
-            .formStyle(.grouped)
-            .tabItem {
-                Label("General", systemImage: "gear")
-            }
-
-            Form {
-                Section("Item Previews") {
-                    Toggle("Show HEX color swatch", isOn: $showColorSwatches)
-                    Toggle("Show URL domain badges", isOn: $showUrlPreviews)
-                    Toggle("Show source application icon", isOn: $showSourceAppIcon)
-                }
-
-                Section("Slideout Preview") {
-                    Toggle("Open preview automatically on selection", isOn: $previewAutoOpenEnabled)
-
-                    if previewAutoOpenEnabled {
-                        Picker("Auto-Open Delay", selection: $previewDelayMs) {
-                            Text("Fast (200 ms)").tag(200)
-                            Text("Normal (400 ms)").tag(400)
-                            Text("Relaxed (600 ms)").tag(600)
-                            Text("Slow (1000 ms)").tag(1000)
-                        }
-                    }
-
-                    Text("Toggle manually anytime inside history using ⌃Space (Control-Space). Shortcut is strictly local to the history window and never registered globally.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Information") {
-                    Text("When color swatches are enabled, recognized #RGB and #RRGGBB color codes display an inline visual color swatch. Copied text remains the primary payload on paste.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .formStyle(.grouped)
-            .tabItem {
-                Label("Appearance", systemImage: "paintpalette")
-            }
-
-            Form {
-                Section("Search Highlights") {
-                    Picker("Match Highlight Style", selection: $searchHighlightStyleRaw) {
-                        ForEach(SearchHighlightStyle.allCases, id: \.rawValue) { style in
-                            Text(style.displayName).tag(style.rawValue)
-                        }
-                    }
-                }
-
-                Section("History Sorting & Pins") {
-                    Picker("Pin Placement", selection: $pinArrangementRaw) {
-                        Text("Top of list").tag("top")
-                        Text("Bottom of list").tag("bottom")
-                        Text("Inline (mixed)").tag("inline")
-                    }
-
-                    Picker("Sort History By", selection: $historySortModeRaw) {
-                        Text("Recency (last copied)").tag("recency")
-                        Text("Number of copies").tag("copyCount")
-                        Text("First copied (creation)").tag("firstCopied")
-                    }
-
-                    Toggle("Rank search results by relevance", isOn: $searchByRelevance)
-                }
-
-                Section("Information") {
-                    Text("Highlight styles indicate matching characters in titles and snippets during active searches. Pin placement controls whether pinned clips stay grouped at the top, bottom, or naturally mixed.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .formStyle(.grouped)
-            .tabItem {
-                Label("Search & Sorting", systemImage: "arrow.up.arrow.down.circle")
-            }
 
             StorageSettingsTab(viewModel: storageViewModel)
                 .tabItem {
                     Label("Storage", systemImage: "cylinder.split.1x2")
                 }
 
-            Form {
-                Section("Security & Privacy") {
-                    Text("Mimra excludes sensitive markers from password managers and ignored applications before any data reaches disk.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    
-                    LabeledContent("Network Access", value: "Zero (Strictly Offline)")
-                    LabeledContent("Telemetry", value: "Disabled")
+            PrivacySettingsTab()
+                .tabItem {
+                    Label("Privacy", systemImage: "hand.raised")
                 }
-            }
-            .formStyle(.grouped)
-            .tabItem {
-                Label("Privacy", systemImage: "hand.raised")
-            }
         }
         .frame(width: 540, height: 480)
         .task {

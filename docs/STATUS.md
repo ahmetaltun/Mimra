@@ -1,7 +1,7 @@
 # Mimra — Project Status & Roadmap Tracker
 
-> **Active Milestone:** Gate G5 — Core Feature Parity
-> **Last Updated:** 2026-11-03  
+> **Active Milestone:** Gate G6 — Release Hardening (Phase 8)  
+> **Last Updated:** 2026-11-04  
 > **Target Environment:** macOS 15.0+ (`aarch64-apple-darwin`), Apple Silicon only
 
 ---
@@ -43,8 +43,8 @@
 | **G2** | Reliable Copy / Paste | **COMPLETED** | NSPanel popup, focus restoration, global shortcut, accessibility fallback |
 | **G3** | Complete Data Types | **COMPLETED** | RTF, HTML, PNG/JPEG/HEIC, file URLs, URLs/colors, attribution, dedupe hardening, type settings |
 | **G4** | History Power Features | **COMPLETED** | Fuzzy/regex search, pinning, retention cleanup, settings UI |
-| **G5** | Core Feature Parity | IN PROGRESS | Slideout preview, OCR, cycle summon, VoiceOver, localization |
-| **G6** | Release Hardening | PENDING | Leaks, benchmarks, fuzzing, notarized arm64 distribution |
+| **G5** | Core Feature Parity | **COMPLETED** | Slideout preview, OCR, cycle summon, VoiceOver, localization, full settings |
+| **G6** | Release Hardening | IN PROGRESS | Leaks, benchmarks, fuzzing, notarized arm64 distribution |
 | **G7** | Mimra Differentiators | PENDING | Privacy profiles, secret heuristics, encrypted vault (SQLCipher) |
 
 ---
@@ -136,7 +136,23 @@
 
 ---
 
-## 10. Current Blockers & Risks
+## 10. Phase 7 Task Tracker (Gate G5)
 
-* **None.** Phase 6 (Slideout Preview & On-Device OCR Experience, Gate G5) is 100% COMPLETED! All 7 tasks (P6-01 through P6-07) are verified. All 75 Rust unit tests, 46 Swift integration test suites, and the native arm64 Xcode build pass cleanly.
-* **Next Task:** P7-01 (General settings: paste mode, launch-at-login with `SMAppService.mainApp`, play sound if verified, clear system clipboard if enabled. DoD: persisted toggles + OS permission/policy handling).
+| Task ID | Description | Status | Verification / Artifact |
+|---|---|---|---|
+| **P7-01** | General: paste mode, launch-at-login with `SMAppService.mainApp`, play sound if verified, clear system clipboard if enabled | Completed | `Mimra/macOS/LaunchAtLoginService.swift`, `Mimra/macOS/SoundFeedbackService.swift`, `Mimra/UI/Settings/SettingsView.swift`, `Mimra/macOS/PasteCoordinator.swift`, `Mimra/macOS/StatusBarCoordinator.swift`, `Mimra/UI/Panel/PanelViewModel.swift` (`tests/general_settings_tests.swift`, `T-SET-01`, `T-REL-01`, `F-020`, `F-035`, `F-056`, `F-062`, `F-064`) |
+| **P7-02** | Appearance: title/search/footer/icon, source app icon, HEX swatches, sizing/position/screen, light/dark | Completed | `Mimra/macOS/AppearanceConfiguration.swift`, `Mimra/macOS/StatusBarCoordinator.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/UI/Preview/PreviewCoordinator.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/appearance_settings_tests.swift`, `T-SET-03`, `T-UI-05`, `T-UI-07`, `T-UI-08`, `T-UI-09`, `F-028`, `F-032`, `F-034`, `F-035`, `F-058`) |
+| **P7-03** | Search/Storage: search modes/highlight; allowed formats and count/size options, DB stats | Completed | `Mimra/UI/Settings/SettingsView.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/macOS/ClipboardTypeConfiguration.swift`, `Mimra/macOS/ClipboardMonitor.swift` (`tests/search_storage_settings_tests.swift`, `T-SRCH-02`, `T-HIST-05`, `F-013`, `F-049`, `F-050`, `F-055`) |
+| **P7-04** | Ignore/Privacy: app picker outside `/Applications`, UTI editing, pause/ignore-next; validation/confirmation | Completed | `Mimra/macOS/PrivacyFilter.swift`, `Mimra/macOS/PrivacyConfiguration.swift`, `Mimra/UI/Settings/SettingsView.swift`, `Mimra/macOS/ClipboardMonitor.swift` (`tests/privacy_settings_tests.swift`, `T-PRIV-02`, `T-PRIV-03`, `T-SET-02`, `F-009`, `F-010`, `F-057`) |
+| **P7-05** | Hotkeys: record/change/reset, collision handling, physical key layout and secure input fallback | Completed | `Mimra/macOS/HotkeyConfiguration.swift`, `Mimra/macOS/HotkeyManager.swift`, `Mimra/UI/Settings/SettingsView.swift`, `Mimra/UI/Panel/FloatingPanel.swift` (`tests/hotkey_settings_tests.swift`, `T-KEY-02`, `F-023`) |
+| **P7-06** | English + localization: string catalog, layout expansion, CJK input, RTL visual QA, one non-English full flow | Completed | `Mimra/macOS/LocalizationService.swift`, `Mimra/Resources/Localizable.xcstrings`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/localization_ime_tests.swift`, `T-I18N-01`, `T-I18N-02`, `F-033`, `F-059`) |
+| **P7-07** | VoiceOver: selected row item content/type/source/pin status; preview, buttons, menu and keyboard drag alternative | Completed | `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/UI/Preview/PreviewContainerView.swift`, `Mimra/UI/Preview/ImagePreviewView.swift`, `Mimra/UI/Panel/FloatingPanel.swift` (`tests/voiceover_accessibility_tests.swift`, `T-A11Y-01`, `F-060`) |
+| **P7-08** | Permissions/onboarding: explain continuous clipboard history, accessibility auto-paste, sensitive exclusions, privacy controls | Completed | `Mimra/macOS/OnboardingService.swift`, `Mimra/UI/Onboarding/OnboardingView.swift`, `Mimra/macOS/PasteCoordinator.swift`, `Mimra/macOS/AccessibilityService.swift`, `Mimra/App/AppDelegate.swift` (`tests/onboarding_permissions_tests.swift`, `T-PASTE-03`, `F-061`) |
+| **P7-09** | Appearance accessibility: Reduce Motion, VoiceOver focus restoration, high contrast, menu bar over fullscreen | Completed | `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Onboarding/OnboardingView.swift`, `Mimra/macOS/AppearanceConfiguration.swift` (`tests/appearance_accessibility_tests.swift`, `T-UI-06`, `T-UI-08`, `F-029`, `F-034`) |
+
+---
+
+## 11. Current Blockers & Risks
+
+* **None.** Phase 7 (Comprehensive Settings, Internationalization, and Accessibility) is 100% COMPLETED and verified. Gate G5 (Core Feature Parity) exited cleanly. All 75 Rust unit tests, 55 Swift integration test suites, and the native arm64 Xcode build pass with zero warnings or errors.
+* **Next Task:** P8-01 (Leak/retention stress: memory graph + synthetic 50k copies + orphan FK/FTS checks. Gate G6 entry).

@@ -130,13 +130,15 @@ public final class ClipboardMonitor: ObservableObject {
             return
         }
 
-        // 2. Identify source application (F-011)
-        let sourceBundleId = detectSourceBundleId()
+        // 2. Identify source application (F-011, F-010)
+        let sourceInfo = detectSourceInfo()
+        let sourceBundleId = sourceInfo.bundleId
 
         // 3. Privacy Pre-Filtering (P1-06, F-008, F-009, F-010, F-014, F-026)
         let decision = privacyFilter.shouldCapture(
             pasteboard: pasteboard,
-            sourceBundleId: sourceBundleId
+            sourceBundleId: sourceBundleId,
+            sourcePath: sourceInfo.path
         )
 
         switch decision {
@@ -193,7 +195,8 @@ public final class ClipboardMonitor: ObservableObject {
                 }
 
                 // Trigger background OCR for image captures (P6-05 / F-043, T-OCR-01)
-                if outcome.contentKind == "image",
+                let includeOcr = UserDefaults.standard.object(forKey: "includeOcrInSearch") as? Bool ?? true
+                if includeOcr && outcome.contentKind == "image",
                    let imgRep = capture.representations.first(where: {
                        $0.uti == "public.png" || $0.uti == "public.tiff" || $0.uti == "public.jpeg" || $0.uti == "public.heic"
                    }) {
@@ -213,29 +216,34 @@ public final class ClipboardMonitor: ObservableObject {
 
     // MARK: - Extraction Helpers
 
-    private func detectSourceBundleId() -> String? {
+    private func detectSourceInfo() -> (bundleId: String?, path: String?) {
         // Try reading explicit source attribution marker if present (F-011)
         if let items = pasteboard.pasteboardItems {
             for item in items {
                 if let source = item.string(forType: ClipboardProvenance.sourceAppType),
                    !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return source.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return (source.trimmingCharacters(in: .whitespacesAndNewlines), nil)
                 }
                 if let data = item.data(forType: ClipboardProvenance.sourceAppType),
                    let str = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                    !str.isEmpty {
-                    return str
+                    return (str, nil)
                 }
             }
         }
 
         // Fall back to frontmost application
-        if let frontmostId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
-           !frontmostId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return frontmostId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let app = NSWorkspace.shared.frontmostApplication {
+            let bundleId = app.bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let path = app.bundleURL?.path ?? app.executableURL?.path
+            return (bundleId, path)
         }
 
-        return nil
+        return (nil, nil)
+    }
+
+    private func detectSourceBundleId() -> String? {
+        return detectSourceInfo().bundleId
     }
 
     private func extractRawCapture(sourceBundleId: String?) -> RawCapture? {

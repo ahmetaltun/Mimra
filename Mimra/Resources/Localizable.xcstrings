@@ -1,0 +1,66 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "panel.empty_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clipboard is Empty" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "クリップボードは空です" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zwischenablage ist leer" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Pano Boş" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الحافظة فارغة" } }
+      }
+    },
+    "panel.search_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search clipboard history..." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "クリップボード履歴を検索..." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zwischenablage-Verlauf durchsuchen..." } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Pano geçmişinde ara..." } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "البحث في سجل الحافظة..." } }
+      }
+    },
+    "settings.general" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "General" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "一般" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Allgemein" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Genel" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "عام" } }
+      }
+    },
+    "settings.appearance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Appearance" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "外観" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Erscheinungsbild" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Görünüm" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "المظهر" } }
+      }
+    },
+    "settings.hotkeys" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hotkeys" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ショートカット" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Tastenkombinationen" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Kısayollar" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اختصارات المفاتيح" } }
+      }
+    },
+    "settings.privacy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Privacy" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "プライバシー" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datenschutz" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Gizlilik" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الخصوصية" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

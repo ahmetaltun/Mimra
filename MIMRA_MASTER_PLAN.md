@@ -598,17 +598,17 @@ All settings changes persist atomically and update relevant components without r
 
 ### PHASE 7 — Comprehensive Settings, internationalization and accessibility (G5)
 
-- [ ] **P7-01 General:** paste mode, launch-at-login with `SMAppService.mainApp`, play sound if verified, clear system clipboard if enabled. **DoD:** persisted toggles + OS permission/policy handling.
-- [ ] **P7-02 Appearance:** title/search/footer/icon, source app icon, HEX swatches, sizing/position/screen, light/dark. **DoD:** every change observable without restart where possible.
-- [ ] **P7-03 Search/Storage:** search modes/highlight; allowed formats and count/size options, DB stats. **DoD:** settings precisely match core behavior.
-- [ ] **P7-04 Ignore/Privacy:** app picker outside `/Applications`, UTI editing, pause/ignore-next; validation/confirmation. **DoD:** app exclusions and markers applied before payload read.
-- [ ] **P7-05 Hotkeys:** record/change/reset, collision handling, physical key layout and secure input fallback. **DoD:** no global event tap when not required.
-- [ ] **P7-06 English + localization:** string catalog, layout expansion, CJK input, RTL visual QA, one non-English full flow. **DoD:** tests for Japanese IME and long translated labels.
-- [ ] **P7-07 VoiceOver:** selected row item content/type/source/pin status; preview, buttons, menu and keyboard drag alternative. **DoD:** complete copy/paste operation via VoiceOver.
-- [ ] **P7-08 Permissions/onboarding:** explain continuous clipboard history, accessibility auto-paste, sensitive exclusions, privacy controls. **DoD:** permissions denied/revoked state independently works.
-- [ ] **P7-09 Appearance accessibility:** Reduce Motion, VoiceOver focus restoration, high contrast, menu bar over fullscreen. **DoD:** accessibility QA checklist passes.
+- [x] **P7-01 General:** paste mode, launch-at-login with `SMAppService.mainApp`, play sound if verified, clear system clipboard if enabled. **DoD:** persisted toggles + OS permission/policy handling.
+- [x] **P7-02 Appearance:** title/search/footer/icon, source app icon, HEX swatches, sizing/position/screen, light/dark. **DoD:** every change observable without restart where possible.
+- [x] **P7-03 Search/Storage:** search modes/highlight; allowed formats and count/size options, DB stats. **DoD:** settings precisely match core behavior.
+- [x] **P7-04 Ignore/Privacy:** app picker outside `/Applications`, UTI editing, pause/ignore-next; validation/confirmation. **DoD:** app exclusions and markers applied before payload read.
+- [x] **P7-05 Hotkeys:** record/change/reset, collision handling, physical key layout and secure input fallback. **DoD:** no global event tap when not required.
+- [x] **P7-06 English + localization:** string catalog, layout expansion, CJK input, RTL visual QA, one non-English full flow. **DoD:** tests for Japanese IME and long translated labels.
+- [x] **P7-07 VoiceOver:** selected row item content/type/source/pin status; preview, buttons, menu and keyboard drag alternative. **DoD:** complete copy/paste operation via VoiceOver.
+- [x] **P7-08 Permissions/onboarding:** explain continuous clipboard history, accessibility auto-paste, sensitive exclusions, privacy controls. **DoD:** permissions denied/revoked state independently works.
+- [x] **P7-09 Appearance accessibility:** Reduce Motion, VoiceOver focus restoration, high contrast, menu bar over fullscreen. **DoD:** accessibility QA checklist passes.
 
-**Phase 7 exit:** no missing core settings or accessibility-critical workflow; setting behaviors documented.
+**Phase 7 exit:** no missing core settings or accessibility-critical workflow; setting behaviors documented. (COMPLETED)
 
 ### PHASE 8 — Reliability/performance/security hardening (G5/G6)
 

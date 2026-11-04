@@ -14,11 +14,11 @@ public final class PreviewCoordinator: NSObject {
     public private(set) var previewPanel: PreviewPanel?
     public private(set) var isPreviewVisible: Bool = false
 
-    public var previewWidth: CGFloat = 360 {
-        didSet {
-            if oldValue != previewWidth && isPreviewVisible {
-                updateLayout()
-            }
+    public var previewWidth: CGFloat {
+        get { AppearanceConfiguration.shared.previewWidth }
+        set {
+            AppearanceConfiguration.shared.previewWidth = newValue
+            if isPreviewVisible { updateLayout() }
         }
     }
 

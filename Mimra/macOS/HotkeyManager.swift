@@ -114,6 +114,19 @@ public final class HotkeyManager {
         }
     }
 
+    /// Registers the summon hotkey from a KeyShortcut configuration model (P7-05 / F-023).
+    @discardableResult
+    public func registerSummonShortcut(
+        _ shortcut: KeyShortcut,
+        action: @escaping HotkeyAction
+    ) -> Bool {
+        return registerSummonHotkey(
+            keyCode: shortcut.keyCode,
+            modifiers: shortcut.carbonModifiers,
+            action: action
+        )
+    }
+
     /// Registers the default summon hotkey (Shift-Command-C, keyCode=8).
     @discardableResult
     public func registerSummonHotkey(
