@@ -38,6 +38,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             // 2. Initialize Clipboard Monitor on @MainActor
             let monitor = ClipboardMonitor(coreClient: client)
+            monitor.onIngest = { _ in
+                SoundFeedbackService.shared.playFeedbackSound()
+            }
             self.clipboardMonitor = monitor
             monitor.startMonitoring()
 

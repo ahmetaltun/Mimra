@@ -533,7 +533,7 @@ struct PanelItemRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     HighlightedLabel(
-                        text: item.title.isEmpty ? "Untitled" : item.title,
+                        text: displayTitle,
                         ranges: item.titleHighlights,
                         isSelected: isSelected,
                         baseFont: .system(size: 12, weight: .medium),
@@ -635,9 +635,9 @@ struct PanelItemRow: View {
                     }
                 }
 
-                if !item.snippet.isEmpty {
+                if !displaySnippet.isEmpty {
                     HighlightedLabel(
-                        text: item.snippet,
+                        text: displaySnippet,
                         ranges: item.snippetHighlights,
                         isSelected: isSelected,
                         baseFont: .system(size: 11),
@@ -690,7 +690,7 @@ struct PanelItemRow: View {
         var parts: [String] = []
 
         // 1. Content Title or Fallback
-        let titleText = item.title.isEmpty ? "Untitled item" : item.title
+        let titleText = displayTitle.isEmpty ? "Untitled item" : displayTitle
         parts.append(titleText)
 
         // 2. Content Type Description
@@ -761,14 +761,53 @@ struct PanelItemRow: View {
         return hints.joined(separator: ", ")
     }
 
+    private var displayTitle: String {
+        if item.contentKind == "file_urls" {
+            if item.title.hasPrefix("id=") || item.title.contains("/.file/id=") {
+                let firstLine = item.snippet.components(separatedBy: .newlines).first ?? item.snippet
+                if let url = URL(string: firstLine), let resolved = (url as NSURL).filePathURL {
+                    return resolved.lastPathComponent
+                }
+                return "File Reference"
+            }
+        }
+        return item.title.isEmpty ? "Untitled" : item.title
+    }
+
+    private var displaySnippet: String {
+        guard item.contentKind == "file_urls" else { return item.snippet }
+        let lines = item.snippet.components(separatedBy: .newlines).map { line -> String in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.contains("/.file/id="), let url = URL(string: trimmed), let resolved = (url as NSURL).filePathURL {
+                return resolved.path
+            }
+            if trimmed.hasPrefix("file://localhost") {
+                let sub = String(trimmed.dropFirst("file://localhost".count))
+                return sub.removingPercentEncoding ?? sub
+            } else if trimmed.hasPrefix("file://") {
+                let sub = String(trimmed.dropFirst("file://".count))
+                return sub.removingPercentEncoding ?? sub
+            }
+            return trimmed
+        }
+        return lines.joined(separator: "\n")
+    }
+
     private func isFileVanished(path: String) -> Bool {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
         let firstLine = trimmed.components(separatedBy: .newlines).first ?? trimmed
         let cleanPath: String
-        if firstLine.hasPrefix("file://") {
+        if firstLine.contains("/.file/id=") {
+            if let url = URL(string: firstLine), let resolved = (url as NSURL).filePathURL {
+                cleanPath = resolved.path
+            } else {
+                return false
+            }
+        } else if firstLine.hasPrefix("file://") {
             guard let url = URL(string: firstLine) else { return false }
-            cleanPath = url.path
+            let resolved = (url as NSURL).filePathURL ?? url
+            cleanPath = resolved.path
         } else if firstLine.hasPrefix("/") {
             cleanPath = firstLine
         } else {

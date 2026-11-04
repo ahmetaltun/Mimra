@@ -24,13 +24,27 @@ public protocol SoundPlaying: Sendable {
 
 /// Native AppKit sound player implementation using bundled macOS system sounds.
 public final class AppKitSoundPlayer: SoundPlaying, @unchecked Sendable {
+    private let lock = NSLock()
+    private var activeSound: NSSound?
+
     public init() {}
 
     public func playSound(named name: String) -> Bool {
-        guard let sound = NSSound(named: NSSound.Name(name)) else {
+        let sound: NSSound?
+        if let named = NSSound(named: NSSound.Name(name)) {
+            sound = named
+        } else {
+            let fileUrl = URL(fileURLWithPath: "/System/Library/Sounds/\(name).aiff")
+            sound = NSSound(contentsOf: fileUrl, byReference: true)
+        }
+        guard let s = sound else {
             return false
         }
-        return sound.play()
+        s.volume = 1.0
+        lock.lock()
+        activeSound = s
+        lock.unlock()
+        return s.play()
     }
 }
 

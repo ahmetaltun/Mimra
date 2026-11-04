@@ -338,7 +338,7 @@ mod tests {
         assert_eq!(item_file.title, "Quarterly Report.pdf");
         assert_eq!(
             item_file.search_text,
-            "file:///Users/username/My%20Documents/Quarterly%20Report.pdf"
+            "/Users/username/My Documents/Quarterly Report.pdf"
         );
 
         // Folder URL with trailing slash
@@ -346,6 +346,13 @@ mod tests {
         let rep_folder = Representation::new(0, uti::FILE_URL, folder_bytes).unwrap();
         let item_folder = HistoryItem::new(vec![rep_folder], None, 5100).unwrap();
         assert_eq!(item_folder.title, "Projects");
+        assert_eq!(item_folder.search_text, "/Users/username/Desktop/Projects");
+
+        // Edge case: Unresolved file reference URL fallback
+        let ref_bytes = b"file:///.file/id=6571367.327946083/".to_vec();
+        let rep_ref = Representation::new(0, uti::FILE_URL, ref_bytes).unwrap();
+        let item_ref = HistoryItem::new(vec![rep_ref], None, 5150).unwrap();
+        assert_eq!(item_ref.title, "File Reference");
 
         // Multiple file URLs (3 files across 3 groups)
         let rep1 = Representation::new(0, uti::FILE_URL, b"file:///tmp/doc1.txt".to_vec()).unwrap();

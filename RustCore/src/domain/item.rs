@@ -317,23 +317,42 @@ impl HistoryItem {
                 .collect();
 
             if !file_urls.is_empty() {
-                let title = if file_urls.len() == 1 {
-                    let cleaned = file_urls[0].trim_end_matches('/');
-                    let decoded = Self::percent_decode_str(cleaned);
-                    let basename = decoded
+                let clean_paths: Vec<String> = file_urls
+                    .iter()
+                    .map(|u| {
+                        let trimmed = u.trim();
+                        let stripped = trimmed
+                            .strip_prefix("file://localhost")
+                            .or_else(|| trimmed.strip_prefix("file://"))
+                            .unwrap_or(trimmed);
+                        let decoded = Self::percent_decode_str(stripped);
+                        let cleaned = decoded.trim_end_matches('/');
+                        if cleaned.is_empty() {
+                            "/".to_string()
+                        } else {
+                            cleaned.to_string()
+                        }
+                    })
+                    .collect();
+
+                let title = if clean_paths.len() == 1 {
+                    let cleaned = clean_paths[0].trim_end_matches('/');
+                    let basename = cleaned
                         .split('/')
                         .next_back()
-                        .unwrap_or(&file_urls[0])
+                        .unwrap_or(&clean_paths[0])
                         .to_string();
-                    if basename.is_empty() {
+                    if basename.is_empty()
+                        || (basename.starts_with("id=") && clean_paths[0].contains("/.file/id="))
+                    {
                         "File Reference".to_string()
                     } else {
                         basename
                     }
                 } else {
-                    format!("{} files", file_urls.len())
+                    format!("{} files", clean_paths.len())
                 };
-                let search_text = file_urls.join("\n");
+                let search_text = clean_paths.join("\n");
                 return (title, search_text);
             }
         }

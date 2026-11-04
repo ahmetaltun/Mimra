@@ -63,7 +63,28 @@ struct FileUrlTests {
             let pageSingle = try await client.listPage(limit: 5, offset: 0)
             let singleSummary = pageSingle.first { $0.id == resultSingle.itemId }!
             assert(singleSummary.title.contains("mimra_report with spaces"), "Percent-encoded filename must be decoded in title: '\(singleSummary.title)'")
-            print("✓ T-TYPE-03: Single file URL captured with clean decoded title: '\(singleSummary.title)'")
+            assert(!singleSummary.snippet.hasPrefix("file://"), "Snippet must be a clean POSIX path without file:// scheme: '\(singleSummary.snippet)'")
+            assert(singleSummary.snippet.contains("mimra_report with spaces"), "Snippet must be percent-decoded: '\(singleSummary.snippet)'")
+            print("✓ T-TYPE-03: Single file URL captured with clean decoded title: '\(singleSummary.title)' and clean path: '\(singleSummary.snippet)'")
+
+            // -----------------------------------------------------------------
+            // Test 1b: APFS/HFS+ File Reference URL Resolution
+            // -----------------------------------------------------------------
+            print("\n--- Test 1b: APFS/HFS+ File Reference URL Ingestion ---")
+            let refUrlPayload = "file:///.file/id=6571367.327946083/".data(using: .utf8)!
+            let resolvedPayload = ClipboardMonitor.resolveFileUrlPayload(data: refUrlPayload)
+            let resolvedStr = String(data: resolvedPayload, encoding: .utf8) ?? ""
+            print("  Raw file reference resolution result: '\(resolvedStr)'")
+            if !resolvedStr.contains("/.file/id=") {
+                assert(resolvedStr.hasPrefix("file:///"), "Resolved URL should be a file:// scheme URL: '\(resolvedStr)'")
+            }
+            let repRef = RawRepresentation(groupIndex: 0, uti: "public.file-url", payload: refUrlPayload)
+            let captureRef = RawCapture(timestampMs: 1700000000500, sourceBundleId: "com.apple.finder", representations: [repRef])
+            let resultRef = try await client.ingest(capture: captureRef)
+            let pageRef = try await client.listPage(limit: 5, offset: 0)
+            let refSummary = pageRef.first { $0.id == resultRef.itemId }!
+            assert(refSummary.title != "id=6571367.327946083", "Title must not be a raw file ID: '\(refSummary.title)'")
+            print("✓ T-TYPE-03: File reference URL safely handled without raw ID title: '\(refSummary.title)'")
 
             // -----------------------------------------------------------------
             // Test 2: Multi-Item File URL Capture (Group Order Preservation)

@@ -2132,6 +2132,39 @@ User feedback and testing identified two critical issues when opening the Settin
 * **Positive:** Settings window opens reliably in the foreground upon request without getting buried; behaves as a standard `.normal` level window that yields to background apps when switched away; all 6 navigation categories are immediately visible, labeled, and accessible without hidden chevrons; clean conformant macOS HIG design.
 * **Negative:** None.
 
+---
+
+## ADR-058: APFS/HFS+ File Reference URL Resolution, Clean Path Presentation, and Bidirectional Audio Feedback on Copy and Paste
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+1. **File Reference URLs on Pasteboard:** When copying files or directories from macOS Finder, the operating system places Apple APFS/HFS+ File Reference URLs (`file:///.file/id=<vol>.<fileid>/`) onto `NSPasteboard.general` under `public.file-url`. Ingesting these raw payloads without resolving them caused RustCore to extract raw volume/inode IDs (e.g. `id=6571367.327946083`) as item titles and raw URI strings as subtitles, producing unreadable rows and breaking standard POSIX path assumptions.
+2. **Path URI Scheme Stripping:** In the Floating Panel list, users expect clean, human-readable POSIX paths (`/Users/...` or `~/...`) rather than `file:///` URI scheme prefixes.
+3. **Audio Feedback on Copy and Paste:** General Settings offers "Play sound on copy and paste", but audio feedback was only wired to paste operations in `PasteCoordinator`. Clipboard ingestion in `ClipboardMonitor` was unhooked from sound playback. Furthermore, `AppKitSoundPlayer` did not retain the active `NSSound` instance, risking premature ARC deallocation during asynchronous playback, and lacked explicit fallback to `/System/Library/Sounds/`.
+
+### Decision
+1. **File Reference URL Resolution (`ClipboardMonitor.swift`):**
+   - Added `resolveFileUrlPayload(data:item:)` to detect and resolve APFS file reference URLs via `(url as NSURL).filePathURL` and `NSFilenamesPboardType`, ensuring only canonical file URLs are dispatched to RustCore.
+2. **Clean Path & Title Derivation (`RustCore/src/domain/item.rs`):**
+   - In `derive_text_fields()`, clean paths by stripping `file://localhost` and `file://`, percent-decoding into clean POSIX paths.
+   - Set single file title to the clean basename and `search_text`/`snippet` to clean POSIX paths (without `file:///`).
+   - Added defensive fallback for unresolved `id=` tokens.
+3. **Resilient UI Formatting (`FloatingPanelView.swift`):**
+   - Implemented `displayTitle` and `displaySnippet` to dynamically format titles and subtitles, stripping legacy `file:///` prefixes and resolving historical `id=` entries.
+   - Enhanced `isFileVanished(path:)` to handle both resolved POSIX paths and file URLs.
+4. **Bidirectional Audio Feedback (`AppDelegate.swift` & `SoundFeedbackService.swift`):**
+   - Connected `clipboardMonitor.onIngest` to `SoundFeedbackService.shared.playFeedbackSound()` so copies trigger audio feedback.
+   - Retained `activeSound` in `AppKitSoundPlayer` with NSLock synchronization to prevent ARC deallocation during playback.
+   - Added fallback to `/System/Library/Sounds/<name>.aiff` with explicit `volume = 1.0`.
+
+### Consequences
+* **Positive:** Clean, human-readable titles and POSIX paths for copied files and folders; historical records display cleanly; audio feedback operates reliably on both copy and paste; no ARC sound clipping.
+* **Negative:** None.
+
+
 
 
 

@@ -173,6 +173,11 @@ final class GeneralSettingsTestsRunner {
         service.playFeedbackSound()
         assert(mockPlayer.playedSounds == ["Tink"], "FAIL: Expected 'Tink' sound to play after switching sound")
 
+        // Test AppKitSoundPlayer native system sound playback with fallback
+        let realPlayer = AppKitSoundPlayer()
+        let realPlayed = realPlayer.playSound(named: "Pop")
+        assert(realPlayed, "FAIL: AppKitSoundPlayer must successfully play system sound 'Pop'")
+
         testDefaults.removePersistentDomain(forName: suiteName)
         print("  ✓ SoundFeedbackService verified")
     }

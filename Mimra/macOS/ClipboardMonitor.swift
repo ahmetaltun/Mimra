@@ -246,6 +246,49 @@ public final class ClipboardMonitor: ObservableObject {
         return detectSourceInfo().bundleId
     }
 
+    /// Standardizes a file URL representation, resolving macOS APFS/HFS+ file reference URLs
+    /// (e.g. `file:///.file/id=...`) to canonical filesystem paths and file URLs.
+    public static func resolveFileUrlPayload(data: Data, item: NSPasteboardItem? = nil) -> Data {
+        guard let rawStr = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawStr.isEmpty else {
+            return data
+        }
+
+        // 1. Check if rawStr is an APFS/HFS+ file reference URL
+        if rawStr.contains("/.file/id=") {
+            if let url = URL(string: rawStr), let resolvedPathUrl = (url as NSURL).filePathURL {
+                let canonicalStr = resolvedPathUrl.standardizedFileURL.absoluteString
+                if let resolvedData = canonicalStr.data(using: .utf8) {
+                    return resolvedData
+                }
+            }
+
+            // Fallback: Check NSFilenamesPboardType on the item if available
+            if let item = item,
+               let filenamesData = item.data(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")),
+               let paths = try? PropertyListSerialization.propertyList(from: filenamesData, format: nil) as? [String],
+               let firstPath = paths.first {
+                let resolved = URL(fileURLWithPath: firstPath).standardizedFileURL.absoluteString
+                if let resolvedData = resolved.data(using: .utf8) {
+                    return resolvedData
+                }
+            }
+        }
+
+        // 2. If it's already a standard file URL, ensure standardized canonical form
+        if rawStr.hasPrefix("file://") {
+            if let url = URL(string: rawStr) {
+                let resolved = (url as NSURL).filePathURL ?? url
+                let canonicalStr = resolved.standardizedFileURL.absoluteString
+                if let resolvedData = canonicalStr.data(using: .utf8) {
+                    return resolvedData
+                }
+            }
+        }
+
+        return data
+    }
+
     private func extractRawCapture(sourceBundleId: String?) -> RawCapture? {
         guard let items = pasteboard.pasteboardItems, !items.isEmpty else {
             return nil
@@ -284,12 +327,17 @@ public final class ClipboardMonitor: ObservableObject {
                     continue
                 }
 
+                var payloadData = data
+                if canonicalUti == "public.file-url" {
+                    payloadData = Self.resolveFileUrlPayload(data: data, item: item)
+                }
+
                 seenCanonicalUtis.insert(canonicalUti)
                 groupReps.append(
                     RawRepresentation(
                         groupIndex: UInt32(groupIndex),
                         uti: canonicalUti,
-                        payload: data
+                        payload: payloadData
                     )
                 )
             }

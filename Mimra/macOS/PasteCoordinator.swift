@@ -243,7 +243,13 @@ public final class PasteCoordinator {
                 } else if rep.uti == "public.file-url",
                           let urlStr = String(data: rep.payload, encoding: .utf8) {
                     let trimmed = urlStr.trimmingCharacters(in: .whitespacesAndNewlines)
-                    pbItem.setString(trimmed, forType: .fileURL)
+                    let finalUrlStr: String
+                    if trimmed.contains("/.file/id="), let url = URL(string: trimmed), let resolved = (url as NSURL).filePathURL {
+                        finalUrlStr = resolved.standardizedFileURL.absoluteString
+                    } else {
+                        finalUrlStr = trimmed
+                    }
+                    pbItem.setString(finalUrlStr, forType: .fileURL)
                 } else if rep.uti == "public.url",
                           let urlStr = String(data: rep.payload, encoding: .utf8) {
                     let trimmed = urlStr.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -374,7 +380,8 @@ public final class PasteCoordinator {
                     let trimmed = rawString.trimmingCharacters(in: .whitespacesAndNewlines)
                     if trimmed.hasPrefix("file://") {
                         if let url = URL(string: trimmed) {
-                            filePaths.append(url.path)
+                            let resolved = (url as NSURL).filePathURL ?? url
+                            filePaths.append(resolved.path)
                         }
                     } else if trimmed.hasPrefix("/") {
                         filePaths.append(trimmed)
