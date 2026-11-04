@@ -31,7 +31,7 @@ pub use storage::{
     open_in_memory, quarantine_corrupted_database, query_available_utis, rebuild_search_index,
     reorder_pins, restore_database_from_backup, run_migrations, sanitize_fts5_query,
     search_history_page, search_history_page_with_options, set_pin_status, toggle_pin_status,
-    update_ocr_text, update_recopy, validate_pin_key, verify_database_integrity,
+    touch_item, update_ocr_text, update_recopy, validate_pin_key, verify_database_integrity,
     verify_search_index_integrity, DatabaseConfig, HistoryItemSummary, IngestOutcome, StorageStats,
 };
 
@@ -390,6 +390,25 @@ impl MimraCoreHandle {
         })?;
 
         toggle_pin_status(&conn, &id)
+    }
+
+    /// Bumps an existing item's last_copied_at timestamp to now (and increments copy_count),
+    /// moving it to the top of the history list in recency-based sorting.
+    pub fn touch_item(
+        &self,
+        item_id: String,
+        timestamp_ms: Option<i64>,
+    ) -> Result<bool, CoreError> {
+        let id = Uuid::parse_str(&item_id).map_err(|e| CoreError::InvalidInput {
+            details: format!("Invalid UUID '{item_id}': {e}"),
+        })?;
+
+        let conn = self.conn.lock().map_err(|e| CoreError::Internal {
+            message: format!("Failed to acquire database lock: {e}"),
+        })?;
+
+        let ts = timestamp_ms.unwrap_or(0);
+        touch_item(&conn, &id, ts)
     }
 
     pub fn validate_pin_key(&self, key: String) -> Result<String, CoreError> {

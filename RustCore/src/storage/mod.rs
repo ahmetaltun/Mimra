@@ -22,8 +22,8 @@ pub use repository::{
     find_by_id, get_ocr_text, get_storage_stats, ingest_clipboard_item,
     ingest_clipboard_item_with_policy, insert_item, list_history_page,
     list_history_page_with_options, load_representations, query_available_utis, reorder_pins,
-    set_pin_status, toggle_pin_status, update_ocr_text, update_recopy, update_recopy_and_merge,
-    validate_pin_key, HistoryItemSummary, IngestOutcome, StorageStats,
+    set_pin_status, toggle_pin_status, touch_item, update_ocr_text, update_recopy,
+    update_recopy_and_merge, validate_pin_key, HistoryItemSummary, IngestOutcome, StorageStats,
 };
 pub use search::{
     rebuild_search_index, sanitize_fts5_query, search_history_page,
@@ -1696,6 +1696,117 @@ fn test_edit_pinned_item_text_preserves_metadata_and_updates_fts() {
     let not_found_err =
         edit_pinned_item_text(&mut conn, &non_existent_id, "Attempt Edit").unwrap_err();
     assert!(matches!(not_found_err, CoreError::ItemNotFound { .. }));
+
+    verify_database_integrity(&conn).unwrap();
+    verify_search_index_integrity(&conn).unwrap();
+}
+
+#[test]
+fn test_touch_item_promotes_to_top_of_recency_list() {
+    use crate::domain::content::{uti, Representation};
+    use crate::domain::dto::{HistorySortMode, PinArrangement};
+    use crate::domain::item::HistoryItem;
+    use uuid::Uuid;
+
+    let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+    run_migrations(&mut conn).unwrap();
+
+    // 1. Ingest items A, B, C with timestamps 1000, 2000, 3000
+    let rep_a = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Alpha Item".to_vec()).unwrap();
+    let item_a = HistoryItem::new(vec![rep_a], None, 1000).unwrap();
+    let id_a = item_a.id;
+    ingest_clipboard_item(&mut conn, item_a, 100).unwrap();
+
+    let rep_b = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Beta Item".to_vec()).unwrap();
+    let item_b = HistoryItem::new(vec![rep_b], None, 2000).unwrap();
+    let id_b = item_b.id;
+    ingest_clipboard_item(&mut conn, item_b, 100).unwrap();
+
+    let rep_c = Representation::new(0, uti::UTF8_PLAIN_TEXT, b"Gamma Item".to_vec()).unwrap();
+    let item_c = HistoryItem::new(vec![rep_c], None, 3000).unwrap();
+    let id_c = item_c.id;
+    ingest_clipboard_item(&mut conn, item_c, 100).unwrap();
+
+    // Verify initial recency order: [Gamma (3000), Beta (2000), Alpha (1000)]
+    let page = list_history_page(&conn, 10, 0).unwrap();
+    assert_eq!(page.len(), 3);
+    assert_eq!(page[0].id, id_c);
+    assert_eq!(page[1].id, id_b);
+    assert_eq!(page[2].id, id_a);
+    assert_eq!(page[2].copy_count, 1);
+    assert_eq!(page[2].first_copied_at_ms, 1000);
+
+    // 2. Touch Alpha with timestamp 4000
+    let updated = touch_item(&conn, &id_a, 4000).unwrap();
+    assert!(updated, "touch_item must return true for existing item");
+
+    // 3. Verify Alpha moved to the top of recency list: [Alpha (4000), Gamma (3000), Beta (2000)]
+    let page_after = list_history_page(&conn, 10, 0).unwrap();
+    assert_eq!(page_after.len(), 3);
+    assert_eq!(page_after[0].id, id_a);
+    assert_eq!(page_after[1].id, id_c);
+    assert_eq!(page_after[2].id, id_b);
+    assert_eq!(page_after[0].copy_count, 2, "copy_count must increment");
+    assert_eq!(page_after[0].last_copied_at_ms, 4000);
+    assert_eq!(
+        page_after[0].first_copied_at_ms, 1000,
+        "first_copied_at_ms must be preserved"
+    );
+
+    // 4. Test touch with timestamp_ms = 0 (defaults to current system time)
+    let updated_b = touch_item(&conn, &id_b, 0).unwrap();
+    assert!(updated_b);
+    let page_now = list_history_page(&conn, 10, 0).unwrap();
+    assert_eq!(
+        page_now[0].id, id_b,
+        "Beta must now be at top after touch with current time"
+    );
+
+    // 5. Test non-existent item returns false
+    let missing_id = Uuid::new_v4();
+    let updated_missing = touch_item(&conn, &missing_id, 5000).unwrap();
+    assert!(
+        !updated_missing,
+        "touch_item must return false for missing UUID"
+    );
+
+    // 6. Test interaction with pinned items
+    // Pin Gamma with order 1
+    set_pin_status(&conn, &id_c, true, Some("1".to_string()), Some(1)).unwrap();
+
+    // Under PinArrangement::Top, Gamma (pinned) is always first, then Beta, then Alpha
+    let page_top =
+        list_history_page_with_options(&conn, HistorySortMode::Recency, PinArrangement::Top, 10, 0)
+            .unwrap();
+    assert_eq!(
+        page_top[0].id, id_c,
+        "Pinned item must remain at top when PinArrangement is Top"
+    );
+    assert_eq!(
+        page_top[1].id, id_b,
+        "Most recent unpinned item must follow pinned items"
+    );
+
+    // Under PinArrangement::Inline, items are strictly ordered by last_copied_at_ms
+    // Touching Alpha to far future places it ahead of all items
+    let far_future_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+        + 100_000;
+    touch_item(&conn, &id_a, far_future_ms).unwrap();
+    let page_inline = list_history_page_with_options(
+        &conn,
+        HistorySortMode::Recency,
+        PinArrangement::Inline,
+        10,
+        0,
+    )
+    .unwrap();
+    assert_eq!(
+        page_inline[0].id, id_a,
+        "Alpha must lead when PinArrangement is Inline"
+    );
 
     verify_database_integrity(&conn).unwrap();
     verify_search_index_integrity(&conn).unwrap();

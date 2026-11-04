@@ -268,6 +268,12 @@ public actor CoreClient {
         return try handle.togglePin(itemId: itemId)
     }
 
+    /// Bumps an existing item's last_copied_at timestamp to now (and increments copy_count),
+    /// moving it to the top of the history list in recency-based sorting.
+    public func touchItem(itemId: String, timestampMs: Int64? = nil) throws -> Bool {
+        return try handle.touchItem(itemId: itemId, timestampMs: timestampMs)
+    }
+
     /// Validates and normalizes a candidate pin shortcut key (P5-02 / F-024, T-PIN-01).
     public func validatePinKey(key: String) throws -> String {
         return try handle.validatePinKey(key: key)

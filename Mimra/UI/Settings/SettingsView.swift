@@ -420,6 +420,7 @@ public struct GeneralSettingsTab: View {
     @ObservedObject var localizationService = LocalizationService.shared
 
     @AppStorage("pasteAutomatically") private var pasteAutomatically: Bool = true
+    @AppStorage("moveToTopOnPaste") private var moveToTopOnPaste: Bool = true
     @AppStorage("clearSystemClipboard") private var clearSystemClipboard: Bool = false
     @AppStorage("cycleModeEnabled") private var cycleModeEnabled: Bool = true
     @AppStorage("retentionMaxCount") private var maxHistoryItems: Int = 200
@@ -509,6 +510,12 @@ public struct GeneralSettingsTab: View {
                 Toggle("Paste automatically into target app", isOn: $pasteAutomatically)
 
                 Text("When enabled, selecting an item pastes it directly into the previous app. Hold ⌥ (Option) to copy without pasting. When disabled, selecting copies to clipboard.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Move item to top when chosen", isOn: $moveToTopOnPaste)
+
+                Text("When enabled, selecting an item moves it to the top of the history list for quick repeated use.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

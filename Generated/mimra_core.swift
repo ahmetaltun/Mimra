@@ -600,6 +600,12 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     func togglePin(itemId: String) throws  -> Bool
     
     /**
+     * Bumps an existing item's last_copied_at timestamp to now (and increments copy_count),
+     * moving it to the top of the history list in recency-based sorting.
+     */
+    func touchItem(itemId: String, timestampMs: Int64?) throws  -> Bool
+    
+    /**
      * Updates the OCR-extracted text for an existing history item (P6-05 / F-043, T-OCR-01).
      * Returns true if updated, false if the item was not found.
      */
@@ -910,6 +916,19 @@ open func togglePin(itemId: String)throws  -> Bool {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_toggle_pin(self.uniffiClonePointer(),
         FfiConverterString.lower(itemId),$0
+    )
+})
+}
+    
+    /**
+     * Bumps an existing item's last_copied_at timestamp to now (and increments copy_count),
+     * moving it to the top of the history list in recency-based sorting.
+     */
+open func touchItem(itemId: String, timestampMs: Int64?)throws  -> Bool {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_touch_item(self.uniffiClonePointer(),
+        FfiConverterString.lower(itemId),
+        FfiConverterOptionInt64.lower(timestampMs),$0
     )
 })
 }
@@ -2327,6 +2346,30 @@ fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionInt64: FfiConverterRustBuffer {
+    typealias SwiftType = Int64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
     typealias SwiftType = String?
 
@@ -2653,6 +2696,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_toggle_pin() != 22350) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_touch_item() != 32195) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_update_ocr_text() != 21118) {

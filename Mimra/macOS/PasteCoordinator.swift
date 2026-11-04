@@ -496,12 +496,22 @@ public final class PasteCoordinator {
         // 1. Always load the item into NSPasteboard first
         try await writeToPasteboard(itemId: itemId, mode: mode)
 
+        // 2. Bump recopy timestamp in RustCore (moves item to top of history under recency sorting)
+        let shouldMoveToTop = (UserDefaults.standard.object(forKey: "moveToTopOnPaste") as? Bool) ?? true
+        if shouldMoveToTop {
+            do {
+                _ = try await coreClient.touchItem(itemId: itemId)
+            } catch {
+                logger.warning("Failed to touch item '\(itemId, privacy: .public)': \(error)")
+            }
+        }
+
         // Play subtle audio feedback on copy/paste commit (P7-01 / F-035, F-056)
         await MainActor.run {
             onAudioFeedback?()
         }
 
-        // 2. Determine whether auto-paste should execute
+        // 3. Determine whether auto-paste should execute
         let userDefaultPaste = UserDefaults.standard.object(forKey: "pasteAutomatically") as? Bool
         let effectivePaste = userDefaultPaste ?? pasteAutomatically
         let shouldAutoPaste = forcePaste ?? effectivePaste

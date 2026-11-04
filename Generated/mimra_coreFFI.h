@@ -407,6 +407,11 @@ void uniffi_mimra_core_fn_method_mimracorehandle_set_retention_policy(void*_Nonn
 int8_t uniffi_mimra_core_fn_method_mimracorehandle_toggle_pin(void*_Nonnull ptr, RustBuffer item_id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_TOUCH_ITEM
+#define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_TOUCH_ITEM
+int8_t uniffi_mimra_core_fn_method_mimracorehandle_touch_item(void*_Nonnull ptr, RustBuffer item_id, RustBuffer timestamp_ms, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_UPDATE_OCR_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_FN_METHOD_MIMRACOREHANDLE_UPDATE_OCR_TEXT
 int8_t uniffi_mimra_core_fn_method_mimracorehandle_update_ocr_text(void*_Nonnull ptr, RustBuffer item_id, RustBuffer ocr_text, RustCallStatus *_Nonnull out_status
@@ -894,6 +899,12 @@ uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_set_retention_policy(
 #ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_TOGGLE_PIN
 #define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_TOGGLE_PIN
 uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_toggle_pin(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_TOUCH_ITEM
+#define UNIFFI_FFIDEF_UNIFFI_MIMRA_CORE_CHECKSUM_METHOD_MIMRACOREHANDLE_TOUCH_ITEM
+uint16_t uniffi_mimra_core_checksum_method_mimracorehandle_touch_item(void
     
 );
 #endif

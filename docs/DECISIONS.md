@@ -2215,3 +2215,38 @@ User feedback and testing identified two critical issues when opening the Settin
 ### Consequences
 * **Positive:** Modern borderless floating panel design free of extraneous titlebar chrome and non-functional window buttons; users can choose between rich two-line snippets and high-density single-line rows; updates apply in real time via `@AppStorage`.
 * **Negative:** None.
+
+---
+
+## ADR-060: Move History Item to Top on Paste / Selection
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In clipboard managers (e.g. Paste), when a user selects an item from history to paste or copy into a target application, that item should be promoted to the top of the history list for rapid repeated re-use.
+Previously in Mimra:
+1. Replaying an item to `NSPasteboard` recorded a self-write provenance marker to prevent self-recapture feedback loops.
+2. Because the self-write was ignored by `ClipboardMonitor` and `PasteCoordinator` did not notify `RustCore`, `last_copied_at_ms` in `history_items` remained unchanged.
+3. Therefore, the chosen item remained at its historical index instead of moving to the top.
+
+### Decision
+1. **Rust Storage Timestamp & Copy Count Bump (`RustCore/src/storage/repository.rs`):**
+   - Implemented `touch_item(conn: &Connection, item_id: &Uuid, timestamp_ms: i64) -> Result<bool, CoreError>`.
+   - Atomically updates `last_copied_at_ms = now_ms` and increments `copy_count = copy_count + 1` by UUID primary key.
+   - Preserves `first_copied_at_ms`, text content representations, and pinned status.
+2. **UniFFI Bridge & Swift Actor Integration (`RustCore/src/lib.rs` & `CoreClient.swift`):**
+   - Exposed `touch_item(itemId: String, timestampMs: Option<i64>) -> Result<bool, CoreError>` on `MimraCoreHandle`.
+   - Added asynchronous wrapper `touchItem(itemId: String, timestampMs: Int64? = nil)` on actor `CoreClient`.
+3. **PasteCoordinator & PanelViewModel Integration (`PasteCoordinator.swift` & `PanelViewModel.swift`):**
+   - In `PasteCoordinator.paste(...)`, after writing representations to `NSPasteboard`, `coreClient.touchItem(itemId: itemId)` updates persistent SQLite storage when `moveToTopOnPaste` is enabled.
+   - In `PanelViewModel.commitSelection(...)`, `moveItemToTop(itemId: item.id)` optimistically reorders the in-memory items list for instant UI responsiveness.
+   - Pinned items maintain their configured `pin_order` when `PinArrangement == .top`, while unpinned items sort to index 0 of the unpinned section.
+4. **User-Configurable Preference (`SettingsView.swift`):**
+   - Introduced `@AppStorage("moveToTopOnPaste") private var moveToTopOnPaste: Bool = true` in **Settings → General → Paste Behavior & Permissions**.
+   - Defaults to `true` matching standard macOS clipboard manager behavior, while allowing users to disable automatic reordering if desired.
+
+### Consequences
+* **Positive:** Choosing an item moves it immediately to the top of history in both the UI and SQLite; rapid re-use workflow is fully supported; pinned items preserve their explicit manual ordering; fully configurable with a toggle in General Settings.
+* **Negative:** None.

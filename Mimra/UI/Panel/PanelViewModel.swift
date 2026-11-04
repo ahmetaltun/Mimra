@@ -255,9 +255,32 @@ public final class PanelViewModel: ObservableObject {
         return true
     }
 
+    /// Moves an item to the top of the unpinned list (or top of list if inline or no pins),
+    /// matching the updated recency order in storage.
+    public func moveItemToTop(itemId: String) {
+        guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
+        var updated = items
+        let item = updated.remove(at: index)
+        if item.isPinned && pinArrangement == .top {
+            // Pinned items stay in their configured pin order
+            updated.insert(item, at: index)
+        } else if pinArrangement == .top {
+            // Insert at the first unpinned index
+            let firstUnpinnedIndex = updated.firstIndex(where: { !$0.isPinned }) ?? 0
+            updated.insert(item, at: firstUnpinnedIndex)
+        } else {
+            updated.insert(item, at: 0)
+        }
+        self.items = updated
+    }
+
     /// Commits the currently selected item (triggers paste or copy action).
     public func commitSelection(mode: PasteMode = .original, forcePaste: Bool? = nil) {
         guard let item = selectedItem else { return }
+        let shouldMoveToTop = (UserDefaults.standard.object(forKey: "moveToTopOnPaste") as? Bool) ?? true
+        if shouldMoveToTop {
+            moveItemToTop(itemId: item.id)
+        }
         onCommitItem?(item, mode, forcePaste)
         onDismiss?()
     }

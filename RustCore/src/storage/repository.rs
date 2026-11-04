@@ -308,6 +308,29 @@ pub fn update_recopy(
     Ok(())
 }
 
+/// Updates the last_copied_at_ms timestamp and increments copy_count for an existing item,
+/// moving it to the top of the history list under recency-based sorting.
+pub fn touch_item(conn: &Connection, item_id: &Uuid, timestamp_ms: i64) -> Result<bool, CoreError> {
+    let now_ms = if timestamp_ms > 0 {
+        timestamp_ms
+    } else {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0)
+    };
+
+    let rows_affected = conn.execute(
+        "UPDATE history_items
+         SET last_copied_at_ms = ?1,
+             copy_count = copy_count + 1
+         WHERE id = ?2;",
+        params![now_ms, item_id.to_string()],
+    )?;
+
+    Ok(rows_affected > 0)
+}
+
 /// Updates recopy timestamps, count, source application, and merges representations for an existing item (F-012, T-CAP-05).
 pub fn update_recopy_and_merge(
     tx: &Transaction,
