@@ -30,7 +30,9 @@ public struct NativeTextPreviewView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
 
-        let contentSize = scrollView.contentSize
+        let contentWidth = max(240.0, scrollView.contentSize.width)
+        let contentSize = NSSize(width: contentWidth, height: max(100.0, scrollView.contentSize.height))
+
         let textStorage = NSTextStorage()
         let layoutManager = NSLayoutManager()
 
@@ -40,12 +42,14 @@ public struct NativeTextPreviewView: NSViewRepresentable {
         textStorage.addLayoutManager(layoutManager)
 
         let textContainer = NSTextContainer(
-            containerSize: NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+            containerSize: NSSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude)
         )
         textContainer.widthTracksTextView = true
         layoutManager.addTextContainer(textContainer)
 
         let textView = NSTextView(frame: NSRect(origin: .zero, size: contentSize), textContainer: textContainer)
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
@@ -63,6 +67,7 @@ public struct NativeTextPreviewView: NSViewRepresentable {
 
         textView.string = text
         scrollView.documentView = textView
+        textView.sizeToFit()
 
         return scrollView
     }
@@ -70,12 +75,19 @@ public struct NativeTextPreviewView: NSViewRepresentable {
     public func updateScrollView(_ scrollView: NSScrollView) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
 
+        let currentWidth = scrollView.contentSize.width
+        if currentWidth > 0 && abs(textView.frame.size.width - currentWidth) > 1.0 {
+            textView.frame.size.width = currentWidth
+            textView.textContainer?.containerSize = NSSize(width: currentWidth, height: .greatestFiniteMagnitude)
+            textView.sizeToFit()
+        }
+
         if textView.string != text {
             textView.string = text
+            textView.sizeToFit()
             // Reset scroll position to top when switching items
-            if let documentView = scrollView.documentView {
-                documentView.scroll(.zero)
-            }
+            scrollView.contentView.scroll(to: .zero)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
         }
 
         let targetFont = isMonospaced
@@ -84,6 +96,7 @@ public struct NativeTextPreviewView: NSViewRepresentable {
 
         if textView.font != targetFont {
             textView.font = targetFont
+            textView.sizeToFit()
         }
     }
 

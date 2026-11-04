@@ -13,6 +13,7 @@ public struct PreviewContainerView: View {
     public let item: HistoryItemSummaryDto?
     public let coreClient: CoreClient?
     public var onClose: (() -> Void)?
+    public var onFullTextLoaded: ((String) -> Void)?
 
     @State private var fullText: String? = nil
     @State private var isMonospaced: Bool = false
@@ -21,11 +22,13 @@ public struct PreviewContainerView: View {
     public init(
         item: HistoryItemSummaryDto?,
         coreClient: CoreClient? = nil,
-        onClose: (() -> Void)? = nil
+        onClose: (() -> Void)? = nil,
+        onFullTextLoaded: ((String) -> Void)? = nil
     ) {
         self.item = item
         self.coreClient = coreClient
         self.onClose = onClose
+        self.onFullTextLoaded = onFullTextLoaded
     }
 
     public var body: some View {
@@ -79,6 +82,7 @@ public struct PreviewContainerView: View {
                let decoded = String(data: textRep.payload, encoding: .utf8) {
                 if !Task.isCancelled {
                     self.fullText = decoded
+                    self.onFullTextLoaded?(decoded)
                 }
             } else {
                 if !Task.isCancelled {

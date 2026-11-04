@@ -230,7 +230,7 @@ final class AppearanceSettingsTestsRunner {
 
         // Defaults
         assert(config.panelWidth == 440, "FAIL: Default panel width must be 440")
-        assert(config.panelHeight == 540, "FAIL: Default panel height must be 540")
+        assert(config.panelHeight == 756, "FAIL: Default panel height must be 756 (40% increase over 540)")
         assert(config.previewWidth == 360, "FAIL: Default preview width must be 360")
 
         // Update sizes

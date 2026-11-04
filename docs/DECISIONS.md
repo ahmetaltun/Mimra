@@ -2055,6 +2055,85 @@ User feedback and runtime inspection identified five specific usability and corr
 * **Positive:** All browser-copied images display proper thumbnails, format labels, byte sizes, and full slideout previews; slideout preview opens via multiple standard macOS shortcuts; settings window opens reliably from the history footer; users can configure history size up to a solid 2,000 item limit; `Command + Backspace` safely edits text without accidental item deletion.
 * **Negative:** None.
 
+---
+
+## ADR-056: History Window Dimensions, Accessibility Banner Removal, Preview Dynamic Height Adaptation, Vertical Text View Scrolling, and Preview Window Display Modes
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+User feedback requested five adjustments across the history window and slideout preview panel:
+1. **Accessibility Warning Banner Removal:** The "Copy-Only Mode Active" banner displayed in the history window when Accessibility permissions were not granted cluttering the clipboard list interface.
+2. **History Window Default Height:** Default history window height was 540 pt, which users requested to increase by 40% (to 756 pt) for greater item density and fewer scroll operations during lookup.
+3. **Preview Window Height Matching History Window:** The slideout preview window previously used a hardcoded 460 pt height. Users requested that the preview window height always match the history window height (`parent.frame.height`, default 756 pt), ensuring complete visual alignment and maximum preview viewport area.
+4. **Vertical Scrolling in Preview Window:** In `NativeTextPreviewView`, the underlying `NSTextView` was initialized with zero frame and without explicit `minSize`/`maxSize` or post-string-assignment `sizeToFit()` invocations. Because `textView.frame.height <= scrollView.contentSize.height`, `NSScrollView` disabled the vertical scroller (`isEnabled: false`), preventing trackpad/mouse vertical scrolling.
+5. **Configurable Preview Window Display Modes:** Users required explicit options for preview presentation:
+   - **Default Option (6.1):** Preview window hidden by default, toggled via keyboard shortcuts (`⌃Space`, `⌥Space`, `⌘Y`, `Space` when search text is empty).
+   - **Option 1 (6.2):** Show preview window immediately alongside the history window.
+   - **Option 2 (6.3):** Show preview window with a configurable delay on selection.
+
+### Decision
+1. **Accessibility Banner Removal (`FloatingPanelView.swift`):**
+   - Removed `CopyOnlyBanner` from `FloatingPanelView.body`. Accessibility onboarding remains properly handled in dedicated onboarding views and settings without cluttering history navigation.
+2. **History Window Height Increase (`AppearanceConfiguration.swift`, `FloatingPanelView.swift`, `SettingsView.swift`):**
+   - Increased default `panelHeight` by 40% from 540 pt to 756 pt (540 * 1.4 = 756).
+   - Updated `FloatingPanelView` ideal frame height to 756 pt and expanded the Settings slider range to 360...1000 pt.
+3. **Preview Height Matching History Window (`PreviewCoordinator.swift`, `PreviewPanel.swift`):**
+   - Configured `previewHeight` to directly match `parent.frame.height` (or `AppearanceConfiguration.shared.panelHeight`, default 756 pt) upon presentation, layout updates, and parent resizing.
+   - Set `panel.maxSize = NSSize(width: 1200, height: parent.frame.height)`.
+   - Both windows share identical height, aligning top and bottom flush with each other.
+4. **Native Text Preview Vertical Scrolling (`NativeTextPreviewView.swift`, `FloatingPanel.swift`):**
+   - Set `textView.minSize = NSSize(width: 0, height: 0)` and `textView.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)`.
+   - Called `textView.sizeToFit()` upon initialization, text updates, font updates, and container width adjustments.
+   - Ensured `scrollView.hasVerticalScroller = true` and `autohidesScrollers = true`.
+   - Added keyboard scrolling support via `Option-Up` / `Option-Down` (`previewCoordinator.scrollPreview(by:)`) when the preview window is visible.
+5. **Preview Window Display Modes (`PreviewCoordinator.swift`, `SettingsView.swift`):**
+   - Introduced `PreviewDisplayMode`: `.manual` (default), `.immediate`, and `.delayed`.
+   - Stored in UserDefaults under key `"previewDisplayMode"`, preserving backwards compatibility with `"previewAutoOpenEnabled"`.
+   - Integrated `handleParentDidShow(item:parent:)` in `FloatingPanel.show()` to immediately present or schedule delayed preview presentation.
+   - Updated Settings UI with a clean `Picker` allowing users to select their preferred mode and configure delay in milliseconds when `.delayed` is selected.
+
+### Consequences
+* **Positive:** History window is clean without intrusive banners; default history height displays 40% more items; preview window dynamically fits its content up to the history window height; full interactive vertical scrolling works for long text buffers; users have complete control over preview appearance behavior (manual/immediate/delayed).
+* **Negative:** None.
+
+---
+
+## ADR-057: Settings Window Focus Retention and Left-Sidebar Navigation Architecture
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+User feedback and testing identified two critical issues when opening the Settings window from the history window:
+1. **Settings Window Buried Under Other App Windows:** When clicking the gear / settings icon in the history window bottom-right footer, `FloatingPanel` dismissed itself by calling `hide()`. `hide()` was designed to reactivate the previously active application (`targetApp.activate()`) so focus would return to e.g. Google Chrome or Xcode after pasting. However, when transitioning to Settings, reactivating the external target app caused macOS WindowServer to immediately bring that external application to the foreground, pushing the newly created Settings window beneath other app windows.
+2. **Settings Tab Bar Overflow & Chevrons:** The Settings window previously used a standard AppKit/SwiftUI top `TabView` fixed at 540 pt width with 6 tabs ("General", "Appearance", "Hotkeys", "Search & Sorting", "Storage", "Privacy"). Because 6 tabs exceeded the horizontal toolbar width, AppKit automatically collapsed trailing items into an obscure top-right `>>` chevron disclosure button, hiding navigation items and impairing discoverability.
+
+### Decision
+1. **Focus Retention Mechanism (`FloatingPanel.swift`, `StatusBarCoordinator.swift`):**
+   - Added `hide(restoringFocus: Bool = true)` to `FloatingPanel`.
+   - In `onOpenSettings` and `Command-,`, `FloatingPanel` dismisses with `hide(restoringFocus: false)`, preventing reactivation of the background external app.
+   - In `StatusBarCoordinator.openSettings()`, configured:
+     - Standard `window.level = .normal` ensuring Settings behaves like a proper macOS preference window, yielding naturally when switching to other apps rather than staying pinned on top of everything.
+     - `window.makeKeyAndOrderFront(nil)` and `NSApp.activate(ignoringOtherApps: true)` to guarantee foreground activation upon opening.
+     - Window dimensions expanded to `720 × 530 pt`.
+     - Added `NSWindowDelegate` with `windowWillClose` to cleanly reset `settingsWindow = nil`.
+2. **Left-Sidebar Navigation Redesign (`SettingsView.swift`):**
+   - Replaced top `TabView` with a left-rail navigation sidebar and detail pane layout.
+   - Introduced `SettingsCategory` enum: `.general`, `.appearance`, `.hotkeys`, `.searchSorting`, `.storage`, `.privacy` with SF Symbols and localized display titles.
+   - Sidebar width fixed at 190 pt with standard macOS sidebar vibrancy and active item accent highlighting.
+   - Detail pane fixed at 530 pt with vertical scrolling for comprehensive configuration controls.
+   - Total window size 720 × 530 pt provides generous padding and completely eliminates tab bar overflow and disclosure chevrons.
+
+### Consequences
+* **Positive:** Settings window opens reliably in the foreground upon request without getting buried; behaves as a standard `.normal` level window that yields to background apps when switched away; all 6 navigation categories are immediately visible, labeled, and accessible without hidden chevrons; clean conformant macOS HIG design.
+* **Negative:** None.
+
+
+
 
 
 

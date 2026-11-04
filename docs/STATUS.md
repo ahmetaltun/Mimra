@@ -176,6 +176,13 @@
 | **Fix 3** | Settings button in history window footer wired to `onSettingsRequested` | Completed | `Mimra/UI/Panel/FloatingPanel.swift` (`tests/user_issues_fixes_tests.swift`) |
 | **Fix 4** | Maximum history item limit (solid 2,000 limit, configurable picker in Settings and dynamic query limit) | Completed | `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/user_issues_fixes_tests.swift`) |
 | **Fix 5** | Deletion keybinding isolation: `Option+Backspace` deletes item, `Command+Backspace` reserved for text editing | Completed | `Mimra/UI/Panel/FloatingPanel.swift` (`tests/user_issues_fixes_tests.swift`) |
+| **Fix 6** | Remove accessibility warning from history window | Completed | `Mimra/UI/Panel/FloatingPanelView.swift` (ADR-056) |
+| **Fix 7** | Increase history window default height by 40% (540 pt -> 756 pt) | Completed | `Mimra/macOS/AppearanceConfiguration.swift`, `FloatingPanelView.swift`, `SettingsView.swift` (ADR-056) |
+| **Fix 8** | Slideout preview height set to always match history window height | Completed | `Mimra/UI/Preview/PreviewCoordinator.swift` (`tests/preview_settings_tests.swift`, ADR-056) |
+| **Fix 9** | Fix preview window vertical scrolling (NSTextView sizing, minSize/maxSize, Option-Up/Down keys) | Completed | `Mimra/UI/Preview/NativeTextPreviewView.swift`, `FloatingPanel.swift` (`tests/preview_settings_tests.swift`, ADR-056) |
+| **Fix 10** | Configurable preview display modes (Manual default, Immediate, Delayed with delay picker) | Completed | `Mimra/UI/Preview/PreviewCoordinator.swift`, `SettingsView.swift`, `FloatingPanel.swift` (`tests/preview_settings_tests.swift`, ADR-056) |
+| **Fix 11** | Settings window focus retention & standard .normal window level (opens in front, yields on app switch) | Completed | `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/macOS/StatusBarCoordinator.swift` (`tests/status_bar_tests.swift`, ADR-057) |
+| **Fix 12** | Settings window navigation redesign: modern 190 pt left-rail sidebar (eliminating tab bar overflow and >> chevrons) | Completed | `Mimra/UI/Settings/SettingsView.swift`, `Mimra/macOS/StatusBarCoordinator.swift` (`tests/status_bar_tests.swift`, ADR-057) |
 
 ---
 

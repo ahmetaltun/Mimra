@@ -21,8 +21,11 @@ struct PreviewSettingsTestsRunner {
         await testPanelDismissalCancelsAutoOpenTimer()
         testImmediateUpdateWhenAlreadyVisible()
         testUserDefaultsPersistence()
+        testPreviewDisplayModesImmediateAndManual()
+        testPreviewDynamicHeightClampedToParent()
+        testNativeTextPreviewVerticalScrollState()
 
-        print("=== All Preview Settings & Auto-Open Tests PASSED (7/7) ===")
+        print("=== All Preview Settings & Auto-Open Tests PASSED (10/10) ===")
     }
 
     // MARK: - Test 1: Local Shortcut Isolation
@@ -246,7 +249,91 @@ struct PreviewSettingsTestsRunner {
         coordinator.isAutoOpenEnabled = false
         assert(UserDefaults.standard.bool(forKey: "previewAutoOpenEnabled") == false, "Must persist false")
 
+        coordinator.displayMode = .immediate
+        assert(UserDefaults.standard.string(forKey: "previewDisplayMode") == "immediate", "Must persist immediate")
+        assert(coordinator.isAutoOpenEnabled == true, "Immediate mode implies auto-open")
+
+        coordinator.displayMode = .manual
+        assert(UserDefaults.standard.string(forKey: "previewDisplayMode") == "manual", "Must persist manual")
+        assert(coordinator.isAutoOpenEnabled == false, "Manual mode disables auto-open")
+
         print("  -> Passed UserDefaults persistence check.")
+    }
+
+    // MARK: - Test 8: Preview Display Modes (Manual vs Immediate vs Delayed)
+
+    static func testPreviewDisplayModesImmediateAndManual() {
+        print("  [Test 8] Preview display modes: immediate opens on show, manual stays closed...")
+
+        let coordinator = PreviewCoordinator()
+        let parent = FloatingPanel(contentRect: NSRect(x: 400, y: 300, width: 440, height: 756))
+        parent.makeKeyAndOrderFront(nil)
+        defer { parent.orderOut(nil) }
+
+        let item = makeDummyItem(id: "mode-test-item")
+
+        // 1. Manual mode (Requirement 6.1)
+        coordinator.displayMode = .manual
+        coordinator.handleParentDidShow(item: item, parent: parent)
+        assert(!coordinator.isPreviewVisible, "In manual mode, preview must not show automatically on window open")
+
+        // 2. Immediate mode (Requirement 6.2)
+        coordinator.displayMode = .immediate
+        coordinator.handleParentDidShow(item: item, parent: parent)
+        assert(coordinator.isPreviewVisible, "In immediate mode, preview must open immediately on window open")
+        assert(coordinator.currentItem?.id == "mode-test-item", "Must show current item")
+
+        coordinator.hide()
+        coordinator.displayMode = .manual
+        print("  -> Passed preview display modes check.")
+    }
+
+    // MARK: - Test 9: Preview Height Matches History Window
+
+    static func testPreviewDynamicHeightClampedToParent() {
+        print("  [Test 9] Preview window height matches history window height...")
+
+        let coordinator = PreviewCoordinator()
+        let parent = FloatingPanel(contentRect: NSRect(x: 400, y: 300, width: 440, height: 756))
+        parent.makeKeyAndOrderFront(nil)
+        defer { parent.orderOut(nil) }
+
+        let item = makeDummyItem(id: "height-test-item")
+        coordinator.show(for: item, parent: parent)
+
+        assert(coordinator.previewHeight == parent.frame.height,
+               "Preview height (\(coordinator.previewHeight)) must match history window height (\(parent.frame.height))")
+        if let panel = coordinator.previewPanel {
+            assert(panel.frame.height == parent.frame.height,
+                   "Preview panel frame height (\(panel.frame.height)) must match parent frame height (\(parent.frame.height))")
+        }
+
+        coordinator.hide()
+        print("  -> Passed preview height matches history window check.")
+    }
+
+    // MARK: - Test 10: Native Text Preview Vertical Scroll State
+
+    static func testNativeTextPreviewVerticalScrollState() {
+        print("  [Test 10] NativeTextPreviewView vertical scroll state and document sizing (Req 5)...")
+
+        let line = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.\n"
+        let multilineText = String(repeating: line, count: 50)
+
+        let previewView = NativeTextPreviewView(text: multilineText)
+        let scrollView = previewView.makeScrollView()
+        scrollView.frame = NSRect(x: 0, y: 0, width: 360, height: 400)
+        previewView.updateScrollView(scrollView)
+
+        guard let textView = scrollView.documentView as? NSTextView else {
+            fatalError("documentView must be NSTextView")
+        }
+
+        assert(textView.frame.size.height > scrollView.contentSize.height,
+               "TextView height (\(textView.frame.size.height)) must be larger than contentSize.height (\(scrollView.contentSize.height)) to allow scrolling")
+        assert(scrollView.verticalScroller?.isEnabled == true, "Vertical scroller must be enabled for multi-line text")
+
+        print("  -> Passed NativeTextPreviewView vertical scroll state check.")
     }
 
     // MARK: - Helpers

@@ -79,8 +79,15 @@ struct StatusBarTests {
 
         // 4. Test Option-Shift-Click: Opens Settings Directly (F-027)
         coordinator.handleStatusItemClick(isRightClick: false, modifierFlags: [.option, .shift])
-        // Verify settings action doesn't crash and settings window is requested
-        print("✓ T-UI-01 / F-027: Option-Shift-click successfully opens Settings window")
+        guard let win = coordinator.settingsWindow else {
+            fatalError("FAIL: Settings window was not created")
+        }
+        let contentRect = win.contentRect(forFrameRect: win.frame)
+        assert(contentRect.width == 720, "FAIL: Settings window content width must be 720, got \(contentRect.width)")
+        assert(contentRect.height == 530, "FAIL: Settings window content height must be 530, got \(contentRect.height)")
+        assert(win.level == .normal, "FAIL: Settings window level must be .normal, got \(win.level)")
+        assert(SettingsCategory.allCases.count == 6, "FAIL: SettingsCategory must have 6 categories")
+        print("✓ T-UI-01 / F-027: Option-Shift-click successfully opens Settings window at 720x530 with .normal level")
 
         // 5. Test Ignore Next Copy Action (F-026)
         assert(!monitor.privacyFilter.ignoreNextCopy, "FAIL: ignoreNextCopy should be false initially")

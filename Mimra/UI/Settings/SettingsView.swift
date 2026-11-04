@@ -621,7 +621,8 @@ public struct AppearanceSettingsTab: View {
     @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
     @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
 
-    // Slideout Preview preferences
+    // Slideout Preview preferences (P6-02 / F-040, Requirement 6)
+    @AppStorage("previewDisplayMode") private var previewDisplayModeRaw: String = PreviewDisplayMode.manual.rawValue
     @AppStorage("previewAutoOpenEnabled") private var previewAutoOpenEnabled: Bool = false
     @AppStorage("previewDelayMs") private var previewDelayMs: Int = 400
 
@@ -692,7 +693,7 @@ public struct AppearanceSettingsTab: View {
                     Slider(value: Binding(
                         get: { Double(appearanceConfig.panelHeight) },
                         set: { appearanceConfig.panelHeight = CGFloat($0) }
-                    ), in: 360...800, step: 20)
+                    ), in: 360...1000, step: 20)
                     .frame(width: 160)
                 }
 
@@ -708,10 +709,22 @@ public struct AppearanceSettingsTab: View {
             }
 
             Section("Slideout Preview") {
-                Toggle("Open preview automatically on selection", isOn: $previewAutoOpenEnabled)
+                Picker("Preview Behavior", selection: Binding(
+                    get: {
+                        PreviewDisplayMode(rawValue: previewDisplayModeRaw) ?? (previewAutoOpenEnabled ? .delayed : .manual)
+                    },
+                    set: { newMode in
+                        previewDisplayModeRaw = newMode.rawValue
+                        previewAutoOpenEnabled = (newMode != .manual)
+                    }
+                )) {
+                    Text("Hidden by default (Toggle with shortcut)").tag(PreviewDisplayMode.manual)
+                    Text("Show immediately with history window").tag(PreviewDisplayMode.immediate)
+                    Text("Show with delay on selection").tag(PreviewDisplayMode.delayed)
+                }
 
-                if previewAutoOpenEnabled {
-                    Picker("Auto-Open Delay", selection: $previewDelayMs) {
+                if (PreviewDisplayMode(rawValue: previewDisplayModeRaw) ?? (previewAutoOpenEnabled ? .delayed : .manual)) == .delayed {
+                    Picker("Preview Delay", selection: $previewDelayMs) {
                         Text("Fast (200 ms)").tag(200)
                         Text("Normal (400 ms)").tag(400)
                         Text("Relaxed (600 ms)").tag(600)
@@ -719,7 +732,7 @@ public struct AppearanceSettingsTab: View {
                     }
                 }
 
-                Text("Toggle manually anytime inside history using ⌃Space (Control-Space).")
+                Text("Shortcut: Toggle preview anytime inside history using ⌃Space, ⌥Space, or ⌘Y.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1194,13 +1207,37 @@ public struct HotkeysSettingsTab: View {
 }
 
 // ==============================================================================
-// Mimra — Main Settings View
+// Mimra — Settings Category Definition & Main Settings View
 // ==============================================================================
+
+public enum SettingsCategory: String, CaseIterable, Identifiable, Sendable {
+    case general = "General"
+    case appearance = "Appearance"
+    case hotkeys = "Hotkeys"
+    case search = "Search & Sorting"
+    case storage = "Storage"
+    case privacy = "Privacy"
+
+    public var id: String { rawValue }
+
+    public var icon: String {
+        switch self {
+        case .general: return "gear"
+        case .appearance: return "paintpalette"
+        case .hotkeys: return "command"
+        case .search: return "arrow.up.arrow.down.circle"
+        case .storage: return "cylinder.split.1x2"
+        case .privacy: return "hand.raised"
+        }
+    }
+}
 
 public struct SettingsView: View {
     @State private var engineVersion: String = coreVersion()
     @ObservedObject private var accessibilityService = AccessibilityService.shared
     @StateObject private var storageViewModel: StorageSettingsViewModel
+
+    @State private var selectedCategory: SettingsCategory = .general
 
     @AppStorage("pasteAutomatically") private var pasteAutomatically: Bool = true
     @AppStorage("cycleModeEnabled") private var cycleModeEnabled: Bool = true
@@ -1208,7 +1245,8 @@ public struct SettingsView: View {
     @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
     @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
 
-    // Slideout Preview preferences (P6-02 / F-040, T-PREV-02)
+    // Slideout Preview preferences (P6-02 / F-040, T-PREV-02, Requirement 6)
+    @AppStorage("previewDisplayMode") private var previewDisplayModeRaw: String = PreviewDisplayMode.manual.rawValue
     @AppStorage("previewAutoOpenEnabled") private var previewAutoOpenEnabled: Bool = false
     @AppStorage("previewDelayMs") private var previewDelayMs: Int = 400
 
@@ -1223,38 +1261,80 @@ public struct SettingsView: View {
     }
 
     public var body: some View {
-        TabView {
-            GeneralSettingsTab(engineVersion: engineVersion)
-                .tabItem {
-                    Label("General", systemImage: "gear")
+        HStack(spacing: 0) {
+            // Left Navigation Sidebar
+            VStack(spacing: 4) {
+                ForEach(SettingsCategory.allCases) { category in
+                    Button(action: {
+                        selectedCategory = category
+                    }) {
+                        HStack(spacing: 10) {
+                            Image(systemName: category.icon)
+                                .font(.system(size: 13, weight: .medium))
+                                .frame(width: 18)
+                                .foregroundColor(selectedCategory == category ? .white : .accentColor)
+
+                            Text(category.rawValue)
+                                .font(.system(size: 13, weight: selectedCategory == category ? .semibold : .regular))
+                                .foregroundColor(selectedCategory == category ? .white : .primary)
+
+                            Spacer()
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(
+                            selectedCategory == category
+                                ? RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.accentColor)
+                                : RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(category.rawValue)
                 }
 
-            AppearanceSettingsTab()
-                .tabItem {
-                    Label("Appearance", systemImage: "paintpalette")
-                }
+                Spacer()
 
-            HotkeysSettingsTab()
-                .tabItem {
-                    Label("Hotkeys", systemImage: "command")
+                // Sidebar Footer Info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Mimra")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    Text("Engine \(engineVersion)")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary.opacity(0.7))
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+            }
+            .padding(.top, 16)
+            .padding(.horizontal, 8)
+            .frame(width: 190)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
 
-            SearchSettingsTab()
-                .tabItem {
-                    Label("Search & Sorting", systemImage: "arrow.up.arrow.down.circle")
-                }
+            Divider()
 
-            StorageSettingsTab(viewModel: storageViewModel)
-                .tabItem {
-                    Label("Storage", systemImage: "cylinder.split.1x2")
+            // Active Category Detail Pane
+            Group {
+                switch selectedCategory {
+                case .general:
+                    GeneralSettingsTab(engineVersion: engineVersion)
+                case .appearance:
+                    AppearanceSettingsTab()
+                case .hotkeys:
+                    HotkeysSettingsTab()
+                case .search:
+                    SearchSettingsTab()
+                case .storage:
+                    StorageSettingsTab(viewModel: storageViewModel)
+                case .privacy:
+                    PrivacySettingsTab()
                 }
-
-            PrivacySettingsTab()
-                .tabItem {
-                    Label("Privacy", systemImage: "hand.raised")
-                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 540, height: 480)
+        .frame(width: 720, height: 530)
         .task {
             accessibilityService.startObserving()
         }

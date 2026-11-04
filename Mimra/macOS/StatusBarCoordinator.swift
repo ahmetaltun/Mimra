@@ -9,9 +9,9 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class StatusBarCoordinator: NSObject {
+final class StatusBarCoordinator: NSObject, NSWindowDelegate {
     private var statusItem: NSStatusItem?
-    private var settingsWindow: NSWindow?
+    public private(set) var settingsWindow: NSWindow?
     private(set) var contextMenu: NSMenu?
 
     public let coreClient: CoreClient
@@ -268,25 +268,32 @@ final class StatusBarCoordinator: NSObject {
     }
 
     @objc public func openSettings() {
-        if let existing = settingsWindow, existing.isVisible {
+        if let existing = settingsWindow {
             existing.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 540, height: 480),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 530),
+            styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
         window.center()
         window.title = "Mimra Settings"
-        window.contentView = NSHostingView(rootView: SettingsView(coreClient: coreClient))
         window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.contentView = NSHostingView(rootView: SettingsView(coreClient: coreClient))
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         self.settingsWindow = window
+    }
+
+    public func windowWillClose(_ notification: Notification) {
+        if let closing = notification.object as? NSWindow, closing == settingsWindow {
+            settingsWindow = nil
+        }
     }
 
     @objc private func quitApp() {

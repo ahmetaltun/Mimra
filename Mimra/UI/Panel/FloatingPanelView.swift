@@ -55,14 +55,6 @@ public struct FloatingPanelView: View {
                     .opacity(0.4)
             }
 
-            // Copy-Only Mode Informational Banner (when Accessibility is not granted)
-            if !accessibilityService.isTrusted {
-                CopyOnlyBanner(onEnable: {
-                    accessibilityService.promptForPermission()
-                })
-                Divider()
-                    .opacity(0.4)
-            }
 
             // Regex Syntax Error Warning Banner (P4-03)
             if let regexErr = viewModel.regexErrorMessage {
@@ -253,7 +245,7 @@ public struct FloatingPanelView: View {
                 )
             }
         }
-        .frame(minWidth: 340, idealWidth: 440, maxWidth: 800, minHeight: 320, idealHeight: 540, maxHeight: 1000)
+        .frame(minWidth: 340, idealWidth: 440, maxWidth: 800, minHeight: 320, idealHeight: 756, maxHeight: 1000)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(

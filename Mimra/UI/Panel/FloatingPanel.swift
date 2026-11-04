@@ -139,7 +139,7 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             self?.hide()
         }
         viewModel.onOpenSettings = { [weak self] in
-            self?.hide()
+            self?.hide(restoringFocus: false)
             self?.onSettingsRequested?()
         }
         viewModel.onCommitItem = { [weak self] item, mode, forcePaste in
@@ -359,7 +359,7 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
         // 3. Command-, (Settings)
         if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "," {
             cancelCycle()
-            hide()
+            hide(restoringFocus: false)
             onSettingsRequested?()
             return true
         }
@@ -402,6 +402,17 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
                 _ = await viewModel.moveSelectedPinDown()
             }
             return true
+        }
+
+        // Preview Window Keyboard Scroll (Option-Up / Option-Down when preview is visible)
+        if previewCoordinator.isPreviewVisible && event.modifierFlags.contains(.option) && !event.modifierFlags.contains(.command) {
+            if event.keyCode == 126 { // Option-Up
+                previewCoordinator.scrollPreview(by: -100)
+                return true
+            } else if event.keyCode == 125 { // Option-Down
+                previewCoordinator.scrollPreview(by: 100)
+                return true
+            }
         }
 
         // 7. Up Arrow (Allows manual navigation during cycle mode or normal mode)
@@ -618,6 +629,11 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
         // 2. Reload data and reset search
         Task {
             await viewModel.loadData()
+            if self.previewCoordinator.displayMode == .immediate, let p = self.panel, p.isVisible {
+                self.previewCoordinator.show(for: self.viewModel.selectedItem, parent: p)
+            } else if self.previewCoordinator.isPreviewVisible {
+                self.previewCoordinator.updateItemIfVisible(self.viewModel.selectedItem)
+            }
         }
 
         // 3. Position the panel according to AppearanceConfiguration (F-032, T-UI-07)
@@ -626,10 +642,14 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
         // 4. Make key and order front
         p.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+
+        // 5. Handle Preview Window Display Mode (Option 1 & 2 - Requirement 6)
+        previewCoordinator.handleParentDidShow(item: viewModel.selectedItem, parent: p)
     }
 
     /// Hides the floating panel without losing state.
-    public func hide() {
+    /// - Parameter restoringFocus: If true, reactivates the previous application. Pass false when navigating to internal windows like Settings.
+    public func hide(restoringFocus: Bool = true) {
         cancelCycle()
         previewCoordinator.hide()
         panel?.orderOut(nil)
@@ -637,7 +657,7 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             viewModel.searchText = ""
         }
         // VoiceOver & system focus restoration: reactivate target application (P7-09 / F-029, T-UI-06)
-        if let target = targetApp, !target.isTerminated {
+        if restoringFocus, let target = targetApp, !target.isTerminated {
             target.activate()
         }
     }

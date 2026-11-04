@@ -73,6 +73,29 @@ public enum MenuBarIconStyle: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// User configurable display behavior for the slideout preview window.
+public enum PreviewDisplayMode: String, CaseIterable, Identifiable, Sendable {
+    /// Preview window is hidden by default and toggled via keyboard shortcut (Default Option 6.1).
+    case manual = "manual"
+    /// Preview window is shown immediately alongside the history window (Option 1 - 6.2).
+    case immediate = "immediate"
+    /// Preview window is shown with a delay on selection (Option 2 - 6.3).
+    case delayed = "delayed"
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .manual:
+            return "Hidden by default (Toggle with shortcut)"
+        case .immediate:
+            return "Show immediately with history window"
+        case .delayed:
+            return "Show with delay on selection"
+        }
+    }
+}
+
 /// Observable singleton managing application appearance, dimensions, and live updates.
 @MainActor
 public final class AppearanceConfiguration: ObservableObject {
@@ -186,7 +209,7 @@ public final class AppearanceConfiguration: ObservableObject {
     public var panelHeight: CGFloat {
         get {
             let val = userDefaults.double(forKey: Self.panelHeightKey)
-            return val >= 300 ? CGFloat(val) : 540
+            return val >= 300 ? CGFloat(val) : 756
         }
         set {
             userDefaults.set(Double(newValue), forKey: Self.panelHeightKey)
