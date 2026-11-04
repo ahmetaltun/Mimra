@@ -76,12 +76,204 @@ pub fn sanitize_fts5_query(input: &str) -> Option<String> {
     }
 }
 
+/// Maximum number of bytes scanned in content for regex and deep matching to prevent CPU stalls.
+pub const MAX_CONTENT_SCAN_BYTES: usize = 64 * 1024; // 64 KB
+
+/// Target character length for context preview snippets displayed in search results.
+pub const SNIPPET_TARGET_CHARS: usize = 160;
+
+/// Number of prefix context characters to show before a match in context preview snippets.
+pub const SNIPPET_PREFIX_CHARS: usize = 35;
+
+/// Extracts a context window of up to `target_chars` centered around `match_byte_offset` in `text`.
+/// Safely avoids splitting UTF-8 characters and provides `prefix_chars` of preceding context.
+pub fn extract_excerpt_around_byte(
+    text: &str,
+    match_byte_offset: usize,
+    target_chars: usize,
+    prefix_chars: usize,
+) -> String {
+    let char_count = text.chars().count();
+    if char_count <= target_chars {
+        return text.to_string();
+    }
+
+    let mut match_char_idx = 0;
+    for (char_idx, (b_idx, _)) in text.char_indices().enumerate() {
+        if b_idx <= match_byte_offset {
+            match_char_idx = char_idx;
+        } else {
+            break;
+        }
+    }
+
+    let start_char_idx = if match_char_idx + 20 <= target_chars {
+        0
+    } else {
+        match_char_idx.saturating_sub(prefix_chars)
+    };
+
+    text.chars()
+        .skip(start_char_idx)
+        .take(target_chars)
+        .collect()
+}
+
+/// Locates the byte offset of a match in `search_text` under the active `SearchMode`.
+/// Bounds the scan to `MAX_CONTENT_SCAN_BYTES` to protect against pathological large payloads.
+pub fn find_content_match_offset(
+    search_text: &str,
+    query: &str,
+    mode: SearchMode,
+    compiled_regex: Option<&regex::Regex>,
+) -> Option<usize> {
+    let trimmed_query = query.trim();
+    if trimmed_query.is_empty() || search_text.is_empty() {
+        return None;
+    }
+
+    // Take bounded scan slice up to a valid UTF-8 character boundary <= MAX_CONTENT_SCAN_BYTES
+    let scan_slice = if search_text.len() > MAX_CONTENT_SCAN_BYTES {
+        let mut end = MAX_CONTENT_SCAN_BYTES;
+        while end > 0 && !search_text.is_char_boundary(end) {
+            end -= 1;
+        }
+        &search_text[..end]
+    } else {
+        search_text
+    };
+
+    match mode {
+        SearchMode::Regex => {
+            if let Some(re) = compiled_regex {
+                re.find(scan_slice).map(|m| m.start())
+            } else {
+                None
+            }
+        }
+        SearchMode::Exact => {
+            let query_lower = trimmed_query.to_lowercase();
+            let scan_lower = scan_slice.to_lowercase();
+            if let Some(pos) = scan_lower.find(&query_lower) {
+                let mut byte_accum = 0;
+                let mut original_byte_pos = 0;
+                for (b_idx, c) in scan_slice.char_indices() {
+                    if byte_accum >= pos {
+                        original_byte_pos = b_idx;
+                        break;
+                    }
+                    for lc in c.to_lowercase() {
+                        byte_accum += lc.len_utf8();
+                    }
+                }
+                Some(original_byte_pos)
+            } else {
+                None
+            }
+        }
+        SearchMode::Fuzzy => {
+            let query_lower = trimmed_query.to_lowercase();
+            let scan_lower = scan_slice.to_lowercase();
+
+            // 1. Literal substring match (highest priority in fuzzy match)
+            if let Some(pos) = scan_lower.find(&query_lower) {
+                let mut byte_accum = 0;
+                let mut original_byte_pos = 0;
+                for (b_idx, c) in scan_slice.char_indices() {
+                    if byte_accum >= pos {
+                        original_byte_pos = b_idx;
+                        break;
+                    }
+                    for lc in c.to_lowercase() {
+                        byte_accum += lc.len_utf8();
+                    }
+                }
+                return Some(original_byte_pos);
+            }
+
+            // 2. Token-delimited substring match (matches individual tokens from FTS5 sanitization)
+            for raw_token in trimmed_query.split(|c: char| {
+                c.is_whitespace()
+                    || matches!(
+                        c,
+                        '"' | '\''
+                            | '*'
+                            | '('
+                            | ')'
+                            | ':'
+                            | '^'
+                            | '{'
+                            | '}'
+                            | '['
+                            | ']'
+                            | '+'
+                            | '-'
+                            | '~'
+                            | '/'
+                            | '\\'
+                            | '!'
+                            | '?'
+                            | ';'
+                            | '<'
+                            | '>'
+                            | '='
+                            | '|'
+                            | '&'
+                    )
+            }) {
+                let tok_cleaned: String = raw_token.chars().filter(|c| !c.is_control()).collect();
+                if tok_cleaned.len() >= 2 {
+                    let tok_lower = tok_cleaned.to_lowercase();
+                    if let Some(pos) = scan_lower.find(&tok_lower) {
+                        let mut byte_accum = 0;
+                        let mut original_byte_pos = 0;
+                        for (b_idx, c) in scan_slice.char_indices() {
+                            if byte_accum >= pos {
+                                original_byte_pos = b_idx;
+                                break;
+                            }
+                            for lc in c.to_lowercase() {
+                                byte_accum += lc.len_utf8();
+                            }
+                        }
+                        return Some(original_byte_pos);
+                    }
+                }
+            }
+
+            // 3. Subsequence match on short prefixes (up to 4096 bytes)
+            let fuzzy_scan_len = scan_slice.len().min(4096);
+            let mut end = fuzzy_scan_len;
+            while end > 0 && !scan_slice.is_char_boundary(end) {
+                end -= 1;
+            }
+            if let Some(fuzzy_res) =
+                crate::domain::search::fuzzy_match(trimmed_query, &scan_slice[..end])
+            {
+                if let Some(first_hl) = fuzzy_res.highlights.first() {
+                    let mut utf16_accum = 0;
+                    for (b_idx, c) in scan_slice[..end].char_indices() {
+                        if utf16_accum >= first_hl.start {
+                            return Some(b_idx);
+                        }
+                        utf16_accum += c.len_utf16() as u32;
+                    }
+                }
+                return Some(0);
+            }
+
+            None
+        }
+    }
+}
+
 /// Internal candidate structure retrieved from SQLite before fuzzy ranking and highlight extraction.
 #[derive(Debug, Clone)]
 struct RawCandidate {
     id_str: String,
     kind_str: String,
     title: String,
+    search_text: String,
     snippet: String,
     ocr_text: String,
     is_pinned: bool,
@@ -166,19 +358,13 @@ pub fn search_history_page_with_options(
                 let search_text: String = row.get(3)?;
                 let ocr_text: String = row.get(4)?;
                 let is_pinned_int: i64 = row.get(5)?;
-                let snippet = if !search_text.trim().is_empty() {
-                    search_text.chars().take(160).collect()
-                } else if !ocr_text.trim().is_empty() {
-                    ocr_text.chars().take(160).collect()
-                } else {
-                    String::new()
-                };
 
                 Ok(RawCandidate {
                     id_str: row.get(0)?,
                     kind_str: row.get(1)?,
                     title: row.get(2)?,
-                    snippet,
+                    search_text,
+                    snippet: String::new(),
                     ocr_text,
                     is_pinned: is_pinned_int != 0,
                     pin_order: row.get(6)?,
@@ -213,19 +399,13 @@ pub fn search_history_page_with_options(
             let search_text: String = row.get(3)?;
             let ocr_text: String = row.get(4)?;
             let is_pinned_int: i64 = row.get(5)?;
-            let snippet = if !search_text.trim().is_empty() {
-                search_text.chars().take(160).collect()
-            } else if !ocr_text.trim().is_empty() {
-                ocr_text.chars().take(160).collect()
-            } else {
-                String::new()
-            };
 
             Ok(RawCandidate {
                 id_str: row.get(0)?,
                 kind_str: row.get(1)?,
                 title: row.get(2)?,
-                snippet,
+                search_text,
+                snippet: String::new(),
                 ocr_text,
                 is_pinned: is_pinned_int != 0,
                 pin_order: row.get(6)?,
@@ -255,60 +435,127 @@ pub fn search_history_page_with_options(
     let mut scored_items: Vec<ScoredCandidate> = Vec::new();
 
     for (_, mut cand) in candidate_map {
-        let scorable = crate::domain::search::ScorableItem {
+        // 1. Evaluate match against title
+        let title_scorable = crate::domain::search::ScorableItem {
             title: &cand.title,
-            snippet: &cand.snippet,
+            snippet: "",
             last_copied_at_ms: cand.last_copied_at_ms,
             is_pinned: cand.is_pinned,
             pin_order: cand.pin_order,
         };
-        let base_match = score_item_with_mode(
+        let title_match = score_item_with_mode(
             trimmed_query,
-            &scorable,
+            &title_scorable,
             mode,
             compiled_regex.as_ref(),
             now_ms,
         );
 
-        let ocr_match = if !cand.ocr_text.is_empty() {
-            let ocr_scorable = crate::domain::search::ScorableItem {
-                title: &cand.title,
-                snippet: &cand.ocr_text,
+        // 2. Evaluate match against search_text using context excerpt
+        let content_match_offset = find_content_match_offset(
+            &cand.search_text,
+            trimmed_query,
+            mode,
+            compiled_regex.as_ref(),
+        );
+
+        let (content_snippet, content_match) = if let Some(offset) = content_match_offset {
+            let excerpt = extract_excerpt_around_byte(
+                &cand.search_text,
+                offset,
+                SNIPPET_TARGET_CHARS,
+                SNIPPET_PREFIX_CHARS,
+            );
+            let excerpt_scorable = crate::domain::search::ScorableItem {
+                title: "",
+                snippet: &excerpt,
                 last_copied_at_ms: cand.last_copied_at_ms,
                 is_pinned: cand.is_pinned,
                 pin_order: cand.pin_order,
             };
-            score_item_with_mode(
+            let sc = score_item_with_mode(
+                trimmed_query,
+                &excerpt_scorable,
+                mode,
+                compiled_regex.as_ref(),
+                now_ms,
+            );
+            (excerpt, sc)
+        } else {
+            let fallback_snippet = cand
+                .search_text
+                .chars()
+                .take(SNIPPET_TARGET_CHARS)
+                .collect();
+            (fallback_snippet, None)
+        };
+
+        // 3. Evaluate match against OCR text (if present)
+        let ocr_match_offset = if !cand.ocr_text.is_empty() {
+            find_content_match_offset(&cand.ocr_text, trimmed_query, mode, compiled_regex.as_ref())
+        } else {
+            None
+        };
+
+        let (ocr_snippet, ocr_match) = if let Some(offset) = ocr_match_offset {
+            let excerpt = extract_excerpt_around_byte(
+                &cand.ocr_text,
+                offset,
+                SNIPPET_TARGET_CHARS,
+                SNIPPET_PREFIX_CHARS,
+            );
+            let ocr_scorable = crate::domain::search::ScorableItem {
+                title: "",
+                snippet: &excerpt,
+                last_copied_at_ms: cand.last_copied_at_ms,
+                is_pinned: cand.is_pinned,
+                pin_order: cand.pin_order,
+            };
+            let sc = score_item_with_mode(
                 trimmed_query,
                 &ocr_scorable,
                 mode,
                 compiled_regex.as_ref(),
                 now_ms,
-            )
+            );
+            (excerpt, sc)
+        } else if !cand.ocr_text.is_empty() {
+            let fallback = cand.ocr_text.chars().take(SNIPPET_TARGET_CHARS).collect();
+            (fallback, None)
         } else {
-            None
+            (String::new(), None)
         };
 
-        if base_match.is_none() && ocr_match.is_none() {
+        // If neither title, content, nor OCR text matched, discard candidate
+        if title_match.is_none() && content_match.is_none() && ocr_match.is_none() {
             continue;
         }
 
-        let (final_score, final_title_hls, final_snippet_hls) = match (base_match, ocr_match) {
-            (Some((b_score, b_t_hls, b_s_hls)), Some((o_score, o_t_hls, o_s_hls))) => {
-                if o_score > b_score || cand.snippet.is_empty() {
-                    cand.snippet = cand.ocr_text.chars().take(160).collect();
-                    (o_score, o_t_hls, o_s_hls)
-                } else {
-                    (b_score, b_t_hls, b_s_hls)
-                }
+        let mut final_score: i64 = 0;
+        let mut final_title_hls = Vec::new();
+        let mut final_snippet = content_snippet;
+        let mut final_snippet_hls = Vec::new();
+
+        if let Some((t_score, t_hls, _)) = title_match {
+            final_score += t_score;
+            final_title_hls = t_hls;
+        }
+
+        let has_content_match = content_match.is_some();
+        if let Some((c_score, _, s_hls)) = content_match {
+            final_score = final_score.max(c_score) + if final_score > 0 { 200 } else { 0 };
+            final_snippet_hls = s_hls;
+        }
+
+        if let Some((o_score, _, o_hls)) = ocr_match {
+            if !has_content_match || o_score > final_score {
+                final_score = final_score.max(o_score);
+                final_snippet = ocr_snippet;
+                final_snippet_hls = o_hls;
             }
-            (Some((b_score, b_t_hls, b_s_hls)), None) => (b_score, b_t_hls, b_s_hls),
-            (None, Some((o_score, o_t_hls, o_s_hls))) => {
-                cand.snippet = cand.ocr_text.chars().take(160).collect();
-                (o_score, o_t_hls, o_s_hls)
-            }
-            (None, None) => unreachable!(),
-        };
+        }
+
+        cand.snippet = final_snippet;
 
         scored_items.push(ScoredCandidate {
             candidate: cand,
@@ -982,5 +1229,131 @@ mod tests {
             orphaned_reps, 0,
             "There must be zero orphaned representations"
         );
+    }
+
+    #[test]
+    fn test_search_8000_chars_arm64() {
+        let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+        run_migrations(&mut conn).unwrap();
+
+        let mut text = String::new();
+        for i in 0..1000 {
+            text.push_str("some words here ");
+            if i == 500 {
+                text.push_str("target keyword arm64 is located here ");
+            }
+        }
+        let rep = Representation::new(
+            0,
+            crate::domain::uti::UTF8_PLAIN_TEXT.to_string(),
+            text.as_bytes().to_vec(),
+        )
+        .unwrap();
+        let item = HistoryItem::new(vec![rep], None, 1000).unwrap();
+        ingest_clipboard_item(&mut conn, item, 100).unwrap();
+
+        let res = search_history_page(&conn, "arm64", SearchMode::Fuzzy, 10, 0).unwrap();
+        println!("Fuzzy res: {:?}", res.len());
+        assert_eq!(res.len(), 1);
+
+        let res_exact = search_history_page(&conn, "arm64", SearchMode::Exact, 10, 0).unwrap();
+        println!("Exact res: {:?}", res_exact.len());
+        assert_eq!(res_exact.len(), 1);
+
+        let res_regex = search_history_page(&conn, "arm64", SearchMode::Regex, 10, 0).unwrap();
+        println!("Regex res: {:?}", res_regex.len());
+        assert_eq!(res_regex.len(), 1);
+    }
+
+    #[test]
+    fn test_search_deep_json_content_across_all_modes() {
+        let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+        run_migrations(&mut conn).unwrap();
+
+        // Multi-line JSON with target keyword at line 20 (character offset ~450, well past 160 chars)
+        let json_body = r#"{
+  "service": "authentication-gateway",
+  "version": "2.4.1",
+  "status": "operational",
+  "config": {
+    "rate_limiting": {
+      "requests_per_minute": 600,
+      "burst": 50
+    },
+    "security": {
+      "tls_version": "1.3",
+      "hsts": true,
+      "jwt": {
+        "issuer": "https://auth.mimra.internal",
+        "algorithm": "ES256",
+        "secret_token": "mimra_ultra_secure_pass_99",
+        "rotation_days": 30
+      }
+    }
+  }
+}"#;
+
+        let rep = Representation::new(
+            0,
+            crate::domain::uti::UTF8_PLAIN_TEXT.to_string(),
+            json_body.as_bytes().to_vec(),
+        )
+        .unwrap();
+        let item =
+            HistoryItem::new(vec![rep], Some("com.apple.Terminal".to_string()), 5000).unwrap();
+        let item_id = item.id;
+        ingest_clipboard_item(&mut conn, item, 100).unwrap();
+
+        // 1. Fuzzy mode test on deep keyword
+        let fuzzy_res =
+            search_history_page(&conn, "mimra_ultra", SearchMode::Fuzzy, 10, 0).unwrap();
+        assert_eq!(fuzzy_res.len(), 1, "Fuzzy mode must find deep JSON keyword");
+        assert_eq!(fuzzy_res[0].id, item_id);
+        assert!(
+            fuzzy_res[0].snippet.contains("mimra_ultra_secure_pass_99"),
+            "Snippet must contain context excerpt with matching keyword, got: '{}'",
+            fuzzy_res[0].snippet
+        );
+        assert!(
+            !fuzzy_res[0].snippet_highlights.is_empty(),
+            "Snippet highlights must not be empty for content match"
+        );
+
+        // 2. Exact mode test on deep keyword
+        let exact_res =
+            search_history_page(&conn, "secret_token", SearchMode::Exact, 10, 0).unwrap();
+        assert_eq!(exact_res.len(), 1, "Exact mode must find deep JSON keyword");
+        assert_eq!(exact_res[0].id, item_id);
+        assert!(
+            exact_res[0].snippet.contains("secret_token"),
+            "Snippet must contain context excerpt with matching keyword, got: '{}'",
+            exact_res[0].snippet
+        );
+        assert!(!exact_res[0].snippet_highlights.is_empty());
+
+        // 3. Regex mode test on deep keyword
+        let regex_res =
+            search_history_page(&conn, r#"mimra_ultra_[a-z0-9_]+"#, SearchMode::Regex, 10, 0)
+                .unwrap();
+        assert_eq!(regex_res.len(), 1, "Regex mode must find deep JSON keyword");
+        assert_eq!(regex_res[0].id, item_id);
+        assert!(
+            regex_res[0].snippet.contains("mimra_ultra_secure_pass_99"),
+            "Snippet must contain context excerpt with matching regex pattern, got: '{}'",
+            regex_res[0].snippet
+        );
+        assert!(!regex_res[0].snippet_highlights.is_empty());
+
+        // 4. Negative test: non-existent keyword
+        let not_found =
+            search_history_page(&conn, "nonexistent_token_404", SearchMode::Fuzzy, 10, 0).unwrap();
+        assert!(
+            not_found.is_empty(),
+            "Non-existent keyword must return 0 results"
+        );
+
+        let not_found_regex =
+            search_history_page(&conn, r#"missing_[0-9]{5}"#, SearchMode::Regex, 10, 0).unwrap();
+        assert!(not_found_regex.is_empty());
     }
 }

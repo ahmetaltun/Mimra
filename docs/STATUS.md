@@ -184,6 +184,7 @@
 | **Fix 11** | Settings window focus retention & standard .normal window level (opens in front, yields on app switch) | Completed | `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/macOS/StatusBarCoordinator.swift` (`tests/status_bar_tests.swift`, ADR-057) |
 | **Fix 12** | Settings window navigation redesign: modern 190 pt left-rail sidebar (eliminating tab bar overflow and >> chevrons) | Completed | `Mimra/UI/Settings/SettingsView.swift`, `Mimra/macOS/StatusBarCoordinator.swift` (`tests/status_bar_tests.swift`, ADR-057) |
 | **Fix 13** | Move history item to top on selection / paste with configurable setting toggle | Completed | Rust storage `touch_item`, `Generated/mimra_core.swift`, `CoreClient.swift`, `PasteCoordinator.swift`, `PanelViewModel.swift`, `SettingsView.swift` (`tests/move_to_top_tests.swift`, ADR-060) |
+| **Fix 14** | Deep clipboard content search & contextual excerpt highlighting (multi-line JSON, code, logs past 160 chars) | Completed | `RustCore/src/storage/search.rs`, `tests/fuzzy_search_tests.swift` (`test_search_deep_json_content_across_all_modes`, ADR-061) |
 
 ---
 

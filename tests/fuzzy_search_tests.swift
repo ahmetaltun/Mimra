@@ -223,6 +223,60 @@ struct FuzzySearchTests {
             assert(!vm.items[0].titleHighlights.isEmpty, "FAIL: ViewModel items must contain title highlights")
             print("✓ Step 6: PanelViewModel real-time search and highlights integration verified")
 
+            // -----------------------------------------------------------------
+            // 8. Multi-Line Deep JSON Content Search & Excerpt Highlights
+            // -----------------------------------------------------------------
+            let deepJson = """
+            {
+              "service": "authentication-gateway",
+              "version": "2.4.1",
+              "status": "operational",
+              "config": {
+                "rate_limiting": {
+                  "requests_per_minute": 600,
+                  "burst": 50
+                },
+                "security": {
+                  "tls_version": "1.3",
+                  "hsts": true,
+                  "jwt": {
+                    "issuer": "https://auth.mimra.internal",
+                    "algorithm": "ES256",
+                    "secret_token": "mimra_ultra_secure_pass_99",
+                    "rotation_days": 30
+                  }
+                }
+              }
+            }
+            """
+            let jsonCap = RawCapture(
+                timestampMs: Int64(Date().timeIntervalSince1970 * 1000),
+                sourceBundleId: "com.apple.Terminal",
+                representations: [
+                    RawRepresentation(
+                        groupIndex: 0,
+                        uti: "public.utf8-plain-text",
+                        payload: Data(deepJson.utf8)
+                    )
+                ]
+            )
+            let jsonRes = try await core.ingest(capture: jsonCap)
+
+            // Search in Fuzzy Mode
+            await vm.performSearch(query: "mimra_ultra", mode: .fuzzy)
+            assert(vm.items.count == 1, "FAIL: Fuzzy search must find deep JSON keyword past 160 characters")
+            assert(vm.items[0].id == jsonRes.itemId)
+            assert(vm.items[0].snippet.contains("mimra_ultra_secure_pass_99"), "FAIL: Snippet must contain excerpt of deep match")
+            assert(!vm.items[0].snippetHighlights.isEmpty, "FAIL: Snippet highlights must be populated for content match")
+
+            // Search in Regex Mode
+            await vm.performSearch(query: #"mimra_ultra_[a-z0-9_]+"#, mode: .regex)
+            assert(vm.items.count == 1, "FAIL: Regex search must find deep JSON keyword past 160 characters")
+            assert(vm.items[0].id == jsonRes.itemId)
+            assert(vm.items[0].snippet.contains("mimra_ultra_secure_pass_99"))
+            assert(!vm.items[0].snippetHighlights.isEmpty)
+            print("✓ Step 7: Multi-line deep JSON content search and excerpt highlights verified")
+
             try? FileManager.default.removeItem(at: tempDir)
             print("✓ ALL Fuzzy Search, Ranking & Highlights Tests PASSED!")
         } catch {
