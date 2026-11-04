@@ -38,10 +38,12 @@ public struct PreviewContainerView: View {
 
             // Content Area
             if let item = item {
-                if item.contentKind.lowercased() == "text" || item.contentKind.lowercased() == "richtext" {
-                    textItemPreviewView(for: item)
-                } else if item.contentKind.lowercased() == "image" {
+                let isImage = item.contentKind.lowercased() == "image" ||
+                              item.availableUtis.contains(where: { ["public.png", "public.tiff", "public.jpeg", "public.heic"].contains($0) })
+                if isImage {
                     ImagePreviewView(item: item, coreClient: coreClient)
+                } else if item.contentKind.lowercased() == "text" || item.contentKind.lowercased() == "richtext" || item.contentKind.lowercased() == "rich_text" {
+                    textItemPreviewView(for: item)
                 } else {
                     nonTextItemPreviewView(for: item)
                 }

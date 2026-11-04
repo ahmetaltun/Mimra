@@ -296,6 +296,34 @@ mod tests {
 
         assert_eq!(item_heic.content_kind, ContentKind::Image);
         assert_eq!(item_heic.title, "HEIC Image (512 B)");
+
+        // Browser-copied image with attached HTML and URL representations (e.g. Brave, Chrome, Safari)
+        let browser_png = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00];
+        let rep_b_png = Representation::new(0, uti::PNG, browser_png).unwrap();
+        let rep_b_html = Representation::new(
+            0,
+            uti::HTML,
+            b"<meta charset='utf-8'><img src=\"https://example.com/logo.png\">".to_vec(),
+        )
+        .unwrap();
+        let rep_b_url =
+            Representation::new(0, uti::URL, b"https://example.com/logo.png".to_vec()).unwrap();
+        let rep_b_text =
+            Representation::new(0, uti::UTF8_PLAIN_TEXT, "\u{fffc}".as_bytes().to_vec()).unwrap();
+
+        let browser_item = HistoryItem::new(
+            vec![rep_b_png, rep_b_html, rep_b_url, rep_b_text],
+            Some("com.brave.Browser".to_string()),
+            4500,
+        )
+        .unwrap();
+
+        assert_eq!(browser_item.content_kind, ContentKind::Image);
+        assert_eq!(browser_item.title, "PNG Image (10 B)");
+        assert!(browser_item.search_text.contains("PNG Image"));
+        assert!(browser_item
+            .search_text
+            .contains("https://example.com/logo.png"));
     }
 
     #[test]

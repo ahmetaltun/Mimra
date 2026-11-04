@@ -140,6 +140,7 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
         }
         viewModel.onOpenSettings = { [weak self] in
             self?.hide()
+            self?.onSettingsRequested?()
         }
         viewModel.onCommitItem = { [weak self] item, mode, forcePaste in
             self?.handleItemCommit(item: item, mode: mode, forcePaste: forcePaste)
@@ -154,8 +155,10 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let self = self, let p = self.panel, p.isVisible else { return }
-            self.positionPanel(panel: p)
+            MainActor.assumeIsolated {
+                guard let self = self, let p = self.panel, p.isVisible else { return }
+                self.positionPanel(panel: p)
+            }
         }
         setupKeyMonitor()
     }
@@ -461,9 +464,15 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
         }
 
         // 14. Delete Selected Item (P7-05 / F-023, T-KEY-03)
+        // Only Option + Backspace (or configured deleteShortcut) deletes the item.
+        // Command + Backspace must NOT delete items (reserved for delete-to-beginning-of-line in search field).
         let deleteShortcut = HotkeyConfiguration.shared.deleteShortcut
-        let matchesDelete = (event.keyCode == deleteShortcut.keyCode && event.modifierFlags.contains(deleteShortcut.modifierFlags)) ||
-                            (event.keyCode == 51 && (event.modifierFlags.contains(.option) || event.modifierFlags.contains(.command)))
+        let isConfiguredDelete = (event.keyCode == deleteShortcut.keyCode &&
+                                  event.modifierFlags.intersection([.command, .option, .control, .shift]) == deleteShortcut.modifierFlags)
+        let isOptionBackspace = (event.keyCode == 51 &&
+                                 event.modifierFlags.contains(.option) &&
+                                 !event.modifierFlags.contains(.command))
+        let matchesDelete = isConfiguredDelete || isOptionBackspace
         if matchesDelete {
             cancelCycle()
             Task {
@@ -507,9 +516,14 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
 
         // 17. Toggle Slideout Preview (P6-01 / P6-02 / P7-05 / F-023, F-039, T-PREV-01)
         let previewShortcut = HotkeyConfiguration.shared.previewShortcut
-        let matchesPreview = (event.keyCode == previewShortcut.keyCode && event.modifierFlags.contains(previewShortcut.modifierFlags)) ||
-                             (event.keyCode == 49 && event.modifierFlags.contains(.control))
-        if matchesPreview {
+        let isConfiguredPreview = (event.keyCode == previewShortcut.keyCode && event.modifierFlags.contains(previewShortcut.modifierFlags))
+        let isControlOrOptionSpace = (event.keyCode == 49 && (event.modifierFlags.contains(.control) || event.modifierFlags.contains(.option)))
+        let isCommandY = (event.keyCode == 16 && event.modifierFlags.contains(.command)) // ⌘Y Quick Look
+        let isSpaceWhenSearchEmpty = (event.keyCode == 49 &&
+                                      event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty &&
+                                      viewModel.searchText.isEmpty)
+
+        if isConfiguredPreview || isControlOrOptionSpace || isCommandY || isSpaceWhenSearchEmpty {
             cancelCycle()
             togglePreview()
             return true

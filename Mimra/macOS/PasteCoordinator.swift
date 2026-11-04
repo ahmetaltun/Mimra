@@ -283,6 +283,14 @@ public final class PasteCoordinator {
 
     /// Extracts the best plain-text string from a list of representations.
     public static func extractPlainText(from representations: [RawRepresentation]) -> String? {
+        func clean(_ text: String) -> String? {
+            let cleaned = text
+                .replacingOccurrences(of: "\u{FFFC}", with: "")
+                .replacingOccurrences(of: "\u{FFFD}", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return cleaned.isEmpty ? nil : cleaned
+        }
+
         // 1. Check for standard UTF-8 plain text
         let plainUtis: Set<String> = [
             "public.utf8-plain-text",
@@ -294,8 +302,8 @@ public final class PasteCoordinator {
             if let str = String(data: textRep.payload, encoding: .utf8)
                 ?? String(data: textRep.payload, encoding: .utf16)
                 ?? String(data: textRep.payload, encoding: .isoLatin1),
-               !str.isEmpty {
-                return str
+               let cleaned = clean(str) {
+                return cleaned
             }
         }
 
@@ -307,19 +315,15 @@ public final class PasteCoordinator {
                 data: rtfRep.payload,
                 options: [.documentType: NSAttributedString.DocumentType.rtf],
                 documentAttributes: nil
-            ) {
-                let plain = attrStr.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !plain.isEmpty {
-                    return plain
-                }
+            ), let cleaned = clean(attrStr.string) {
+                return cleaned
             }
             if let rtfStr = String(data: rtfRep.payload, encoding: .utf8) ?? String(data: rtfRep.payload, encoding: .ascii) {
                 let stripped = rtfStr
                     .replacingOccurrences(of: "\\\\[a-zA-Z]+-?[0-9]*[ ]?", with: " ", options: .regularExpression, range: nil)
                     .replacingOccurrences(of: "[{}]", with: "", options: .regularExpression, range: nil)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if !stripped.isEmpty {
-                    return stripped
+                if let cleaned = clean(stripped) {
+                    return cleaned
                 }
             }
         }
@@ -331,11 +335,8 @@ public final class PasteCoordinator {
                 data: rtfdRep.payload,
                 options: [.documentType: NSAttributedString.DocumentType.rtfd],
                 documentAttributes: nil
-            ) {
-                let plain = attrStr.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !plain.isEmpty {
-                    return plain
-                }
+            ), let cleaned = clean(attrStr.string) {
+                return cleaned
             }
         }
 
@@ -347,17 +348,13 @@ public final class PasteCoordinator {
                 data: htmlRep.payload,
                 options: [.documentType: NSAttributedString.DocumentType.html],
                 documentAttributes: nil
-            ) {
-                let plain = attrStr.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !plain.isEmpty {
-                    return plain
-                }
+            ), let cleaned = clean(attrStr.string) {
+                return cleaned
             }
             if let htmlStr = String(data: htmlRep.payload, encoding: .utf8) ?? String(data: htmlRep.payload, encoding: .isoLatin1) {
                 let stripped = htmlStr.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression, range: nil)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if !stripped.isEmpty {
-                    return stripped
+                if let cleaned = clean(stripped) {
+                    return cleaned
                 }
             }
         }

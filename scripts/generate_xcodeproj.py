@@ -51,6 +51,14 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		10000027 /* ImagePreviewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000029 /* ImagePreviewService.swift */; };
 		10000028 /* ImagePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000030 /* ImagePreviewView.swift */; };
 		10000029 /* OCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000031 /* OCRService.swift */; };
+		10000030 /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000032 /* LaunchAtLoginService.swift */; };
+		10000031 /* SoundFeedbackService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000033 /* SoundFeedbackService.swift */; };
+		10000032 /* AppearanceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000034 /* AppearanceConfiguration.swift */; };
+		10000033 /* PrivacyConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000035 /* PrivacyConfiguration.swift */; };
+		10000034 /* HotkeyConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000036 /* HotkeyConfiguration.swift */; };
+		10000035 /* LocalizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000037 /* LocalizationService.swift */; };
+		10000036 /* OnboardingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000038 /* OnboardingService.swift */; };
+		10000037 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000039 /* OnboardingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -86,6 +94,14 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		20000029 /* ImagePreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreviewService.swift; sourceTree = "<group>"; };
 		20000030 /* ImagePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreviewView.swift; sourceTree = "<group>"; };
 		20000031 /* OCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRService.swift; sourceTree = "<group>"; };
+		20000032 /* LaunchAtLoginService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginService.swift; sourceTree = "<group>"; };
+		20000033 /* SoundFeedbackService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundFeedbackService.swift; sourceTree = "<group>"; };
+		20000034 /* AppearanceConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceConfiguration.swift; sourceTree = "<group>"; };
+		20000035 /* PrivacyConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyConfiguration.swift; sourceTree = "<group>"; };
+		20000036 /* HotkeyConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyConfiguration.swift; sourceTree = "<group>"; };
+		20000037 /* LocalizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationService.swift; sourceTree = "<group>"; };
+		20000038 /* OnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingService.swift; sourceTree = "<group>"; };
+		20000039 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -178,6 +194,13 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				20000022 /* AppIconService.swift */,
 				20000023 /* ClipboardTypeConfiguration.swift */,
 				20000031 /* OCRService.swift */,
+				20000032 /* LaunchAtLoginService.swift */,
+				20000033 /* SoundFeedbackService.swift */,
+				20000034 /* AppearanceConfiguration.swift */,
+				20000035 /* PrivacyConfiguration.swift */,
+				20000036 /* HotkeyConfiguration.swift */,
+				20000037 /* LocalizationService.swift */,
+				20000038 /* OnboardingService.swift */,
 			);
 			path = macOS;
 			sourceTree = "<group>";
@@ -189,8 +212,17 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				40000011 /* History */,
 				40000012 /* Panel */,
 				40000013 /* Preview */,
+				40000014 /* Onboarding */,
 			);
 			path = UI;
+			sourceTree = "<group>";
+		};
+		40000014 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				20000039 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
 			sourceTree = "<group>";
 		};
 		40000009 /* Settings */ = {
@@ -314,6 +346,14 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				10000027 /* ImagePreviewService.swift in Sources */,
 				10000028 /* ImagePreviewView.swift in Sources */,
 				10000029 /* OCRService.swift in Sources */,
+				10000030 /* LaunchAtLoginService.swift in Sources */,
+				10000031 /* SoundFeedbackService.swift in Sources */,
+				10000032 /* AppearanceConfiguration.swift in Sources */,
+				10000033 /* PrivacyConfiguration.swift in Sources */,
+				10000034 /* HotkeyConfiguration.swift in Sources */,
+				10000035 /* LocalizationService.swift in Sources */,
+				10000036 /* OnboardingService.swift in Sources */,
+				10000037 /* OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

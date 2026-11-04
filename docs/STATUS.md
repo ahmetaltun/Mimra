@@ -167,7 +167,19 @@
 
 ---
 
-## 12. Current Blockers & Risks
+## 12. Post-G6 Usability & Runtime Fixes
 
-* **None.** Phase 8 (Reliability, Performance, and Security Hardening) is 100% COMPLETED and verified. Gate G6 exited cleanly. All 81 Rust unit and property tests, 62 Swift integration test suites, and the native arm64 Xcode build pass with zero warnings or errors.
+| Item | Description | Status | Verification / Artifact |
+|---|---|---|---|
+| **Fix 1** | Browser image copy classification, thumbnail display, and ImagePreviewView routing | Completed | `RustCore/src/domain/item.rs`, `Mimra/macOS/PasteCoordinator.swift`, `FloatingPanelView.swift`, `PreviewContainerView.swift` (`tests/user_issues_fixes_tests.swift`) |
+| **Fix 2** | Preview shortcut triggers (`Control+Space`, `Option+Space`, `Command+Y`, empty-search `Space`) | Completed | `Mimra/UI/Panel/FloatingPanel.swift` (`tests/user_issues_fixes_tests.swift`) |
+| **Fix 3** | Settings button in history window footer wired to `onSettingsRequested` | Completed | `Mimra/UI/Panel/FloatingPanel.swift` (`tests/user_issues_fixes_tests.swift`) |
+| **Fix 4** | Maximum history item limit (solid 2,000 limit, configurable picker in Settings and dynamic query limit) | Completed | `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/user_issues_fixes_tests.swift`) |
+| **Fix 5** | Deletion keybinding isolation: `Option+Backspace` deletes item, `Command+Backspace` reserved for text editing | Completed | `Mimra/UI/Panel/FloatingPanel.swift` (`tests/user_issues_fixes_tests.swift`) |
+
+---
+
+## 13. Current Blockers & Risks
+
+* **None.** Phase 8 hardening and all post-G6 runtime usability fixes are 100% COMPLETED and verified. All 81 Rust unit and property tests, 63 Swift integration test suites, and native arm64 builds pass cleanly.
 * **Next Milestone:** Phase 9 (Packaging, CI, Release and Maintenance: Developer ID, Notarization, Signed DMG, GitHub Actions CI workflow).

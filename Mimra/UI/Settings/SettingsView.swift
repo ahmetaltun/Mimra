@@ -275,7 +275,7 @@ public struct StorageSettingsTab: View {
                     Text("200 items (Recommended)").tag(200)
                     Text("500 items").tag(500)
                     Text("1,000 items").tag(1000)
-                    Text("Unlimited").tag(0)
+                    Text("2,000 items (Maximum Limit)").tag(2000)
                 }
 
                 Picker("Retention Duration", selection: $viewModel.maxAgeDays) {
@@ -422,6 +422,7 @@ public struct GeneralSettingsTab: View {
     @AppStorage("pasteAutomatically") private var pasteAutomatically: Bool = true
     @AppStorage("clearSystemClipboard") private var clearSystemClipboard: Bool = false
     @AppStorage("cycleModeEnabled") private var cycleModeEnabled: Bool = true
+    @AppStorage("retentionMaxCount") private var maxHistoryItems: Int = 200
 
     let engineVersion: String
 
@@ -473,6 +474,33 @@ public struct GeneralSettingsTab: View {
                 }
 
                 Text("Supports English, Japanese, German, Turkish, and Arabic with automatic layout expansion and RTL text direction.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("History Item Limit") {
+                Picker("Maximum History Items", selection: $maxHistoryItems) {
+                    Text("50 items").tag(50)
+                    Text("100 items").tag(100)
+                    Text("200 items (Recommended)").tag(200)
+                    Text("500 items").tag(500)
+                    Text("1,000 items").tag(1000)
+                    Text("2,000 items (Maximum Limit)").tag(2000)
+                }
+                .onChange(of: maxHistoryItems) { _, newValue in
+                    let age = UserDefaults.standard.object(forKey: "retentionMaxAgeDays") as? Int ?? 30
+                    let size = UserDefaults.standard.object(forKey: "retentionMaxSizeBytes") as? Int64 ?? (100 * 1024 * 1024)
+                    let policy = RetentionPolicyDto(
+                        maxCount: UInt32(newValue),
+                        maxAgeDays: age > 0 ? UInt32(age) : nil,
+                        maxSizeBytes: size > 0 ? UInt64(size) : nil
+                    )
+                    Task {
+                        await CoreClient.shared.setRetentionPolicy(policy: policy)
+                    }
+                }
+
+                Text("Controls the maximum number of items retained in history (solid limit: 2,000). When exceeded, older unpinned clips are automatically pruned. Pinned items are always preserved.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

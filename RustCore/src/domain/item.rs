@@ -268,7 +268,7 @@ impl HistoryItem {
 
     /// Helper to classify content kind from representations.
     pub(crate) fn derive_content_kind(reps: &[Representation]) -> ContentKind {
-        let has_text = reps.iter().any(|r| r.is_plain_text());
+        let _has_text = reps.iter().any(|r| r.is_plain_text());
         let has_rich = reps.iter().any(|r| r.is_rich_text());
         let has_image = reps.iter().any(|r| r.is_image());
         let has_file = reps.iter().any(|r| r.is_file_url());
@@ -280,9 +280,17 @@ impl HistoryItem {
                 ContentKind::Mixed
             }
         } else if has_image {
-            if has_rich || (has_text && reps.len() > 2) {
+            // Check if this copy consists of multiple separate pasteboard items across distinct groups.
+            let mut groups: Vec<u32> = reps.iter().map(|r| r.group_index).collect();
+            groups.sort_unstable();
+            groups.dedup();
+
+            if groups.len() > 1 {
                 ContentKind::Mixed
             } else {
+                // Single-item copy containing an image (e.g. from browser "Copy Image", Screenshot, Preview, Figma).
+                // Browsers commonly attach helper flavors such as HTML (<img src="...">) or URL/plain-text.
+                // The primary payload is the image.
                 ContentKind::Image
             }
         } else if has_rich {
@@ -330,7 +338,36 @@ impl HistoryItem {
             }
         }
 
-        // 2. Check for public.url representation (P3-04)
+        // 2. Check for images if classified as Image (P3-02)
+        if kind == ContentKind::Image {
+            if let Some(img_rep) = reps.iter().find(|r| r.is_image()) {
+                let format_name = match img_rep.uti.as_str() {
+                    crate::domain::content::uti::PNG => "PNG Image",
+                    crate::domain::content::uti::TIFF => "TIFF Image",
+                    crate::domain::content::uti::JPEG => "JPEG Image",
+                    crate::domain::content::uti::HEIC => "HEIC Image",
+                    _ => "Image",
+                };
+                let size_str = Self::format_byte_size(img_rep.payload.len() as u64);
+                let title = format!("{format_name} ({size_str})");
+
+                let mut search_tokens = vec![format_name.to_string(), size_str];
+                if let Some(url_rep) = reps
+                    .iter()
+                    .find(|r| r.uti == crate::domain::content::uti::URL)
+                {
+                    let raw_url = String::from_utf8_lossy(&url_rep.payload).trim().to_string();
+                    if !raw_url.is_empty() {
+                        search_tokens.push(raw_url);
+                    }
+                }
+                let search_text = search_tokens.join(" ");
+                return (title, search_text);
+            }
+            return ("Image".to_string(), String::new());
+        }
+
+        // 3. Check for public.url representation (P3-04)
         if let Some(url_rep) = reps
             .iter()
             .find(|r| r.uti == crate::domain::content::uti::URL)
@@ -439,24 +476,6 @@ impl HistoryItem {
             }
         }
 
-        // 4. Check for images
-        if kind == ContentKind::Image {
-            if let Some(img_rep) = reps.iter().find(|r| r.is_image()) {
-                let format_name = match img_rep.uti.as_str() {
-                    crate::domain::content::uti::PNG => "PNG Image",
-                    crate::domain::content::uti::TIFF => "TIFF Image",
-                    crate::domain::content::uti::JPEG => "JPEG Image",
-                    crate::domain::content::uti::HEIC => "HEIC Image",
-                    _ => "Image",
-                };
-                let size_str = Self::format_byte_size(img_rep.payload.len() as u64);
-                let title = format!("{format_name} ({size_str})");
-                let search_text = format!("{format_name} {size_str}");
-                return (title, search_text);
-            }
-            return ("Image".to_string(), String::new());
-        }
-
         // 5. Fallbacks for non-text content
         match kind {
             ContentKind::Image => ("Image".to_string(), String::new()),
@@ -468,12 +487,14 @@ impl HistoryItem {
     }
 
     /// Normalizes text for deduplication across complex applications (F-012):
+    /// - Strips object replacement / attachment characters (\u{fffc}, \u{fffd}).
     /// - Normalizes newlines (\r\n and \r -> \n).
     /// - Normalizes Unicode to NFC.
     /// - Trims outer whitespace and newlines.
     /// - For multiline text (code snippets, tables), trims trailing whitespace per line.
     pub fn canonicalize_text(raw: &str) -> String {
-        let normalized = raw.replace("\r\n", "\n").replace('\r', "\n");
+        let stripped_obj = raw.replace(['\u{fffc}', '\u{fffd}'], "");
+        let normalized = stripped_obj.replace("\r\n", "\n").replace('\r', "\n");
         let nfc: String = normalized.nfc().collect();
         let trimmed_outer = nfc.trim();
         if trimmed_outer.is_empty() {

@@ -857,7 +857,9 @@ struct ItemThumbnailView: View {
             }
         }
         .task(id: itemId) {
-            guard contentKind == "image", !hasAttemptedLoad, let client = coreClient else { return }
+            let isImageItem = contentKind == "image" ||
+                              availableUtis.contains(where: { ["public.png", "public.tiff", "public.jpeg", "public.heic"].contains($0) })
+            guard isImageItem, !hasAttemptedLoad, let client = coreClient else { return }
             hasAttemptedLoad = true
             if let cached = ImageThumbnailService.shared.cachedThumbnail(for: itemId) {
                 self.thumbnail = cached
@@ -884,13 +886,16 @@ struct ItemThumbnailView: View {
         switch kind {
         case "text":
             return "text.alignleft"
-        case "rich_text":
+        case "rich_text", "richtext":
             return "text.quote"
         case "image":
             return "photo"
         case "file_urls":
             return "folder"
         default:
+            if availableUtis.contains(where: { ["public.png", "public.tiff", "public.jpeg", "public.heic"].contains($0) }) {
+                return "photo"
+            }
             return "square.stack.3d.down.right"
         }
     }

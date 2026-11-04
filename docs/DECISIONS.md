@@ -2017,6 +2017,44 @@ Phase 8 represents the final release-hardening stage (Gate G6) before general av
 * **Positive:** Complete fulfillment of Phase 8 (`P8-01` through `P8-08`), meeting all Gate G6 release criteria. Zero memory leaks, ultra-low latency, full crash and corruption resilience, 100% verified feature parity, and robust test suite passing in CI and native builds.
 * **Negative:** None.
 
+---
+
+## ADR-039: Browser Image Classification, Slideout Preview Triggers, Settings Routing, History Item Limits, and Deletion Shortcut Isolation
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+User feedback and runtime inspection identified five specific usability and correctness issues:
+1. **Browser Image Ingestion:** When copying an image from a web browser (Brave, Chrome, Safari), browsers provide multiple representations: `public.png`/`public.tiff` (bitmap data), `public.html` (`<img src="...">`), and `public.url`. In `HistoryItem::derive_content_kind`, having both `public.html` (rich text) and an image caused the item to be classified as `ContentKind::Mixed`. Furthermore, `NSAttributedString` HTML parsing produced an Object Replacement Character (`\u{FFFC}`), which `derive_text_fields` set as the item title and snippet. Consequently, the row displayed as completely blank with no thumbnail, no title, and failed to load `ImagePreviewView`.
+2. **Preview Toggle (`⌃Space`):** On macOS, `Control + Space` (`⌃Space`) is frequently claimed by system-level Input Source switching ("Select previous input source"), preventing applications from receiving local event monitor key strokes. Additionally, users expect standard macOS Quick Look shortcuts (`Option + Space`, `Command + Y`, and `Space` when search text is empty) to trigger preview.
+3. **Settings Button in Footer:** Clicking the gear icon in `PanelFooterBar` invoked `viewModel.onOpenSettings?()`, which called `self?.hide()` but omitted calling `self?.onSettingsRequested?()`. As a result, the settings window never opened from the footer button.
+4. **History Item Limit Definition & UI:** Storage retention count existed in `StorageSettingsTab`, but `PanelViewModel` hardcoded `limit: 100` across all query calls, truncating visible items regardless of retention settings. Furthermore, an explicit solid maximum limit was needed with options accessible in Settings.
+5. **Item Deletion Shortcut Overreach:** `FloatingPanel.handlePanelKeyDown` accepted both `Option + Backspace` and `Command + Backspace` (keyCode 51 with `.command`). In macOS, `Command + Backspace` is the universal text editing keystroke to delete to the beginning of the line inside a text/search field. Intercepting `Command + Backspace` erroneously deleted history items while typing.
+
+### Decision
+1. **Browser Image Classification & Title Derivation (`RustCore` & `Swift`):**
+   - In `HistoryItem::derive_content_kind`: When `has_image` is true in a single-item copy, classify as `ContentKind::Image`, recognizing HTML and URL flavors as standard browser helper metadata.
+   - In `HistoryItem::derive_text_fields`: Prioritize image metadata derivation (`"{format_name} ({size_str})"`) over helper URLs, while appending the URL to `search_text` for FTS5 index discovery.
+   - In `canonicalize_text` and `PasteCoordinator.extractPlainText`: Strip attachment / object replacement characters (`\u{FFFC}`, `\u{FFFD}`) and reject synthesized plain-text representations that contain only replacement characters or whitespace.
+   - In `FloatingPanelView.ItemThumbnailView` & `PreviewContainerView`: Support image thumbnails and `ImagePreviewView` whenever `contentKind == "image"` or `availableUtis` contains image formats (`public.png`, `public.tiff`, `public.jpeg`, `public.heic`).
+2. **Robust Preview Shortcuts (`FloatingPanel.swift`):**
+   - Support `previewShortcut` (`⌃Space`), `⌥Space`, `⌘Y` (macOS Quick Look), and `Space` (when search input is empty).
+3. **Settings Button Routing (`FloatingPanel.swift`):**
+   - Update `viewModel.onOpenSettings` to invoke `self?.onSettingsRequested?()`, routing directly to `StatusBarCoordinator.openSettings()`.
+4. **Solid History Item Limit (`PanelViewModel.swift` & `SettingsView.swift`):**
+   - Define a solid upper limit of 2,000 items (`50`, `100`, `200 [Recommended]`, `500`, `1,000`, `2,000 [Maximum Limit]`).
+   - Expose the history limit picker in both `GeneralSettingsTab` and `StorageSettingsTab`.
+   - Update `PanelViewModel` to use dynamic `historyLimit` (bounded to `[10, 2000]`) instead of hardcoded 100 across all query routines.
+5. **Deletion Shortcut Isolation (`FloatingPanel.swift`):**
+   - Require `Option + Backspace` (or configured delete shortcut) for item removal.
+   - Explicitly disallow `Command + Backspace` (`!event.modifierFlags.contains(.command)`), passing it through to the search field for line-start text deletion.
+
+### Consequences
+* **Positive:** All browser-copied images display proper thumbnails, format labels, byte sizes, and full slideout previews; slideout preview opens via multiple standard macOS shortcuts; settings window opens reliably from the history footer; users can configure history size up to a solid 2,000 item limit; `Command + Backspace` safely edits text without accidental item deletion.
+* **Negative:** None.
+
 
 
 

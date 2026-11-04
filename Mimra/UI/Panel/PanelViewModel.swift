@@ -70,6 +70,12 @@ public final class PanelViewModel: ObservableObject {
     /// Timestamp of last keyboard navigation to guard against accidental mouse-hover overrides.
     public private(set) var lastKeyboardNavTime: CFTimeInterval = 0
 
+    /// Configured maximum history limit (default 200, bounded between 10 and 2000).
+    public var historyLimit: UInt32 {
+        let count = UserDefaults.standard.object(forKey: "retentionMaxCount") as? Int ?? 200
+        return UInt32(max(10, min(2000, count > 0 ? count : 2000)))
+    }
+
     public var onCommitItem: ((HistoryItemSummaryDto, PasteMode, Bool?) -> Void)?
     public var onDismiss: (() -> Void)?
     public var onOpenSettings: (() -> Void)?
@@ -279,7 +285,7 @@ public final class PanelViewModel: ObservableObject {
                 let loaded = try await coreClient.listPageWithSort(
                     sortMode: self.sortMode,
                     pinArrangement: self.pinArrangement,
-                    limit: 100,
+                    limit: self.historyLimit,
                     offset: 0
                 )
                 applyItemsPreservingSelection(loaded)
@@ -292,7 +298,7 @@ public final class PanelViewModel: ObservableObject {
                     mode: effectiveMode,
                     sortByRelevance: self.searchByRelevance,
                     pinArrangement: self.pinArrangement,
-                    limit: 100,
+                    limit: self.historyLimit,
                     offset: 0
                 )
                 applyItemsPreservingSelection(results)
@@ -318,7 +324,7 @@ public final class PanelViewModel: ObservableObject {
                 let loaded = try await coreClient.listPageWithSort(
                     sortMode: self.sortMode,
                     pinArrangement: self.pinArrangement,
-                    limit: 100,
+                    limit: self.historyLimit,
                     offset: 0
                 )
                 applyItemsPreservingSelection(loaded)
@@ -331,7 +337,7 @@ public final class PanelViewModel: ObservableObject {
                     mode: effectiveMode,
                     sortByRelevance: self.searchByRelevance,
                     pinArrangement: self.pinArrangement,
-                    limit: 100,
+                    limit: self.historyLimit,
                     offset: 0
                 )
                 applyItemsPreservingSelection(results)
@@ -411,7 +417,7 @@ public final class PanelViewModel: ObservableObject {
                 let loaded = try await coreClient.listPageWithSort(
                     sortMode: self.sortMode,
                     pinArrangement: self.pinArrangement,
-                    limit: 100,
+                    limit: self.historyLimit,
                     offset: 0
                 )
                 applyItemsPreservingSelection(loaded)
@@ -424,7 +430,7 @@ public final class PanelViewModel: ObservableObject {
                     mode: effectiveMode,
                     sortByRelevance: self.searchByRelevance,
                     pinArrangement: self.pinArrangement,
-                    limit: 100,
+                    limit: self.historyLimit,
                     offset: 0
                 )
                 applyItemsPreservingSelection(results)
@@ -483,7 +489,7 @@ public final class PanelViewModel: ObservableObject {
                 let loaded = try await coreClient.listPageWithSort(
                     sortMode: self.sortMode,
                     pinArrangement: self.pinArrangement,
-                    limit: 100,
+                    limit: self.historyLimit,
                     offset: 0
                 )
                 applyItemsPreservingSelection(loaded)
@@ -496,7 +502,7 @@ public final class PanelViewModel: ObservableObject {
                     mode: effectiveMode,
                     sortByRelevance: self.searchByRelevance,
                     pinArrangement: self.pinArrangement,
-                    limit: 100,
+                    limit: self.historyLimit,
                     offset: 0
                 )
                 applyItemsPreservingSelection(results)
@@ -566,7 +572,7 @@ public final class PanelViewModel: ObservableObject {
             let loaded = try await coreClient.listPageWithSort(
                 sortMode: self.sortMode,
                 pinArrangement: self.pinArrangement,
-                limit: 100,
+                limit: self.historyLimit,
                 offset: 0
             )
             let loadedStats = try await coreClient.getStats()
@@ -584,12 +590,13 @@ public final class PanelViewModel: ObservableObject {
     public func performSearch(
         query: String,
         mode: SearchMode? = nil,
-        limit: UInt32 = 100,
+        limit: UInt32? = nil,
         offset: UInt32 = 0
     ) async {
         searchGeneration += 1
         let currentGen = searchGeneration
         let effectiveMode = mode ?? self.searchMode
+        let effectiveLimit = limit ?? self.historyLimit
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         isLoading = true
@@ -600,7 +607,7 @@ public final class PanelViewModel: ObservableObject {
                 let loaded = try await coreClient.listPageWithSort(
                     sortMode: self.sortMode,
                     pinArrangement: self.pinArrangement,
-                    limit: limit,
+                    limit: effectiveLimit,
                     offset: offset
                 )
                 guard currentGen == self.searchGeneration else { return }
@@ -611,7 +618,7 @@ public final class PanelViewModel: ObservableObject {
                     mode: effectiveMode,
                     sortByRelevance: self.searchByRelevance,
                     pinArrangement: self.pinArrangement,
-                    limit: limit,
+                    limit: effectiveLimit,
                     offset: offset
                 )
                 guard currentGen == self.searchGeneration else { return }
