@@ -268,7 +268,13 @@ public struct FloatingPanelView: View {
             accessibilityService.stopObserving()
         }
         .onReceive(NotificationCenter.default.publisher(for: .mimraClipboardDidIngest)) { _ in
-            Task { await viewModel.loadData() }
+            Task {
+                if viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    await viewModel.loadData()
+                } else {
+                    await viewModel.performSearch(query: viewModel.searchText)
+                }
+            }
         }
     }
 }

@@ -189,53 +189,69 @@ pub fn fuzzy_match(query: &str, target: &str) -> Option<FuzzyMatchResult> {
     // -------------------------------------------------------------------------
     // Phase 2: Ranked Subsequence Matching (Fuzzy / Acronyms)
     // -------------------------------------------------------------------------
+    // Subsequence matching is strictly bounded to genuine word-boundary acronyms
+    // or contiguous character runs. Accidental character gaps landing on internal
+    // non-boundary letters are rejected to prevent false positives across unrelated text.
     let mut matched_indices: Vec<usize> = Vec::with_capacity(query_chars.len());
     let mut target_idx = 0;
-    let mut score: i64 = 500;
+    let mut score: i64 = 1000;
+    let mut effective_q_idx = 0;
 
-    for (q_idx, &qc) in query_chars.iter().enumerate() {
-        let mut found = false;
-        let mut best_match_idx = None;
-
-        let search_start = target_idx;
-        while target_idx < target_chars.len() {
-            if target_chars[target_idx].lower == qc {
-                if best_match_idx.is_none() {
-                    best_match_idx = Some(target_idx);
-                }
-                if target_chars[target_idx].is_boundary {
-                    best_match_idx = Some(target_idx);
-                    break;
-                }
-            }
-            target_idx += 1;
+    for &qc in &query_chars {
+        // Skip whitespace in query during acronym matching (e.g. 'v s c' -> 'vsc')
+        if qc.is_whitespace() {
+            continue;
         }
 
-        if let Some(m_idx) = best_match_idx {
-            target_idx = m_idx + 1;
-            matched_indices.push(m_idx);
-            found = true;
+        let mut found = false;
 
-            let tc = target_chars[m_idx];
-            if tc.is_boundary {
-                score += 180;
-            } else {
-                score += 30;
-            }
-
-            if q_idx > 0 && m_idx == matched_indices[q_idx - 1] + 1 {
-                score += 80;
-            } else if q_idx > 0 {
-                let gap = (m_idx - matched_indices[q_idx - 1] - 1) as i64;
-                score -= (gap * 3).min(100);
+        if effective_q_idx == 0 {
+            // First character of the acronym/abbreviation MUST start on a word boundary
+            while target_idx < target_chars.len() {
+                if target_chars[target_idx].lower == qc && target_chars[target_idx].is_boundary {
+                    matched_indices.push(target_idx);
+                    score += 200;
+                    target_idx += 1;
+                    found = true;
+                    break;
+                }
+                target_idx += 1;
             }
         } else {
-            target_idx = search_start;
+            let prev_idx = matched_indices[effective_q_idx - 1];
+            // Prefer contiguous continuation (e.g. 'co' in 'Code')
+            if prev_idx + 1 < target_chars.len() && target_chars[prev_idx + 1].lower == qc {
+                matched_indices.push(prev_idx + 1);
+                score += 100;
+                target_idx = prev_idx + 2;
+                found = true;
+            } else {
+                // Non-contiguous jump: MUST land on a word boundary (e.g. 'S' in 'Studio')
+                target_idx = prev_idx + 1;
+                while target_idx < target_chars.len() {
+                    if target_chars[target_idx].lower == qc && target_chars[target_idx].is_boundary
+                    {
+                        let gap = (target_idx - prev_idx - 1) as i64;
+                        score += 150;
+                        score -= (gap * 2).min(80);
+                        matched_indices.push(target_idx);
+                        target_idx += 1;
+                        found = true;
+                        break;
+                    }
+                    target_idx += 1;
+                }
+            }
         }
 
         if !found {
             return None;
         }
+        effective_q_idx += 1;
+    }
+
+    if matched_indices.is_empty() {
+        return None;
     }
 
     if let Some(&first_idx) = matched_indices.first() {

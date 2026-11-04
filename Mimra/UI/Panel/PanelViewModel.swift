@@ -13,6 +13,11 @@ import QuartzCore
 public final class PanelViewModel: ObservableObject {
     public let coreClient: CoreClient
 
+    private var searchTask: Task<Void, Never>?
+
+    /// Tracks the most recent query string populated into `items` by the Core search engine.
+    @Published public private(set) var lastSearchQuery: String?
+
     @Published public var searchText: String = "" {
         didSet {
             if oldValue != searchText {
@@ -26,6 +31,7 @@ public final class PanelViewModel: ObservableObject {
                     selectedIndex = 0
                     selectedItemId = list.first?.id
                 }
+                triggerSearch()
             }
         }
     }
@@ -45,6 +51,10 @@ public final class PanelViewModel: ObservableObject {
         didSet {
             if oldValue != searchMode {
                 regexErrorMessage = nil
+                lastSearchQuery = nil
+                if !searchText.isEmpty {
+                    triggerSearch()
+                }
             }
         }
     }
@@ -88,36 +98,66 @@ public final class PanelViewModel: ObservableObject {
 
     /// Synchronizes active search algorithm, sort mode, and pin placement from UserDefaults (P7-03 / F-049).
     public func reloadSearchSettings() {
+        var needsRequery = false
         if let modeStr = UserDefaults.standard.string(forKey: "searchMode") {
+            let newMode: SearchMode
             switch modeStr {
-            case "exact": self.searchMode = .exact
-            case "regex": self.searchMode = .regex
-            default: self.searchMode = .fuzzy
+            case "exact": newMode = .exact
+            case "regex": newMode = .regex
+            default: newMode = .fuzzy
+            }
+            if newMode != self.searchMode {
+                self.searchMode = newMode
+                needsRequery = true
             }
         }
         if let pinArr = UserDefaults.standard.string(forKey: "pinArrangement") {
+            let newPinArr: PinArrangement
             switch pinArr {
-            case "bottom": self.pinArrangement = .bottom
-            case "inline": self.pinArrangement = .inline
-            default: self.pinArrangement = .top
+            case "bottom": newPinArr = .bottom
+            case "inline": newPinArr = .inline
+            default: newPinArr = .top
+            }
+            if newPinArr != self.pinArrangement {
+                self.pinArrangement = newPinArr
+                needsRequery = true
             }
         }
         if let sortMode = UserDefaults.standard.string(forKey: "historySortMode") {
+            let newSort: HistorySortMode
             switch sortMode {
-            case "copyCount": self.sortMode = .copyCount
-            case "firstCopied": self.sortMode = .firstCopied
-            default: self.sortMode = .recency
+            case "copyCount": newSort = .copyCount
+            case "firstCopied": newSort = .firstCopied
+            default: newSort = .recency
+            }
+            if newSort != self.sortMode {
+                self.sortMode = newSort
+                needsRequery = true
             }
         }
         if UserDefaults.standard.object(forKey: "searchByRelevance") != nil {
-            self.searchByRelevance = UserDefaults.standard.bool(forKey: "searchByRelevance")
+            let newRel = UserDefaults.standard.bool(forKey: "searchByRelevance")
+            if newRel != self.searchByRelevance {
+                self.searchByRelevance = newRel
+                needsRequery = true
+            }
+        }
+        if needsRequery && !searchText.isEmpty {
+            lastSearchQuery = nil
+            triggerSearch()
         }
     }
 
-    /// Items filtered in real-time by search text matching title or snippet.
+    /// Items filtered in real-time.
+    /// When `items` has already been populated by the Core search engine matching the current query,
+    /// `items` is returned directly to preserve BM25 relevance scores, deep content matches, and highlighted excerpts.
+    /// If an asynchronous search is still in-flight, a synchronous title/snippet fallback filter is applied.
     public var filteredItems: [HistoryItemSummaryDto] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if query.isEmpty {
+            return items
+        }
+        if let last = lastSearchQuery, last.lowercased() == query {
             return items
         }
         return items.filter { item in
@@ -312,6 +352,7 @@ public final class PanelViewModel: ObservableObject {
                     offset: 0
                 )
                 applyItemsPreservingSelection(loaded)
+                self.lastSearchQuery = ""
             } else {
                 let effectiveMode = searchMode == .fuzzy && (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") && trimmed.count >= 2)
                     ? SearchMode.exact
@@ -325,6 +366,7 @@ public final class PanelViewModel: ObservableObject {
                     offset: 0
                 )
                 applyItemsPreservingSelection(results)
+                self.lastSearchQuery = trimmed
             }
 
             let loadedStats = try await coreClient.getStats()
@@ -351,6 +393,7 @@ public final class PanelViewModel: ObservableObject {
                     offset: 0
                 )
                 applyItemsPreservingSelection(loaded)
+                self.lastSearchQuery = ""
             } else {
                 let effectiveMode = searchMode == .fuzzy && (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") && trimmed.count >= 2)
                     ? SearchMode.exact
@@ -364,6 +407,7 @@ public final class PanelViewModel: ObservableObject {
                     offset: 0
                 )
                 applyItemsPreservingSelection(results)
+                self.lastSearchQuery = trimmed
             }
             return true
         } catch {
@@ -444,6 +488,7 @@ public final class PanelViewModel: ObservableObject {
                     offset: 0
                 )
                 applyItemsPreservingSelection(loaded)
+                self.lastSearchQuery = ""
             } else {
                 let effectiveMode = searchMode == .fuzzy && (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") && trimmed.count >= 2)
                     ? SearchMode.exact
@@ -457,6 +502,7 @@ public final class PanelViewModel: ObservableObject {
                     offset: 0
                 )
                 applyItemsPreservingSelection(results)
+                self.lastSearchQuery = trimmed
             }
             return true
         } catch {
@@ -516,6 +562,7 @@ public final class PanelViewModel: ObservableObject {
                     offset: 0
                 )
                 applyItemsPreservingSelection(loaded)
+                self.lastSearchQuery = ""
             } else {
                 let effectiveMode = searchMode == .fuzzy && (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") && trimmed.count >= 2)
                     ? SearchMode.exact
@@ -529,6 +576,7 @@ public final class PanelViewModel: ObservableObject {
                     offset: 0
                 )
                 applyItemsPreservingSelection(results)
+                self.lastSearchQuery = trimmed
             }
             return true
         } catch {
@@ -600,11 +648,35 @@ public final class PanelViewModel: ObservableObject {
             )
             let loadedStats = try await coreClient.getStats()
             applyItemsPreservingSelection(loaded)
+            self.lastSearchQuery = ""
             self.stats = loadedStats
             self.isLoading = false
         } catch {
             self.errorMessage = error.localizedDescription
             self.isLoading = false
+        }
+    }
+
+    /// Schedules an asynchronous debounced search request (40ms debounce).
+    /// If query is empty, restores full history if an active search query was previously applied.
+    public func triggerSearch() {
+        searchTask?.cancel()
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            if lastSearchQuery != nil && lastSearchQuery != "" {
+                searchTask = Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    if Task.isCancelled { return }
+                    await self.performSearch(query: "")
+                }
+            }
+            return
+        }
+        searchTask = Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            try? await Task.sleep(nanoseconds: 40_000_000) // 40ms debounce
+            if Task.isCancelled { return }
+            await self.performSearch(query: self.searchText)
         }
     }
 
@@ -635,6 +707,7 @@ public final class PanelViewModel: ObservableObject {
                 )
                 guard currentGen == self.searchGeneration else { return }
                 applyItemsPreservingSelection(loaded)
+                self.lastSearchQuery = ""
             } else {
                 let results = try await coreClient.searchPageWithOptions(
                     query: trimmed,
@@ -646,16 +719,19 @@ public final class PanelViewModel: ObservableObject {
                 )
                 guard currentGen == self.searchGeneration else { return }
                 applyItemsPreservingSelection(results)
+                self.lastSearchQuery = trimmed
             }
             self.isLoading = false
         } catch let CoreError.InvalidRegex(pattern: _, errorMessage: errorMsg) {
             guard currentGen == self.searchGeneration else { return }
             self.regexErrorMessage = errorMsg
             applyItemsPreservingSelection([])
+            self.lastSearchQuery = trimmed
             self.isLoading = false
         } catch {
             guard currentGen == self.searchGeneration else { return }
             self.errorMessage = error.localizedDescription
+            self.lastSearchQuery = trimmed
             self.isLoading = false
         }
     }

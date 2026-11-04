@@ -166,6 +166,7 @@ struct SearchInteractionTests {
         // ---------------------------------------------------------------------
         // 5. Return Key Commit & Escape Dismissal
         // ---------------------------------------------------------------------
+        vm.items = [item1, item2, item3, item4]
         vm.selectedIndex = 1
         committedItem = nil
         committedMode = nil

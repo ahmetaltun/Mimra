@@ -241,27 +241,6 @@ pub fn find_content_match_offset(
                 }
             }
 
-            // 3. Subsequence match on short prefixes (up to 4096 bytes)
-            let fuzzy_scan_len = scan_slice.len().min(4096);
-            let mut end = fuzzy_scan_len;
-            while end > 0 && !scan_slice.is_char_boundary(end) {
-                end -= 1;
-            }
-            if let Some(fuzzy_res) =
-                crate::domain::search::fuzzy_match(trimmed_query, &scan_slice[..end])
-            {
-                if let Some(first_hl) = fuzzy_res.highlights.first() {
-                    let mut utf16_accum = 0;
-                    for (b_idx, c) in scan_slice[..end].char_indices() {
-                        if utf16_accum >= first_hl.start {
-                            return Some(b_idx);
-                        }
-                        utf16_accum += c.len_utf16() as u32;
-                    }
-                }
-                return Some(0);
-            }
-
             None
         }
     }
@@ -1355,5 +1334,81 @@ mod tests {
         let not_found_regex =
             search_history_page(&conn, r#"missing_[0-9]{5}"#, SearchMode::Regex, 10, 0).unwrap();
         assert!(not_found_regex.is_empty());
+    }
+
+    #[test]
+    fn test_search_rejects_unrelated_items_in_fuzzy_mode() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        crate::storage::migrations::run_migrations(&mut conn).unwrap();
+
+        // 1. Ingest pinned unrelated item
+        let rep_pin = Representation::new(
+            0,
+            crate::domain::uti::UTF8_PLAIN_TEXT.to_string(),
+            b"AWS production access key: AKIAIOSFODNN7EXAMPLE\nRegion: us-west-2".to_vec(),
+        )
+        .unwrap();
+        let mut item_pin =
+            HistoryItem::new(vec![rep_pin], Some("com.apple.Terminal".to_string()), 1000).unwrap();
+        item_pin.is_pinned = true;
+        item_pin.pin_order = Some(1);
+        ingest_clipboard_item(&mut conn, item_pin, 100).unwrap();
+
+        // 2. Ingest recent unrelated item (Git status)
+        let rep_git = Representation::new(
+            0,
+            crate::domain::uti::UTF8_PLAIN_TEXT.to_string(),
+            b"git status --porcelain\n M src/lib.rs\n?? tests/new_test.rs".to_vec(),
+        )
+        .unwrap();
+        let item_git =
+            HistoryItem::new(vec![rep_git], Some("com.apple.Terminal".to_string()), 2000).unwrap();
+        ingest_clipboard_item(&mut conn, item_git, 100).unwrap();
+
+        // 3. Ingest recent unrelated item (URL with numbers and letters)
+        let rep_url = Representation::new(
+            0,
+            crate::domain::uti::UTF8_PLAIN_TEXT.to_string(),
+            b"https://apple.com/macbook-pro-14-and-16-m3-max/specs/".to_vec(),
+        )
+        .unwrap();
+        let item_url =
+            HistoryItem::new(vec![rep_url], Some("com.apple.Safari".to_string()), 3000).unwrap();
+        ingest_clipboard_item(&mut conn, item_url, 100).unwrap();
+
+        // 4. Ingest target item with arm64
+        let rep_target = Representation::new(
+            0,
+            crate::domain::uti::UTF8_PLAIN_TEXT.to_string(),
+            b"Build artifact completed for target arm64-apple-darwin release binary.".to_vec(),
+        )
+        .unwrap();
+        let item_target = HistoryItem::new(
+            vec![rep_target],
+            Some("com.apple.Terminal".to_string()),
+            4000,
+        )
+        .unwrap();
+        let target_id = item_target.id;
+        ingest_clipboard_item(&mut conn, item_target, 100).unwrap();
+
+        // Search for "arm" in Fuzzy mode
+        let results = search_history_page(&conn, "arm", SearchMode::Fuzzy, 10, 0).unwrap();
+
+        println!("Results for 'arm': {} items", results.len());
+        for res in &results {
+            println!(
+                "  - id: {}, title: '{}', snippet: '{}'",
+                res.id, res.title, res.snippet
+            );
+        }
+
+        assert_eq!(
+            results.len(),
+            1,
+            "Search for 'arm' must return ONLY the 1 matching item, but found {} items!",
+            results.len()
+        );
+        assert_eq!(results[0].id, target_id);
     }
 }

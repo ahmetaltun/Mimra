@@ -185,6 +185,8 @@
 | **Fix 12** | Settings window navigation redesign: modern 190 pt left-rail sidebar (eliminating tab bar overflow and >> chevrons) | Completed | `Mimra/UI/Settings/SettingsView.swift`, `Mimra/macOS/StatusBarCoordinator.swift` (`tests/status_bar_tests.swift`, ADR-057) |
 | **Fix 13** | Move history item to top on selection / paste with configurable setting toggle | Completed | Rust storage `touch_item`, `Generated/mimra_core.swift`, `CoreClient.swift`, `PasteCoordinator.swift`, `PanelViewModel.swift`, `SettingsView.swift` (`tests/move_to_top_tests.swift`, ADR-060) |
 | **Fix 14** | Deep clipboard content search & contextual excerpt highlighting (multi-line JSON, code, logs past 160 chars) | Completed | `RustCore/src/storage/search.rs`, `tests/fuzzy_search_tests.swift` (`test_search_deep_json_content_across_all_modes`, ADR-061) |
+| **Fix 15** | End-to-end runtime search pipeline: debounced search trigger, core engine bypass fix, and 8,000+ char verification | Completed | `Mimra/UI/Panel/PanelViewModel.swift`, `FloatingPanelView.swift`, `tests/fuzzy_search_tests.swift` (Step 8, ADR-062) |
+| **Fix 16** | Precision search: word-boundary acronym matching in fuzzy mode and elimination of false-positive body content matches | Completed | `RustCore/src/domain/search.rs`, `RustCore/src/storage/search.rs`, `tests/fuzzy_search_tests.swift` (`test_search_rejects_unrelated_items_in_fuzzy_mode`, ADR-063) |
 
 ---
 

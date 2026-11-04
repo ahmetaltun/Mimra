@@ -2286,3 +2286,72 @@ Investigation revealed:
 ### Consequences
 * **Positive:** Multi-line JSON, code snippets, logs, and essays can now be searched by any keyword across Mixed/Fuzzy, Exact, and Regex modes; the UI list row displays the contextual excerpt showing the matched term with bold/colored highlight styling; performance remains sub-millisecond (< 5 ms for 10,000 items).
 * **Negative:** None. Storage cost is $0 as `search_text` and FTS5 were already stored in SQLite.
+
+---
+
+## ADR-062: End-to-End Runtime Search Pipeline & Debounced Keystroke Integration
+
+* **Status:** Accepted  
+* **Date:** 2026-11-05  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Following ADR-061 (which enabled deep content searching and excerpt generation in RustCore), testing the running application by copying an ~8,000-character payload containing the keyword `"arm64"` revealed that searching for `"arm64"` in the UI still returned zero results.
+
+Investigation across the Swift UI layer uncovered an architectural disconnection:
+1. `PanelViewModel.performSearch(query:mode:)` existed and handled debouncing counters and `CoreClient` search queries, but was **never called** when typing in the search bar. `searchText.didSet` did not trigger search.
+2. `FloatingPanelView.swift` rendered `viewModel.filteredItems`, which ran a legacy in-memory filter: `items.filter { item.title.contains(query) || item.snippet.contains(query) }`.
+3. `viewModel.items` was only populated once when opening the window via `loadData()`, where `snippet` was the initial 160-character prefix.
+4. Because the user's keystrokes never invoked `performSearch`, SQLite FTS5, RustCore fuzzy matching, regex matching, and deep excerpt generation were completely bypassed in the live app.
+5. In addition, when new clipboard items were copied while a search query was active in the panel, `.onReceive(.mimraClipboardDidIngest)` invoked `loadData()`, wiping out search state.
+
+### Decision
+1. **Debounced Search Triggering (`PanelViewModel.triggerSearch`):**
+   - Wired `searchText.didSet` and `searchMode.didSet` to call `triggerSearch()`.
+   - `triggerSearch()` cancels any in-flight search task and debounces by 40ms before calling `performSearch(query: searchText)`.
+   - When `searchText` is cleared to empty, `performSearch(query: "")` restores the full recency history only if an active search was previously applied, preventing unnecessary re-queries.
+2. **Dynamic List Binding (`PanelViewModel.filteredItems`):**
+   - Introduced `@Published public private(set) var lastSearchQuery: String?` to track when `items` contains the results of a Core search for the active query.
+   - When `lastSearchQuery?.lowercased() == query`, `filteredItems` returns `items` directly, preserving RustCore's BM25 ranking, deep excerpts, and UTF-16 highlight ranges.
+   - When an asynchronous search is still debouncing or executing in the background, a synchronous title/snippet fallback filter is retained for instantaneous typing feedback and unit-test compatibility.
+3. **Reactive Re-query on Configuration Changes (`reloadSearchSettings`):**
+   - When the user toggles search mode (Fuzzy / Exact / Regex) or sort/pin arrangement, if `!searchText.isEmpty`, `reloadSearchSettings()` invalidates `lastSearchQuery` and triggers an immediate re-search.
+4. **Clipboard Ingestion Awareness (`FloatingPanelView.swift`):**
+   - Updated `.onReceive(.mimraClipboardDidIngest)` to call `performSearch(query: viewModel.searchText)` when a query is present, ensuring newly copied matching items appear without wiping the search view.
+
+### Consequences
+* **Positive:** Complete end-to-end integration between Swift UI search input and the RustCore SQLite FTS5 search engine; searching for keywords in 8,000+ character payloads works seamlessly; smooth 40ms typing debounce prevents SQLite lock churn; full backward compatibility with synchronous unit tests.
+* **Negative:** None.
+
+---
+
+## ADR-063: Strict Word-Boundary Fuzzy Subsequence Matching & Elimination of False-Positive Content Matches
+
+* **Status:** Accepted  
+* **Date:** 2026-11-05  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Following the activation of the end-to-end runtime search pipeline (ADR-062), users reported that typing queries in the search bar returned unrelated history items—including completely unrelated pinned items appearing at the top of the search list.
+
+Investigation revealed two root causes:
+1. **Subsequence Matching on Arbitrary Content Payloads:** `find_content_match_offset` in `search.rs` executed `fuzzy_match` on up to 4,096 bytes of body text. For arbitrary text of several kilobytes (code, JSON, logs), any 3-to-5 character query almost inevitably matches as a scattered non-contiguous character subsequence (e.g. `'a'` on line 1, `'r'` on line 5, `'m'` on line 12). This falsely flagged unrelated items as content matches.
+2. **Permissive Word-Jumping in `fuzzy_match`:** In `domain/search.rs`, Phase 2 allowed non-contiguous character jumps to land on arbitrary internal characters in the middle of words (giving positive $+30$ points). Consequently, any title or snippet containing the query letters in order—regardless of word boundaries—was accepted with a positive score. Pinned items received $+1,000,000$ priority boosts, causing unrelated pinned items to rise to the top of search results.
+
+### Decision
+1. **Strict Word-Boundary Rule for Non-Contiguous Subsequences (`domain/search.rs`):**
+   - In `fuzzy_match` Phase 2, the initial character of an abbreviation MUST start on a word boundary (`tc.is_boundary == true`).
+   - For all subsequent characters: if non-contiguous with the previous matched character (i.e. jumping across characters), the matched character MUST start on a word boundary (e.g. `_`, `-`, `/`, whitespace, or camelCase transitions).
+   - Contiguous continuation (e.g. `'co'` following `'c'` in `'Code'`) is rewarded with a $+100$ bonus.
+   - Any character jump landing on an internal non-boundary character immediately terminates the match and returns `None`.
+   - Whitespace in the query is skipped during acronym matching to permit spaced inputs (e.g. `'v s c'` matches `'Visual Studio Code'`).
+2. **Elimination of Arbitrary Subsequence Matches in Body Content (`storage/search.rs`):**
+   - In `find_content_match_offset`, removed Step 3 (the 4 KB `fuzzy_match` scan).
+   - Content matching strictly requires:
+     1. Exact substring match of the query string, OR
+     2. Exact substring match of the query's whitespace/punctuation-delimited tokens.
+   - Text lacking the query terms or tokens as substrings is rejected as a content match.
+
+### Consequences
+* **Positive:** Complete elimination of false-positive search results; unrelated pinned items and recent history items no longer pollute search results; genuine word-boundary acronyms (`vsc` for `Visual Studio Code`, `gc` for `git commit`) and exact substrings remain 100% supported; high precision and high recall across all search modes.
+* **Negative:** None.

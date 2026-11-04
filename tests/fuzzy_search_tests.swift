@@ -277,6 +277,48 @@ struct FuzzySearchTests {
             assert(!vm.items[0].snippetHighlights.isEmpty)
             print("✓ Step 7: Multi-line deep JSON content search and excerpt highlights verified")
 
+            // -----------------------------------------------------------------
+            // 8. 8,000+ Character Deep Content Match for "arm64" via searchText
+            // -----------------------------------------------------------------
+            let prefixPadding = String(repeating: "The quick brown fox jumps over the lazy dog. Continuous integration pipeline log trace. ", count: 50) // ~4,350 chars
+            let suffixPadding = String(repeating: " Additional build metadata and symbol tables generated for darwin release target. ", count: 45) // ~3,800 chars
+            let longText = "\(prefixPadding)\nBuild target architecture: arm64-apple-darwin release binary.\n\(suffixPadding)"
+            assert(longText.count > 8000, "Corpus text must exceed 8,000 characters")
+
+            let arm64Cap = RawCapture(
+                timestampMs: Int64(Date().timeIntervalSince1970 * 1000),
+                sourceBundleId: "com.apple.Terminal",
+                representations: [
+                    RawRepresentation(
+                        groupIndex: 0,
+                        uti: "public.utf8-plain-text",
+                        payload: Data(longText.utf8)
+                    )
+                ]
+            )
+            let arm64Res = try await core.ingest(capture: arm64Cap)
+
+            // Test through ViewModel searchText property binding (triggers debounce & pipeline)
+            vm.searchText = "arm64"
+            // Wait for 40ms debounce + async query execution
+            try await Task.sleep(nanoseconds: 120_000_000)
+
+            assert(vm.filteredItems.count == 1, "FAIL: searchText 'arm64' must find item in 8000+ char payload via runtime pipeline")
+            assert(vm.filteredItems[0].id == arm64Res.itemId, "FAIL: Matched item must be arm64 capture")
+            assert(vm.filteredItems[0].snippet.contains("arm64"), "FAIL: Excerpt snippet must contain 'arm64' keyword")
+            assert(!vm.filteredItems[0].snippetHighlights.isEmpty, "FAIL: Snippet highlights must not be empty for 'arm64'")
+
+            // Verify with Regex mode as well
+            vm.searchMode = .regex
+            vm.searchText = "arm[0-9]{2}"
+            try await Task.sleep(nanoseconds: 120_000_000)
+
+            assert(vm.filteredItems.count == 1, "FAIL: Regex 'arm[0-9]{2}' must find item in 8000+ char payload")
+            assert(vm.filteredItems[0].id == arm64Res.itemId)
+            assert(vm.filteredItems[0].snippet.contains("arm64"))
+            assert(!vm.filteredItems[0].snippetHighlights.isEmpty)
+            print("✓ Step 8: 8,000+ character content search for 'arm64' verified across runtime searchText pipeline")
+
             try? FileManager.default.removeItem(at: tempDir)
             print("✓ ALL Fuzzy Search, Ranking & Highlights Tests PASSED!")
         } catch {
