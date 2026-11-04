@@ -252,6 +252,7 @@ public struct FloatingPanelView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.primary.opacity(0.12), lineWidth: 1)
         )
+        .ignoresSafeArea()
         .overlay(
             PinEditorOverlay(viewModel: viewModel)
         )
@@ -459,7 +460,12 @@ struct PanelItemRow: View {
     @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
     @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
     @AppStorage("searchHighlightStyle") private var searchHighlightStyleRaw: String = SearchHighlightStyle.bold.rawValue
+    @AppStorage("historyRowStyle") private var rowStyleRaw: String = "standard"
     @State private var isHovered: Bool = false
+
+    private var isCompact: Bool {
+        rowStyleRaw == "compact"
+    }
 
     private var highlightStyle: SearchHighlightStyle {
         SearchHighlightStyle(rawValue: searchHighlightStyleRaw) ?? .bold
@@ -491,7 +497,7 @@ struct PanelItemRow: View {
     var body: some View {
         rowContent
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, isCompact ? 4 : 7)
             .background(backgroundView)
             .contentShape(Rectangle())
             .help(item.title)
@@ -518,6 +524,134 @@ struct PanelItemRow: View {
 
     @ViewBuilder
     private var rowContent: some View {
+        if isCompact {
+            compactRowContent
+        } else {
+            standardRowContent
+        }
+    }
+
+    @ViewBuilder
+    private var compactRowContent: some View {
+        HStack(alignment: .center, spacing: 8) {
+            ItemThumbnailView(
+                itemId: item.id,
+                contentKind: item.contentKind,
+                title: item.title,
+                availableUtis: item.availableUtis,
+                isSelected: isSelected,
+                coreClient: coreClient,
+                size: 16
+            )
+
+            HighlightedLabel(
+                text: displayTitle,
+                ranges: item.titleHighlights,
+                isSelected: isSelected,
+                baseFont: .system(size: 12, weight: .medium),
+                defaultColor: .primary,
+                highlightStyle: highlightStyle
+            )
+            .lineLimit(1)
+            .truncationMode(.tail)
+
+            if let color = detectedColor {
+                ColorSwatchView(colorInfo: color, size: 10, cornerRadius: 2)
+            }
+
+            if let urlInfo = detectedUrl {
+                UrlBadgeView(urlInfo: urlInfo, isSelected: isSelected)
+            }
+
+            if item.isPinned {
+                Button {
+                    onTogglePin?()
+                } label: {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 8))
+                        .foregroundColor(.orange)
+                }
+                .buttonStyle(.plain)
+                .help("Unpin item (⌥P)")
+            } else if isHovered {
+                Button {
+                    onTogglePin?()
+                } label: {
+                    Image(systemName: "pin")
+                        .font(.system(size: 8))
+                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Pin item (⌥P)")
+            }
+
+            if item.contentKind == "file_urls" && isFileVanished(path: item.snippet) {
+                Text("missing")
+                    .font(.system(size: 8, weight: .semibold))
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 0.5)
+                    .background(Color.red.opacity(0.18))
+                    .foregroundColor(isSelected ? .white : .red)
+                    .cornerRadius(2)
+            }
+
+            if item.copyCount > 1 {
+                Text("\(item.copyCount)x")
+                    .font(.system(size: 8, weight: .bold))
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 0.5)
+                    .background(isSelected ? Color.white.opacity(0.2) : Color.secondary.opacity(0.15))
+                    .foregroundColor(isSelected ? .white : .secondary)
+                    .cornerRadius(2)
+            }
+
+            Spacer(minLength: 4)
+
+            // Click-safe external browser launcher (explicit button on hover only)
+            if let urlInfo = detectedUrl, isHovered, let url = urlInfo.url {
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 10))
+                        .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Open in Browser")
+            }
+
+            // Source application icon
+            if showSourceAppIcon, let bundleId = item.sourceBundleId, !bundleId.isEmpty {
+                SourceAppIconView(bundleId: bundleId, size: 13)
+                    .help(bundleId)
+            }
+
+            // Pinned and quick-pick shortcut badges
+            HStack(spacing: 3) {
+                if let pinKey = item.pinKey, !pinKey.isEmpty {
+                    Text("⌥\(pinKey.uppercased())")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(isSelected ? .white.opacity(0.9) : .orange)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 0.5)
+                        .background(isSelected ? Color.white.opacity(0.18) : Color.orange.opacity(0.12))
+                        .cornerRadius(3)
+                }
+                if let key = shortcutIndex {
+                    Text("⌘\(key)")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 0.5)
+                        .background(isSelected ? Color.white.opacity(0.15) : Color.primary.opacity(0.06))
+                        .cornerRadius(3)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var standardRowContent: some View {
         HStack(alignment: .center, spacing: 10) {
             // Type icon, cached image thumbnail, or color swatch (P3-02, P3-04)
             ItemThumbnailView(
@@ -526,7 +660,8 @@ struct PanelItemRow: View {
                 title: item.title,
                 availableUtis: item.availableUtis,
                 isSelected: isSelected,
-                coreClient: coreClient
+                coreClient: coreClient,
+                size: 22
             )
 
             // Text title and preview snippet
@@ -690,7 +825,7 @@ struct PanelItemRow: View {
         var parts: [String] = []
 
         // 1. Content Title or Fallback
-        let titleText = displayTitle.isEmpty ? "Untitled item" : displayTitle
+        let titleText = (displayTitle.isEmpty || displayTitle == "Untitled") ? "Untitled item" : displayTitle
         parts.append(titleText)
 
         // 2. Content Type Description
@@ -859,6 +994,7 @@ struct ItemThumbnailView: View {
     var availableUtis: [String] = []
     let isSelected: Bool
     let coreClient: CoreClient?
+    var size: CGFloat = 22
 
     @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
     @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
@@ -872,19 +1008,19 @@ struct ItemThumbnailView: View {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 22, height: 22)
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .frame(width: size, height: size)
+                    .clipShape(RoundedRectangle(cornerRadius: size <= 18 ? 3 : 4, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        RoundedRectangle(cornerRadius: size <= 18 ? 3 : 4, style: .continuous)
                             .stroke(isSelected ? Color.white.opacity(0.3) : Color.primary.opacity(0.1), lineWidth: 0.5)
                     )
             } else if showColorSwatches, let color = ColorDetector.detect(in: title) {
-                ColorSwatchView(colorInfo: color, size: 22, cornerRadius: 4)
+                ColorSwatchView(colorInfo: color, size: size, cornerRadius: size <= 18 ? 3 : 4)
             } else {
                 Image(systemName: iconForKind(contentKind))
-                    .font(.system(size: 13))
+                    .font(.system(size: size <= 18 ? 11 : 13))
                     .foregroundColor(isSelected ? .white : .accentColor)
-                    .frame(width: 22, height: 22)
+                    .frame(width: size, height: size)
             }
         }
         .task(id: itemId) {

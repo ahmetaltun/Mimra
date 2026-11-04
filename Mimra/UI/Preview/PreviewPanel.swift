@@ -27,6 +27,9 @@ open class PreviewPanel: NSPanel {
 
         self.titleVisibility = .hidden
         self.titlebarAppearsTransparent = true
+        if #available(macOS 11.0, *) {
+            self.titlebarSeparatorStyle = .none
+        }
         self.isMovableByWindowBackground = false
         self.isOpaque = false
         self.backgroundColor = .clear
@@ -40,6 +43,31 @@ open class PreviewPanel: NSPanel {
         self.maxSize = NSSize(width: 1200, height: 1600)
         self.isReleasedWhenClosed = false
         self.ignoresMouseEvents = false
+
+        hideStandardWindowButtons()
+    }
+
+    /// Hides and disables all standard window buttons.
+    public func hideStandardWindowButtons() {
+        for buttonType in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            if let button = self.standardWindowButton(buttonType) {
+                button.isHidden = true
+                button.isEnabled = false
+            }
+        }
+    }
+
+    /// Ensures standard window buttons always report hidden if requested.
+    open override func standardWindowButton(_ b: NSWindow.ButtonType) -> NSButton? {
+        let btn = super.standardWindowButton(b)
+        btn?.isHidden = true
+        return btn
+    }
+
+    /// Re-applies button hiding whenever the window performs layout.
+    open override func layoutIfNeeded() {
+        super.layoutIfNeeded()
+        hideStandardWindowButtons()
     }
 
     /// The preview panel does not steal key window status by default so that

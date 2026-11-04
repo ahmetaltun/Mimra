@@ -39,6 +39,11 @@ struct PanelTests {
         assert(panel.titleVisibility == .hidden, "FAIL: Titlebar title must be hidden")
         assert(panel.titlebarAppearsTransparent == true, "FAIL: Titlebar must appear transparent")
 
+        // Verify standard window buttons are hidden (Spotlight / Raycast style)
+        assert(panel.standardWindowButton(.closeButton)?.isHidden != false, "FAIL: Close button must be hidden")
+        assert(panel.standardWindowButton(.miniaturizeButton)?.isHidden != false, "FAIL: Miniaturize button must be hidden")
+        assert(panel.standardWindowButton(.zoomButton)?.isHidden != false, "FAIL: Zoom button must be hidden")
+
         assert(panel.minSize.width == 340 && panel.minSize.height == 320, "FAIL: Minimum size mismatch")
         assert(panel.maxSize.width == 800 && panel.maxSize.height == 1000, "FAIL: Maximum size mismatch")
 

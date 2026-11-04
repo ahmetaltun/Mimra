@@ -31,6 +31,9 @@ open class FloatingPanel: NSPanel {
 
         self.titleVisibility = .hidden
         self.titlebarAppearsTransparent = true
+        if #available(macOS 11.0, *) {
+            self.titlebarSeparatorStyle = .none
+        }
         self.isMovableByWindowBackground = true
         self.isOpaque = false
         self.backgroundColor = .clear
@@ -43,6 +46,32 @@ open class FloatingPanel: NSPanel {
         self.minSize = NSSize(width: 340, height: 320)
         self.maxSize = NSSize(width: 800, height: 1000)
         self.isReleasedWhenClosed = false
+
+        hideStandardWindowButtons()
+    }
+
+    /// Hides and disables all standard window management buttons (close, minimize, zoom)
+    /// to provide a clean Spotlight/Raycast-like floating panel appearance.
+    public func hideStandardWindowButtons() {
+        for buttonType in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            if let button = self.standardWindowButton(buttonType) {
+                button.isHidden = true
+                button.isEnabled = false
+            }
+        }
+    }
+
+    /// Ensures standard window buttons always report hidden if requested.
+    open override func standardWindowButton(_ b: NSWindow.ButtonType) -> NSButton? {
+        let btn = super.standardWindowButton(b)
+        btn?.isHidden = true
+        return btn
+    }
+
+    /// Re-applies button hiding whenever the window performs layout.
+    open override func layoutIfNeeded() {
+        super.layoutIfNeeded()
+        hideStandardWindowButtons()
     }
 
     /// The panel can become key window so that text inputs inside receive keyboard focus.

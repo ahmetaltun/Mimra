@@ -2187,3 +2187,31 @@ User feedback and testing identified two critical issues when opening the Settin
 
 
 
+
+---
+
+## ADR-059: Floating Panel Window Chrome & Traffic Light Removal, and User-Configurable One-Line Compact History Row Architecture
+
+* **Status:** Accepted  
+* **Date:** 2026-11-04  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+1. **Window Buttons & Chrome on Floating Panel:** Mimra's floating clipboard panel uses `.titled` and `.fullSizeContentView` in its `NSPanel` style mask to retain macOS system shadows and edge-resizing support. However, AppKit by default renders standard traffic light buttons (Close, Minimize, Zoom) in the top-left corner, and SwiftUI's `NSHostingView` measures a top safe area inset of ~28pt, causing an awkward dark gap between the top rounded window border and the search bar.
+2. **History Item Density:** The original history item row layout renders on two lines (Title + Snippet preview), taking ~50pt of vertical height. Users with larger monitors or heavy copy workloads requested a more compact single-line view to maximize visible item capacity without scrolling.
+
+### Decision
+1. **Panel Chrome and Traffic Light Removal (`FloatingPanel.swift` & `PreviewPanel.swift`):**
+   - Implemented `hideStandardWindowButtons()` to hide and disable `.closeButton`, `.miniaturizeButton`, and `.zoomButton`.
+   - Overrode `standardWindowButton(_:)` to ensure buttons remain hidden on AppKit layout passes.
+   - Set `titlebarSeparatorStyle = .none`.
+   - Added `.ignoresSafeArea()` to `FloatingPanelView` so that the glass background and search bar extend all the way to the top border with standard 10pt inset padding, matching Spotlight and Raycast.
+2. **User-Configurable One-Line Compact History Option (`AppearanceConfiguration.swift`, `SettingsView.swift`, `FloatingPanelView.swift`):**
+   - Defined `HistoryRowStyle` (`.standard` = two lines, `.compact` = one line) with key `"historyRowStyle"`, defaulting to `.standard` to preserve current behavior.
+   - Added a segmented control picker in **Settings → Appearance → History Item Style**.
+   - In `FloatingPanelView.swift`, implemented `compactRowContent` in `PanelItemRow` which renders thumbnail (16x16), single-line title with tail truncation, color/url/status badges, spacer, app icon, and shortcuts on one horizontal line (~28pt height), omitting the snippet.
+   - Preserved two-line `standardRowContent` as default.
+
+### Consequences
+* **Positive:** Modern borderless floating panel design free of extraneous titlebar chrome and non-functional window buttons; users can choose between rich two-line snippets and high-density single-line rows; updates apply in real time via `@AppStorage`.
+* **Negative:** None.

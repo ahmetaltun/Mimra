@@ -23,6 +23,20 @@ public enum AppearanceTheme: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Row formatting style for clipboard history items in the panel (F-028).
+public enum HistoryRowStyle: String, CaseIterable, Identifiable, Sendable {
+    case standard = "standard"
+    case compact = "compact"
+
+    public var id: String { rawValue }
+    public var displayName: String {
+        switch self {
+        case .standard: return "Standard (Two lines)"
+        case .compact: return "Compact (One line)"
+        }
+    }
+}
+
 /// Positioning modes for the history floating panel (F-032, T-UI-07).
 public enum PanelPositionMode: String, CaseIterable, Identifiable, Sendable {
     case centerActive = "centerActive"
@@ -111,6 +125,7 @@ public final class AppearanceConfiguration: ObservableObject {
 
     // Keys
     public static let themeKey = "appearanceTheme"
+    public static let rowStyleKey = "historyRowStyle"
     public static let positionModeKey = "panelPositionMode"
     public static let iconStyleKey = "menuBarIconStyle"
     public static let showRecentCopyInMenuBarKey = "showRecentCopyInMenuBar"
@@ -122,6 +137,21 @@ public final class AppearanceConfiguration: ObservableObject {
     public static let previewWidthKey = "previewWidth"
     public static let lastSavedOriginXKey = "lastSavedOriginX"
     public static let lastSavedOriginYKey = "lastSavedOriginY"
+
+    public var rowStyle: HistoryRowStyle {
+        get {
+            let val = userDefaults.string(forKey: Self.rowStyleKey) ?? HistoryRowStyle.standard.rawValue
+            return HistoryRowStyle(rawValue: val) ?? .standard
+        }
+        set {
+            userDefaults.set(newValue.rawValue, forKey: Self.rowStyleKey)
+            notifyChange()
+        }
+    }
+
+    public var isCompactRows: Bool {
+        rowStyle == .compact
+    }
 
     public var theme: AppearanceTheme {
         get {

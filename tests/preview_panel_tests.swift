@@ -148,6 +148,11 @@ struct PreviewPanelTestsRunner {
         assert(panel.collectionBehavior.contains(.canJoinAllSpaces), "Panel must join all spaces")
         assert(panel.collectionBehavior.contains(.fullScreenAuxiliary), "Panel must be fullScreenAuxiliary")
 
+        // Verify standard window buttons are hidden
+        assert(panel.standardWindowButton(.closeButton)?.isHidden != false, "PreviewPanel close button must be hidden")
+        assert(panel.standardWindowButton(.miniaturizeButton)?.isHidden != false, "PreviewPanel miniaturize button must be hidden")
+        assert(panel.standardWindowButton(.zoomButton)?.isHidden != false, "PreviewPanel zoom button must be hidden")
+
         print("  -> Passed window attributes check.")
     }
 

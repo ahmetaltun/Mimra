@@ -670,6 +670,19 @@ public struct AppearanceSettingsTab: View {
                 Toggle("Show recent copy snippet in menu bar", isOn: $appearanceConfig.showRecentCopyInMenuBar)
             }
 
+            Section("History Item Style") {
+                Picker("Row Style", selection: $appearanceConfig.rowStyle) {
+                    ForEach(HistoryRowStyle.allCases) { style in
+                        Text(style.displayName).tag(style)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text("Standard displays title and snippet preview on two lines. Compact displays single-line items, allowing significantly more clipboard clips to fit on screen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Item Previews in List") {
                 Toggle("Show HEX color swatch", isOn: $showColorSwatches)
                 Toggle("Show URL domain badges", isOn: $showUrlPreviews)

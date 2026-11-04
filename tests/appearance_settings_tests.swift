@@ -19,6 +19,7 @@ final class AppearanceSettingsTestsRunner {
         await testMenuBarIconStylesAndSnippetToggle()
         await testElementVisibilityAndDefaultFallbacks()
         await testDimensionsAndSizingConstraints()
+        await testHistoryRowStylePersistenceAndNotification()
 
         print("✓ All Appearance Settings integration tests PASSED!")
     }
@@ -248,6 +249,50 @@ final class AppearanceSettingsTestsRunner {
 
         testDefaults.removePersistentDomain(forName: suiteName)
         print("  ✓ Dimensions and sizing constraints verified")
+    }
+
+    // 7. History Row Style persistence and notifications (F-028)
+    static func testHistoryRowStylePersistenceAndNotification() async {
+        print("  Testing HistoryRowStyle persistence and notification...")
+
+        final class NotificationFlag: @unchecked Sendable {
+            var received: Bool = false
+        }
+
+        let suiteName = "MimraHistoryRowStyleTest_\(UUID().uuidString)"
+        let testDefaults = UserDefaults(suiteName: suiteName)!
+        let config = AppearanceConfiguration(userDefaults: testDefaults)
+
+        // Default should be standard (two lines)
+        assert(config.rowStyle == .standard, "FAIL: Default rowStyle must be .standard")
+        assert(config.isCompactRows == false, "FAIL: Default isCompactRows must be false")
+
+        let flag = NotificationFlag()
+        let observer = NotificationCenter.default.addObserver(
+            forName: AppearanceConfiguration.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            flag.received = true
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        // Switch to Compact
+        flag.received = false
+        config.rowStyle = .compact
+        assert(testDefaults.string(forKey: AppearanceConfiguration.rowStyleKey) == "compact", "FAIL: Compact style must persist to UserDefaults")
+        assert(config.isCompactRows == true, "FAIL: isCompactRows must be true when compact")
+        assert(flag.received, "FAIL: Notification must be broadcast on row style change")
+
+        // Switch back to Standard
+        flag.received = false
+        config.rowStyle = .standard
+        assert(testDefaults.string(forKey: AppearanceConfiguration.rowStyleKey) == "standard", "FAIL: Standard style must persist to UserDefaults")
+        assert(config.isCompactRows == false, "FAIL: isCompactRows must be false when standard")
+        assert(flag.received, "FAIL: Notification must be broadcast on row style change")
+
+        testDefaults.removePersistentDomain(forName: suiteName)
+        print("  ✓ HistoryRowStyle switching and persistence verified")
     }
 }
 

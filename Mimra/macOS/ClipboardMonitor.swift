@@ -256,7 +256,9 @@ public final class ClipboardMonitor: ObservableObject {
 
         // 1. Check if rawStr is an APFS/HFS+ file reference URL
         if rawStr.contains("/.file/id=") {
-            if let url = URL(string: rawStr), let resolvedPathUrl = (url as NSURL).filePathURL {
+            if let url = URL(string: rawStr),
+               let resolvedPathUrl = (url as NSURL).filePathURL,
+               resolvedPathUrl.isFileURL {
                 let canonicalStr = resolvedPathUrl.standardizedFileURL.absoluteString
                 if let resolvedData = canonicalStr.data(using: .utf8) {
                     return resolvedData
@@ -276,9 +278,9 @@ public final class ClipboardMonitor: ObservableObject {
         }
 
         // 2. If it's already a standard file URL, ensure standardized canonical form
-        if rawStr.hasPrefix("file://") {
+        if rawStr.hasPrefix("file://") && !rawStr.contains("/.file/id=") {
             if let url = URL(string: rawStr) {
-                let resolved = (url as NSURL).filePathURL ?? url
+                let resolved = ((url as NSURL).filePathURL?.isFileURL == true ? (url as NSURL).filePathURL : nil) ?? url
                 let canonicalStr = resolved.standardizedFileURL.absoluteString
                 if let resolvedData = canonicalStr.data(using: .utf8) {
                     return resolvedData
