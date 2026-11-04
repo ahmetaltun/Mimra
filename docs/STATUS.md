@@ -1,6 +1,6 @@
 # Mimra — Project Status & Roadmap Tracker
 
-> **Active Milestone:** Gate G6 — Release Hardening (Phase 8)  
+> **Active Milestone:** Gate G6 Completed — Entering Phase 9 (Packaging & CI)  
 > **Last Updated:** 2026-11-04  
 > **Target Environment:** macOS 15.0+ (`aarch64-apple-darwin`), Apple Silicon only
 
@@ -44,7 +44,7 @@
 | **G3** | Complete Data Types | **COMPLETED** | RTF, HTML, PNG/JPEG/HEIC, file URLs, URLs/colors, attribution, dedupe hardening, type settings |
 | **G4** | History Power Features | **COMPLETED** | Fuzzy/regex search, pinning, retention cleanup, settings UI |
 | **G5** | Core Feature Parity | **COMPLETED** | Slideout preview, OCR, cycle summon, VoiceOver, localization, full settings |
-| **G6** | Release Hardening | IN PROGRESS | Leaks, benchmarks, fuzzing, notarized arm64 distribution |
+| **G6** | Release Hardening | **COMPLETED** | Leaks, benchmarks, fuzzing, recovery, and parity signed off |
 | **G7** | Mimra Differentiators | PENDING | Privacy profiles, secret heuristics, encrypted vault (SQLCipher) |
 
 ---
@@ -152,7 +152,22 @@
 
 ---
 
-## 11. Current Blockers & Risks
+## 11. Phase 8 Task Tracker (Gate G6)
 
-* **None.** Phase 7 (Comprehensive Settings, Internationalization, and Accessibility) is 100% COMPLETED and verified. Gate G5 (Core Feature Parity) exited cleanly. All 75 Rust unit tests, 55 Swift integration test suites, and the native arm64 Xcode build pass with zero warnings or errors.
-* **Next Task:** P8-01 (Leak/retention stress: memory graph + synthetic 50k copies + orphan FK/FTS checks. Gate G6 entry).
+| Task ID | Description | Status | Verification / Artifact |
+|---|---|---|---|
+| **P8-01** | Leak/retention stress: memory graph + synthetic 50k churn + 0 orphan FK/FTS checks | Completed | `tests/leak_retention_stress_tests.swift`, `RustCore/src/storage/mod.rs` (`T-HIST-05`, `F-025`, `F-052`, `F-053`) |
+| **P8-02** | Paste regression lab: Finder, Safari, Chrome, Notes, Pages, Terminal, IDE, Spotlight, RDC, Fullscreen | Completed | `tests/paste_regression_lab_tests.swift`, `docs/PASTE_REGRESSION_MATRIX.md` (`T-PASTE-01` to `T-PASTE-04`, `T-UI-06`, `F-001`, `F-002`, `F-020`, `F-021`, `F-029`) |
+| **P8-03** | Layout regression: multi-monitor, disconnection, scaled displays, Stage Manager, IME, safe preview | Completed | `tests/layout_regression_tests.swift`, `Mimra/UI/Preview/PreviewBoundsCalculator.swift`, `Mimra/UI/Panel/FloatingPanel.swift` (`T-UI-06`, `T-UI-07`, `T-PREV-01`, `T-PREV-02`, `F-018`, `F-028`, `F-032`, `F-039`, `F-040`) |
+| **P8-04** | Privacy audit: denied markers, deleted items, logs, permissions, caches, zero network review | Completed | `tests/privacy_audit_tests.swift`, `docs/THREAT_MODEL.md` (`T-PRIV-01` to `T-PRIV-06`, `F-008`, `F-009`, `F-010`, `F-014`, `F-015`, `F-026`, `F-057`) |
+| **P8-05** | FFI fuzz/property tests: malformed sizes, invalid UTF-8, pathological regex, SQL injection | Completed | `RustCore/src/fuzz_tests.rs`, `tests/ffi_fuzz_property_tests.swift` (`T-FFI-01`, `T-SRCH-02`, `F-018`, `F-048`, `F-051`) |
+| **P8-06** | Performance benchmarks: idle CPU/wakeups, memory, history summon, search, paste, thumbnails | Completed | `tests/performance_benchmarks.swift` (§10 Budgets verified on Apple Silicon: Ingest 0.44ms, Search 14.4ms, Summon 3.36ms, Idle poll 0.0006ms) |
+| **P8-07** | Database recovery: crash resilience, WAL replay, corruption quarantine & salvage, clean resume | Completed | `tests/database_recovery_lab_tests.swift`, `RustCore/src/storage/recovery.rs` (`T-DB-01`, `T-HIST-02`, `F-052`, `F-055`) |
+| **P8-08** | Parity signoff: revisit feature inventory | Completed | `MIMRA_MASTER_PLAN.md` (all 64 feature IDs and Gate G6 exit criteria signed off) |
+
+---
+
+## 12. Current Blockers & Risks
+
+* **None.** Phase 8 (Reliability, Performance, and Security Hardening) is 100% COMPLETED and verified. Gate G6 exited cleanly. All 81 Rust unit and property tests, 62 Swift integration test suites, and the native arm64 Xcode build pass with zero warnings or errors.
+* **Next Milestone:** Phase 9 (Packaging, CI, Release and Maintenance: Developer ID, Notarization, Signed DMG, GitHub Actions CI workflow).

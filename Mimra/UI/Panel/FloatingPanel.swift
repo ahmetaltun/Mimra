@@ -149,6 +149,14 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             let p = self.getOrCreatePanel()
             self.previewCoordinator.handleSelectionChanged(item: item, parent: p)
         }
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self, let p = self.panel, p.isVisible else { return }
+            self.positionPanel(panel: p)
+        }
         setupKeyMonitor()
     }
 

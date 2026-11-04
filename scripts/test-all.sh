@@ -1248,7 +1248,133 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 /tmp/mimra_a11y_appear_runner
 rm -f /tmp/mimra_a11y_appear_runner
 
-echo -e "\n=== 56. Building Native macOS App (Mimra.app) via Xcode ==="
+echo -e "\n=== 56. Running Leak & Retention Stress Tests (P8-01 / T-HIST-05) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/tests/leak_retention_stress_tests.swift" \
+    -o /tmp/mimra_stress_runner
+
+/tmp/mimra_stress_runner
+rm -f /tmp/mimra_stress_runner
+
+echo -e "\n=== 57. Running Paste Regression Lab Tests (P8-02 / T-PASTE-01 to T-PASTE-04, T-UI-06) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/tests/paste_regression_lab_tests.swift" \
+    -o /tmp/mimra_paste_lab_runner
+
+/tmp/mimra_paste_lab_runner
+rm -f /tmp/mimra_paste_lab_runner
+
+echo -e "\n=== 58. Running Layout Regression & Multi-Monitor Tests (P8-03 / T-UI-06, T-UI-07, T-PREV-01, T-PREV-02) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    "$PROJECT_ROOT/Mimra/macOS/AppearanceConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Preview/PreviewBoundsCalculator.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Preview/PreviewPanel.swift" \
+    "$PROJECT_ROOT/tests/layout_regression_tests.swift" \
+    -o /tmp/mimra_layout_runner
+
+/tmp/mimra_layout_runner
+rm -f /tmp/mimra_layout_runner
+
+echo -e "\n=== 59. Running Privacy & Security Audit Tests (P8-04 / T-PRIV-01 to T-PRIV-06) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/tests/privacy_audit_tests.swift" \
+    -o /tmp/mimra_privacy_audit_runner
+
+/tmp/mimra_privacy_audit_runner
+rm -f /tmp/mimra_privacy_audit_runner
+
+echo -e "\n=== 60. Running FFI Fuzz & Property Bridge Tests (P8-05 / T-FFI-01, T-SRCH-02) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/tests/ffi_fuzz_property_tests.swift" \
+    -o /tmp/mimra_ffi_fuzz_runner
+
+/tmp/mimra_ffi_fuzz_runner
+rm -f /tmp/mimra_ffi_fuzz_runner
+
+echo -e "\n=== 61. Running Performance Benchmarks (§10 Budgets / P8-06) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppearanceConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/HotkeyConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/HotkeyManager.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/LocalizationService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "$PROJECT_ROOT/tests/performance_benchmarks.swift" \
+    -o /tmp/mimra_benchmarks_runner
+
+/tmp/mimra_benchmarks_runner
+rm -f /tmp/mimra_benchmarks_runner
+
+echo -e "\n=== 62. Running Database Recovery Lab Tests (P8-07 / T-DB-01, T-HIST-02) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/tests/database_recovery_lab_tests.swift" \
+    -o /tmp/mimra_db_recovery_runner
+
+/tmp/mimra_db_recovery_runner
+rm -f /tmp/mimra_db_recovery_runner
+
+echo -e "\n=== 63. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \
     -scheme Mimra \

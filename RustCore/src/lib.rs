@@ -4,6 +4,8 @@
 
 pub mod domain;
 pub mod error;
+#[cfg(test)]
+mod fuzz_tests;
 pub mod storage;
 
 use std::path::PathBuf;

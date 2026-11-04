@@ -612,16 +612,16 @@ All settings changes persist atomically and update relevant components without r
 
 ### PHASE 8 — Reliability/performance/security hardening (G5/G6)
 
-- [ ] **P8-01 Leak/retention stress:** memory graph + synthetic 50k copies + orphan FK/FTS checks. **DoD:** stable bounded growth and no orphaned representations.
-- [ ] **P8-02 Paste regression lab:** Finder, Safari, Chrome, Notes, Pages, Terminal, IDE, Spotlight, remote desktop, full-screen. **DoD:** documented matrix and fallback in unsupported targets.
-- [ ] **P8-03 Layout regression:** multi-monitor, disconnection, scaled displays, Stage Manager, IME, overlay priority, preview safe bounds. **DoD:** no offscreen popup or stuck mouse intercept.
-- [ ] **P8-04 Privacy audit:** denied markers, deleted items, logs, permissions, clipboard race, OCR/preview caches, external network review. **DoD:** no captured secrets in diagnostics; threat model updated.
-- [ ] **P8-05 FFI fuzz/property tests:** malformed payload sizes/UTIs/invalid UTF-8; no panics across boundary. **DoD:** fuzz corpus clean and failure returns typed error.
-- [ ] **P8-06 Performance benchmarks:** idle CPU/wakeups, memory, history summon, search, paste, thumbnails. **DoD:** thresholds in §10 met on real Apple silicon hardware.
-- [ ] **P8-07 Database recovery:** migration failure/low disk/disk corruption/WAL checkpoint/forced kill, clean resume. **DoD:** no routine startup multi-minute cleanup.
-- [ ] **P8-08 Parity signoff:** revisit feature inventory. **DoD:** every P0/P1 `F` ID has evidence, no unresolved high-severity regressions.
+- [x] **P8-01 Leak/retention stress:** memory graph + synthetic 50k copies + orphan FK/FTS checks. **DoD:** stable bounded growth and no orphaned representations.
+- [x] **P8-02 Paste regression lab:** Finder, Safari, Chrome, Notes, Pages, Terminal, IDE, Spotlight, remote desktop, full-screen. **DoD:** documented matrix and fallback in unsupported targets.
+- [x] **P8-03 Layout regression:** multi-monitor, disconnection, scaled displays, Stage Manager, IME, overlay priority, preview safe bounds. **DoD:** no offscreen popup or stuck mouse intercept.
+- [x] **P8-04 Privacy audit:** denied markers, deleted items, logs, permissions, clipboard race, OCR/preview caches, external network review. **DoD:** no captured secrets in diagnostics; threat model updated.
+- [x] **P8-05 FFI fuzz/property tests:** malformed payload sizes/UTIs/invalid UTF-8; no panics across boundary. **DoD:** fuzz corpus clean and failure returns typed error.
+- [x] **P8-06 Performance benchmarks:** idle CPU/wakeups, memory, history summon, search, paste, thumbnails. **DoD:** thresholds in §10 met on real Apple silicon hardware.
+- [x] **P8-07 Database recovery:** migration failure/low disk/disk corruption/WAL checkpoint/forced kill, clean resume. **DoD:** no routine startup multi-minute cleanup.
+- [x] **P8-08 Parity signoff:** revisit feature inventory. **DoD:** every P0/P1 `F` ID has evidence, no unresolved high-severity regressions.
 
-**Phase 8 exit:** privacy- and performance-reviewed candidate with all user-visible parity features complete.
+**Phase 8 exit:** privacy- and performance-reviewed candidate with all user-visible parity features complete. (COMPLETED)
 
 ### PHASE 9 — Packaging, CI, release and maintenance (G6)
 
