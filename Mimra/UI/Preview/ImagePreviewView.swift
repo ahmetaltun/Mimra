@@ -35,6 +35,15 @@ struct CheckerboardBackdropView: View {
     }
 }
 
+/// Display state representing background on-device OCR lifecycle.
+public enum OCRDisplayState: Equatable, Sendable {
+    case idle
+    case loading
+    case success(text: String)
+    case noTextDetected
+    case failed(error: String)
+}
+
 /// SwiftUI View rendering image previews with high fidelity and aspect ratio scaling.
 @MainActor
 public struct ImagePreviewView: View {
@@ -45,6 +54,8 @@ public struct ImagePreviewView: View {
     @State private var isLoading: Bool = true
     @State private var hasError: Bool = false
     @State private var isCopiedNotificationShown: Bool = false
+    @State private var ocrState: OCRDisplayState = .idle
+    @State private var isOcrCopiedNotificationShown: Bool = false
 
     public init(item: HistoryItemSummaryDto, coreClient: CoreClient? = nil) {
         self.item = item
@@ -94,13 +105,19 @@ public struct ImagePreviewView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
 
+            // Optional Recognized Text Drawer (if text recognized by on-device Vision)
+            if case .success(let ocrText) = ocrState, !ocrText.isEmpty {
+                Divider().opacity(0.2)
+                ocrTextSection(ocrText: ocrText)
+            }
+
             Divider().opacity(0.2)
 
             // Compact Metadata Footer
             compactMetadataBar
         }
         .task(id: item.id) {
-            await loadPreview()
+            await loadAll()
         }
     }
 
@@ -156,6 +173,12 @@ public struct ImagePreviewView: View {
 
             Spacer()
 
+            // OCR Extraction Status & Action (F-044, T-OCR-02)
+            ocrToolbarItem
+
+            Text("•")
+                .foregroundColor(.secondary.opacity(0.3))
+
             // Quick Copy Image Action
             Button(action: copyImageToClipboard) {
                 HStack(spacing: 3) {
@@ -172,6 +195,90 @@ public struct ImagePreviewView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.primary.opacity(0.03))
+    }
+
+    @ViewBuilder
+    private var ocrToolbarItem: some View {
+        switch ocrState {
+        case .idle:
+            EmptyView()
+        case .loading:
+            HStack(spacing: 4) {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 10, height: 10)
+                Text("Scanning text...")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+            }
+        case .success(let ocrText):
+            if !ocrText.isEmpty {
+                Button(action: copyOcrTextToClipboard) {
+                    HStack(spacing: 3) {
+                        Image(systemName: isOcrCopiedNotificationShown ? "checkmark" : "text.viewfinder")
+                            .font(.system(size: 10))
+                        Text(isOcrCopiedNotificationShown ? "Copied Text" : "Copy OCR Text")
+                            .font(.system(size: 9, weight: .medium))
+                    }
+                    .foregroundColor(isOcrCopiedNotificationShown ? .green : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Copy extracted OCR text to clipboard")
+            }
+        case .noTextDetected:
+            HStack(spacing: 3) {
+                Image(systemName: "text.viewfinder")
+                    .font(.system(size: 9))
+                Text("No text")
+                    .font(.system(size: 9))
+            }
+            .foregroundColor(.secondary.opacity(0.5))
+            .help("On-device Vision scanned this image and found no readable text")
+        case .failed(let error):
+            HStack(spacing: 3) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 9))
+                Text("OCR error")
+                    .font(.system(size: 9))
+            }
+            .foregroundColor(.secondary.opacity(0.6))
+            .help("OCR extraction failed: \(error)")
+        }
+    }
+
+    private func ocrTextSection(ocrText: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                HStack(spacing: 4) {
+                    Image(systemName: "text.viewfinder")
+                        .font(.system(size: 9))
+                    Text("RECOGNIZED TEXT")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .foregroundColor(.secondary.opacity(0.7))
+
+                Spacer()
+
+                Text("\(ocrText.count) chars")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.6))
+            }
+
+            ScrollView {
+                Text(ocrText)
+                    .font(.system(size: 11))
+                    .foregroundColor(.primary.opacity(0.9))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+            }
+            .frame(maxHeight: 75)
+            .background(Color.primary.opacity(0.03))
+            .cornerRadius(6)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.primary.opacity(0.015))
     }
 
     private var compactMetadataBar: some View {
@@ -196,6 +303,13 @@ public struct ImagePreviewView: View {
     }
 
     // MARK: - Actions
+
+    private func loadAll() async {
+        ocrState = .idle
+        async let preview: () = loadPreview()
+        async let ocr: () = loadOcrText()
+        _ = await (preview, ocr)
+    }
 
     private func loadPreview() async {
         isLoading = true
@@ -242,6 +356,89 @@ public struct ImagePreviewView: View {
         }
     }
 
+    private func loadOcrText() async {
+        guard let client = coreClient else {
+            self.ocrState = .idle
+            return
+        }
+
+        self.ocrState = .loading
+
+        // Check if OCR text is already stored in the database
+        do {
+            if let stored = try await client.getOcrText(itemId: item.id) {
+                if Task.isCancelled { return }
+                if stored.isEmpty {
+                    self.ocrState = .noTextDetected
+                } else {
+                    self.ocrState = .success(text: stored)
+                }
+                return
+            }
+        } catch {
+            // Ignore query error and fall back to on-demand OCR
+        }
+
+        // Otherwise retrieve image payload and perform on-device Vision recognition on-demand
+        guard let reps = try? await client.getItemRepresentations(itemId: item.id),
+              let imageRep = reps.first(where: {
+                  $0.uti == "public.png" ||
+                  $0.uti == "public.heic" ||
+                  $0.uti == "public.jpeg" ||
+                  $0.uti == "public.tiff"
+              }) else {
+            if !Task.isCancelled {
+                self.ocrState = .noTextDetected
+            }
+            return
+        }
+
+        do {
+            let extracted = try await OCRService.shared.recognizeAndIndex(
+                itemId: item.id,
+                imageData: imageRep.payload,
+                coreClient: client
+            )
+            if !Task.isCancelled {
+                if extracted.isEmpty {
+                    self.ocrState = .noTextDetected
+                } else {
+                    self.ocrState = .success(text: extracted)
+                }
+            }
+        } catch is CancellationError {
+            // Task was cancelled cleanly
+        } catch {
+            if !Task.isCancelled {
+                self.ocrState = .failed(error: error.localizedDescription)
+            }
+        }
+    }
+
+    private func copyOcrTextToClipboard() {
+        guard case .success(let text) = ocrState, !text.isEmpty else { return }
+
+        let pb = NSPasteboard.general
+        pb.clearContents()
+
+        let pbItem = NSPasteboardItem()
+        pbItem.setString(text, forType: .string)
+
+        // Stamp provenance to prevent self-recapture loops (F-012, F-020)
+        pbItem.setData(Data(), forType: ClipboardProvenance.provenanceType)
+        pbItem.setString(ClipboardProvenance.mimraBundleIdentifier, forType: ClipboardProvenance.sourceAppType)
+
+        let success = pb.writeObjects([pbItem])
+        if success {
+            ClipboardProvenance.shared.recordSelfWrite(on: pb)
+            isOcrCopiedNotificationShown = true
+            Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                isOcrCopiedNotificationShown = false
+            }
+        }
+    }
+
     private func copyImageToClipboard() {
         guard let client = coreClient else { return }
 
@@ -258,16 +455,26 @@ public struct ImagePreviewView: View {
 
             let pb = NSPasteboard.general
             pb.clearContents()
-            pb.setData(imageRep.payload, forType: NSPasteboard.PasteboardType(imageRep.uti))
+
+            let pbItem = NSPasteboardItem()
+            pbItem.setData(imageRep.payload, forType: NSPasteboard.PasteboardType(imageRep.uti))
 
             // Provide TIFF fallback for apps expecting standard TIFF pasteboard representation
             if let img = previewPayload?.image, let tiff = img.tiffRepresentation {
-                pb.setData(tiff, forType: .tiff)
+                pbItem.setData(tiff, forType: .tiff)
             }
 
-            isCopiedNotificationShown = true
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            isCopiedNotificationShown = false
+            // Stamp provenance to prevent self-recapture loops (F-012, F-020)
+            pbItem.setData(Data(), forType: ClipboardProvenance.provenanceType)
+            pbItem.setString(ClipboardProvenance.mimraBundleIdentifier, forType: ClipboardProvenance.sourceAppType)
+
+            let success = pb.writeObjects([pbItem])
+            if success {
+                ClipboardProvenance.shared.recordSelfWrite(on: pb)
+                isCopiedNotificationShown = true
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                isCopiedNotificationShown = false
+            }
         }
     }
 

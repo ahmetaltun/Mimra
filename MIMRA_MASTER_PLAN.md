@@ -590,11 +590,11 @@ All settings changes persist atomically and update relevant components without r
 - [x] **P6-02 Preview shortcuts/settings:** Control-Space toggle; auto-open/delay; only local shortcut, not global registration. **DoD:** keyboard shortcut works inside panel only.
 - [x] **P6-03 Text preview:** native efficient `NSTextView` for long content and accessibility selection. **DoD:** 1 MB text scrollable without UI freeze.
 - [x] **P6-04 Image preview:** aspect ratio, HEIC, dimensions and image-byte size; cached scaling. **DoD:** no image decoded repeatedly on each row render.
-- [ ] **P6-05 OCR service:** Vision recognition on background queue, automatic language detection where supported. **DoD:** synthetic test image in 2 languages indexed; clean cancellation.
-- [ ] **P6-06 OCR results:** searchable image text, copy OCR button, loading/failed states; no network call. **DoD:** can find an image by embedded text and copy extracted text.
-- [ ] **P6-07 Race protection:** delete/clear while OCR pending; stale callbacks must never resurrect deleted items. **DoD:** stress test 1,000 rapid changes + dismissals.
+- [x] **P6-05 OCR service:** Vision recognition on background queue, automatic language detection where supported. **DoD:** synthetic test image in 2 languages indexed; clean cancellation.
+- [x] **P6-06 OCR results:** searchable image text, copy OCR button, loading/failed states; no network call. **DoD:** can find an image by embedded text and copy extracted text.
+- [x] **P6-07 Race protection:** delete/clear while OCR pending; stale callbacks must never resurrect deleted items. **DoD:** stress test 1,000 rapid changes + dismissals.
 
-**Phase 6 exit:** slideout preview and OCR experience  entirely on-device.
+**Phase 6 exit:** slideout preview and OCR experience  entirely on-device. (COMPLETED)
 
 ### PHASE 7 — Comprehensive Settings, internationalization and accessibility (G5)
 

@@ -83,6 +83,7 @@ struct RawCandidate {
     kind_str: String,
     title: String,
     snippet: String,
+    ocr_text: String,
     is_pinned: bool,
     pin_order: Option<u32>,
     pin_key: Option<String>,
@@ -150,7 +151,7 @@ pub fn search_history_page_with_options(
     if mode != SearchMode::Regex {
         if let Some(sanitized_match) = sanitize_fts5_query(trimmed_query) {
             let mut stmt = conn.prepare(
-                "SELECT h.id, h.content_kind, h.title, h.search_text, h.is_pinned, h.pin_order, h.pin_key,
+                "SELECT h.id, h.content_kind, h.title, h.search_text, h.ocr_text, h.is_pinned, h.pin_order, h.pin_key,
                         h.source_bundle_id, h.first_copied_at_ms, h.last_copied_at_ms, h.copy_count, h.byte_size
                  FROM search_fts
                  JOIN history_items h ON h.rowid = search_fts.rowid
@@ -163,22 +164,30 @@ pub fn search_history_page_with_options(
 
             let rows = stmt.query_map(params![sanitized_match], |row| {
                 let search_text: String = row.get(3)?;
-                let snippet: String = search_text.chars().take(160).collect();
-                let is_pinned_int: i64 = row.get(4)?;
+                let ocr_text: String = row.get(4)?;
+                let is_pinned_int: i64 = row.get(5)?;
+                let snippet = if !search_text.trim().is_empty() {
+                    search_text.chars().take(160).collect()
+                } else if !ocr_text.trim().is_empty() {
+                    ocr_text.chars().take(160).collect()
+                } else {
+                    String::new()
+                };
 
                 Ok(RawCandidate {
                     id_str: row.get(0)?,
                     kind_str: row.get(1)?,
                     title: row.get(2)?,
                     snippet,
+                    ocr_text,
                     is_pinned: is_pinned_int != 0,
-                    pin_order: row.get(5)?,
-                    pin_key: row.get(6)?,
-                    source_bundle_id: row.get(7)?,
-                    first_copied_at_ms: row.get(8)?,
-                    last_copied_at_ms: row.get(9)?,
-                    copy_count: row.get(10)?,
-                    byte_size: row.get(11)?,
+                    pin_order: row.get(6)?,
+                    pin_key: row.get(7)?,
+                    source_bundle_id: row.get(8)?,
+                    first_copied_at_ms: row.get(9)?,
+                    last_copied_at_ms: row.get(10)?,
+                    copy_count: row.get(11)?,
+                    byte_size: row.get(12)?,
                 })
             })?;
 
@@ -193,7 +202,7 @@ pub fn search_history_page_with_options(
     {
         let recent_limit = if mode == SearchMode::Regex { 500 } else { 200 };
         let mut stmt = conn.prepare(
-            "SELECT id, content_kind, title, search_text, is_pinned, pin_order, pin_key,
+            "SELECT id, content_kind, title, search_text, ocr_text, is_pinned, pin_order, pin_key,
                     source_bundle_id, first_copied_at_ms, last_copied_at_ms, copy_count, byte_size
              FROM history_items
              ORDER BY is_pinned DESC, last_copied_at_ms DESC
@@ -202,22 +211,30 @@ pub fn search_history_page_with_options(
 
         let rows = stmt.query_map(params![recent_limit], |row| {
             let search_text: String = row.get(3)?;
-            let snippet: String = search_text.chars().take(160).collect();
-            let is_pinned_int: i64 = row.get(4)?;
+            let ocr_text: String = row.get(4)?;
+            let is_pinned_int: i64 = row.get(5)?;
+            let snippet = if !search_text.trim().is_empty() {
+                search_text.chars().take(160).collect()
+            } else if !ocr_text.trim().is_empty() {
+                ocr_text.chars().take(160).collect()
+            } else {
+                String::new()
+            };
 
             Ok(RawCandidate {
                 id_str: row.get(0)?,
                 kind_str: row.get(1)?,
                 title: row.get(2)?,
                 snippet,
+                ocr_text,
                 is_pinned: is_pinned_int != 0,
-                pin_order: row.get(5)?,
-                pin_key: row.get(6)?,
-                source_bundle_id: row.get(7)?,
-                first_copied_at_ms: row.get(8)?,
-                last_copied_at_ms: row.get(9)?,
-                copy_count: row.get(10)?,
-                byte_size: row.get(11)?,
+                pin_order: row.get(6)?,
+                pin_key: row.get(7)?,
+                source_bundle_id: row.get(8)?,
+                first_copied_at_ms: row.get(9)?,
+                last_copied_at_ms: row.get(10)?,
+                copy_count: row.get(11)?,
+                byte_size: row.get(12)?,
             })
         })?;
 
@@ -237,7 +254,7 @@ pub fn search_history_page_with_options(
 
     let mut scored_items: Vec<ScoredCandidate> = Vec::new();
 
-    for (_, cand) in candidate_map {
+    for (_, mut cand) in candidate_map {
         let scorable = crate::domain::search::ScorableItem {
             title: &cand.title,
             snippet: &cand.snippet,
@@ -245,20 +262,60 @@ pub fn search_history_page_with_options(
             is_pinned: cand.is_pinned,
             pin_order: cand.pin_order,
         };
-        if let Some((score, title_hls, snippet_hls)) = score_item_with_mode(
+        let base_match = score_item_with_mode(
             trimmed_query,
             &scorable,
             mode,
             compiled_regex.as_ref(),
             now_ms,
-        ) {
-            scored_items.push(ScoredCandidate {
-                candidate: cand,
-                score,
-                title_highlights: title_hls,
-                snippet_highlights: snippet_hls,
-            });
+        );
+
+        let ocr_match = if !cand.ocr_text.is_empty() {
+            let ocr_scorable = crate::domain::search::ScorableItem {
+                title: &cand.title,
+                snippet: &cand.ocr_text,
+                last_copied_at_ms: cand.last_copied_at_ms,
+                is_pinned: cand.is_pinned,
+                pin_order: cand.pin_order,
+            };
+            score_item_with_mode(
+                trimmed_query,
+                &ocr_scorable,
+                mode,
+                compiled_regex.as_ref(),
+                now_ms,
+            )
+        } else {
+            None
+        };
+
+        if base_match.is_none() && ocr_match.is_none() {
+            continue;
         }
+
+        let (final_score, final_title_hls, final_snippet_hls) = match (base_match, ocr_match) {
+            (Some((b_score, b_t_hls, b_s_hls)), Some((o_score, o_t_hls, o_s_hls))) => {
+                if o_score > b_score || cand.snippet.is_empty() {
+                    cand.snippet = cand.ocr_text.chars().take(160).collect();
+                    (o_score, o_t_hls, o_s_hls)
+                } else {
+                    (b_score, b_t_hls, b_s_hls)
+                }
+            }
+            (Some((b_score, b_t_hls, b_s_hls)), None) => (b_score, b_t_hls, b_s_hls),
+            (None, Some((o_score, o_t_hls, o_s_hls))) => {
+                cand.snippet = cand.ocr_text.chars().take(160).collect();
+                (o_score, o_t_hls, o_s_hls)
+            }
+            (None, None) => unreachable!(),
+        };
+
+        scored_items.push(ScoredCandidate {
+            candidate: cand,
+            score: final_score,
+            title_highlights: final_title_hls,
+            snippet_highlights: final_snippet_hls,
+        });
     }
 
     // 4. Sort by pinned priority (per pin_arrangement), then score/recency
@@ -686,5 +743,243 @@ mod tests {
         assert_eq!(bottom_rel[0].title, "Terminal command reference");
         assert_eq!(bottom_rel[1].title, "Setup guide with some Terminal tips");
         assert_eq!(bottom_rel[2].title, "Pinned Terminal workflows");
+    }
+
+    #[test]
+    fn test_ocr_text_update_and_search() {
+        use crate::domain::content::{uti, Representation};
+        use crate::domain::item::HistoryItem;
+        use crate::storage::repository::{get_ocr_text, ingest_clipboard_item, update_ocr_text};
+
+        let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+        run_migrations(&mut conn).unwrap();
+
+        // 1. Ingest an image item (PNG)
+        let rep = Representation::new(
+            0,
+            uti::PNG,
+            vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+        )
+        .unwrap();
+        let item =
+            HistoryItem::new(vec![rep], Some("com.apple.Preview".to_string()), 1000).unwrap();
+        let item_id = item.id;
+        ingest_clipboard_item(&mut conn, item, 100).unwrap();
+
+        // Verify initial OCR text is empty
+        let initial_ocr = get_ocr_text(&conn, &item_id).unwrap();
+        assert_eq!(initial_ocr, Some("".to_string()));
+
+        // Searching for multilingual terms before OCR returns empty
+        let initial_search =
+            search_history_page(&conn, "Bonjour", SearchMode::Fuzzy, 10, 0).unwrap();
+        assert!(initial_search.is_empty());
+
+        // 2. Update OCR text with bilingual content (English & French)
+        let sample_ocr_text =
+            "System Diagnostics: Error code 404\nBonjour le monde - Connexion réussie";
+        let updated = update_ocr_text(&conn, &item_id, sample_ocr_text).unwrap();
+        assert!(
+            updated,
+            "update_ocr_text must return true for existing item"
+        );
+
+        // Verify get_ocr_text reflects the updated text
+        let fetched_ocr = get_ocr_text(&conn, &item_id).unwrap();
+        assert_eq!(fetched_ocr, Some(sample_ocr_text.to_string()));
+
+        // 3. Search for English term inside image
+        let en_results =
+            search_history_page(&conn, "Diagnostics", SearchMode::Fuzzy, 10, 0).unwrap();
+        assert_eq!(en_results.len(), 1);
+        assert_eq!(en_results[0].id, item_id);
+        assert!(en_results[0].snippet.contains("System Diagnostics"));
+        assert!(!en_results[0].snippet_highlights.is_empty());
+
+        // 4. Search for French term inside image in Exact mode
+        let fr_results = search_history_page(&conn, "Bonjour", SearchMode::Exact, 10, 0).unwrap();
+        assert_eq!(fr_results.len(), 1);
+        assert_eq!(fr_results[0].id, item_id);
+        assert!(fr_results[0].snippet.contains("Bonjour"));
+
+        // 5. Search using Regex mode
+        let re_results =
+            search_history_page(&conn, "Error.*404", SearchMode::Regex, 10, 0).unwrap();
+        assert_eq!(re_results.len(), 1);
+        assert_eq!(re_results[0].id, item_id);
+
+        // 6. Update OCR text for non-existent UUID returns false
+        let fake_id = uuid::Uuid::new_v4();
+        let fake_updated = update_ocr_text(&conn, &fake_id, "Some text").unwrap();
+        assert!(
+            !fake_updated,
+            "update_ocr_text must return false for non-existent item"
+        );
+        let fake_get = get_ocr_text(&conn, &fake_id).unwrap();
+        assert_eq!(fake_get, None);
+
+        // 7. Verify index integrity
+        verify_search_index_integrity(&conn).expect("Index integrity must pass");
+    }
+
+    #[test]
+    fn test_ocr_delete_and_clear_race_protection() {
+        use crate::domain::content::{uti, Representation};
+        use crate::domain::item::HistoryItem;
+        use crate::storage::migrations::verify_database_integrity;
+        use crate::storage::repository::{
+            clear_all_history, clear_unpinned_history, delete_item_by_id, get_ocr_text,
+            ingest_clipboard_item, set_pin_status, update_ocr_text,
+        };
+
+        let mut conn = open_in_memory(&DatabaseConfig::default()).unwrap();
+        run_migrations(&mut conn).unwrap();
+
+        // 1. Delete item while OCR pending (stale callback must never resurrect)
+        let rep1 = Representation::new(0, uti::PNG, vec![0x89, 0x50, 0x4E, 0x47]).unwrap();
+        let item1 =
+            HistoryItem::new(vec![rep1], Some("com.apple.Preview".to_string()), 1000).unwrap();
+        let item1_id = item1.id;
+        ingest_clipboard_item(&mut conn, item1, 100).unwrap();
+
+        // Delete item before OCR completes
+        let deleted1 = delete_item_by_id(&conn, &item1_id).unwrap();
+        assert!(deleted1, "Item must be successfully deleted");
+
+        // Stale OCR callback arrives
+        let updated1 = update_ocr_text(&conn, &item1_id, "Ghost Secret Text 12345").unwrap();
+        assert!(
+            !updated1,
+            "update_ocr_text must return false for deleted item"
+        );
+
+        // Verify item was not resurrected in history_items or get_ocr_text
+        let fetched_ocr1 = get_ocr_text(&conn, &item1_id).unwrap();
+        assert_eq!(
+            fetched_ocr1, None,
+            "get_ocr_text must return None for deleted item"
+        );
+
+        // Verify FTS5 search cannot find ghost text
+        let search_ghost = search_history_page(&conn, "Ghost", SearchMode::Fuzzy, 10, 0).unwrap();
+        assert!(
+            search_ghost.is_empty(),
+            "Search must never find text from stale OCR callback on deleted item"
+        );
+
+        // 2. Clear unpinned history while OCR pending
+        let rep2 = Representation::new(0, uti::PNG, vec![0x89, 0x50, 0x4E, 0x47]).unwrap();
+        let item2 =
+            HistoryItem::new(vec![rep2], Some("com.apple.Preview".to_string()), 2000).unwrap();
+        let item2_id = item2.id;
+        ingest_clipboard_item(&mut conn, item2, 100).unwrap();
+
+        let cleared_count = clear_unpinned_history(&conn).unwrap();
+        assert_eq!(cleared_count, 1, "Must clear 1 unpinned item");
+
+        // Stale OCR callback arrives after clear_unpinned
+        let updated2 = update_ocr_text(&conn, &item2_id, "Unpinned Cleared Text 67890").unwrap();
+        assert!(
+            !updated2,
+            "update_ocr_text must return false after clear_unpinned"
+        );
+
+        let search_unpinned =
+            search_history_page(&conn, "Cleared", SearchMode::Exact, 10, 0).unwrap();
+        assert!(
+            search_unpinned.is_empty(),
+            "Search must never find text from cleared unpinned items"
+        );
+
+        // 3. Clear all history while OCR pending
+        let rep3 = Representation::new(0, uti::PNG, vec![0x89, 0x50, 0x4E, 0x47]).unwrap();
+        let item3 =
+            HistoryItem::new(vec![rep3], Some("com.apple.Preview".to_string()), 3000).unwrap();
+        let item3_id = item3.id;
+        ingest_clipboard_item(&mut conn, item3, 100).unwrap();
+        set_pin_status(&conn, &item3_id, true, Some("1".to_string()), None).unwrap();
+
+        let cleared_all = clear_all_history(&conn).unwrap();
+        assert_eq!(cleared_all, 1, "Must clear all history including pinned");
+
+        let updated3 = update_ocr_text(&conn, &item3_id, "Pinned Cleared Text 11223").unwrap();
+        assert!(
+            !updated3,
+            "update_ocr_text must return false after clear_all"
+        );
+
+        // 4. Stress test: 1,000 rapid changes, deletes, clears, and stale OCR callbacks
+        let mut active_ids = Vec::new();
+        let mut deleted_ids = Vec::new();
+
+        for i in 0..1000 {
+            match i % 5 {
+                0 => {
+                    // Ingest image item
+                    let rep = Representation::new(
+                        0,
+                        uti::PNG,
+                        vec![0x89, 0x50, 0x4E, 0x47, (i & 0xFF) as u8],
+                    )
+                    .unwrap();
+                    let item = HistoryItem::new(
+                        vec![rep],
+                        Some("com.apple.Preview".to_string()),
+                        1000 + i as i64,
+                    )
+                    .unwrap();
+                    let id = item.id;
+                    ingest_clipboard_item(&mut conn, item, 500).unwrap();
+                    active_ids.push(id);
+                }
+                1 => {
+                    // Delete an item if available
+                    if let Some(id) = active_ids.pop() {
+                        let ok = delete_item_by_id(&conn, &id).unwrap();
+                        assert!(ok);
+                        deleted_ids.push(id);
+                    }
+                }
+                2 => {
+                    // Stale OCR callback to a deleted item
+                    if let Some(id) = deleted_ids.last() {
+                        let res = update_ocr_text(&conn, id, "Stale OCR stress text").unwrap();
+                        assert!(!res, "Stale OCR callback must not succeed on deleted ID");
+                    }
+                }
+                3 => {
+                    // Legitimate OCR callback to an active item
+                    if let Some(id) = active_ids.last() {
+                        let res = update_ocr_text(&conn, id, "Valid OCR stress text").unwrap();
+                        assert!(res, "OCR callback must succeed on active ID");
+                    }
+                }
+                4 => {
+                    // Periodic clear_unpinned every 100 steps
+                    if i % 100 == 4 {
+                        let _ = clear_unpinned_history(&conn).unwrap();
+                        active_ids.clear();
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        // 5. Final integrity assertions
+        verify_database_integrity(&conn).expect("Database PRAGMA integrity check must pass");
+        verify_search_index_integrity(&conn).expect("Search index integrity must pass");
+
+        // Verify zero orphaned representations
+        let orphaned_reps: usize = conn
+            .query_row(
+                "SELECT COUNT(*) FROM item_representations WHERE item_id NOT IN (SELECT id FROM history_items);",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            orphaned_reps, 0,
+            "There must be zero orphaned representations"
+        );
     }
 }

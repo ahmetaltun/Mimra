@@ -128,6 +128,7 @@ public final class StorageSettingsViewModel: ObservableObject {
     public func confirmClearUnpinned() async {
         isPerformingAction = true
         statusMessage = nil
+        await OCRService.shared.cancelAll()
         do {
             let count = try await coreClient.clearUnpinned()
             _ = try? await coreClient.checkpointWal()
@@ -144,6 +145,7 @@ public final class StorageSettingsViewModel: ObservableObject {
     public func confirmClearAll() async {
         isPerformingAction = true
         statusMessage = nil
+        await OCRService.shared.cancelAll()
         do {
             let count = try await coreClient.clearAll()
             _ = try? await coreClient.checkpointWal()

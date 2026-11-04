@@ -19,10 +19,11 @@ pub use recovery::{
 pub use repository::{
     clear_all_history, clear_unpinned_history, delete_item_by_id, edit_pinned_item_text,
     enforce_retention_limit, enforce_retention_policy, fetch_payload, find_by_content_hash,
-    find_by_id, get_storage_stats, ingest_clipboard_item, ingest_clipboard_item_with_policy,
-    insert_item, list_history_page, list_history_page_with_options, load_representations,
-    query_available_utis, reorder_pins, set_pin_status, toggle_pin_status, update_recopy,
-    update_recopy_and_merge, validate_pin_key, HistoryItemSummary, IngestOutcome, StorageStats,
+    find_by_id, get_ocr_text, get_storage_stats, ingest_clipboard_item,
+    ingest_clipboard_item_with_policy, insert_item, list_history_page,
+    list_history_page_with_options, load_representations, query_available_utis, reorder_pins,
+    set_pin_status, toggle_pin_status, update_ocr_text, update_recopy, update_recopy_and_merge,
+    validate_pin_key, HistoryItemSummary, IngestOutcome, StorageStats,
 };
 pub use search::{
     rebuild_search_index, sanitize_fts5_query, search_history_page,

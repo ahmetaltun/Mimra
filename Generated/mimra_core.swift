@@ -559,6 +559,11 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     func getItemRepresentations(itemId: String) throws  -> [RawRepresentation]
     
     /**
+     * Retrieves the OCR-extracted text for an item if available (P6-05 / F-043, T-OCR-01).
+     */
+    func getOcrText(itemId: String) throws  -> String?
+    
+    /**
      * Queries the recovery diagnosis report if database recovery occurred during startup.
      */
     func getRecoveryReport()  -> DatabaseRecoveryReportDto?
@@ -593,6 +598,12 @@ public protocol MimraCoreHandleProtocol : AnyObject {
     func setRetentionPolicy(policy: RetentionPolicyDto) 
     
     func togglePin(itemId: String) throws  -> Bool
+    
+    /**
+     * Updates the OCR-extracted text for an existing history item (P6-05 / F-043, T-OCR-01).
+     * Returns true if updated, false if the item was not found.
+     */
+    func updateOcrText(itemId: String, ocrText: String) throws  -> Bool
     
     func vacuumDatabase() throws 
     
@@ -762,6 +773,17 @@ open func getItemRepresentations(itemId: String)throws  -> [RawRepresentation] {
 }
     
     /**
+     * Retrieves the OCR-extracted text for an item if available (P6-05 / F-043, T-OCR-01).
+     */
+open func getOcrText(itemId: String)throws  -> String? {
+    return try  FfiConverterOptionString.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_get_ocr_text(self.uniffiClonePointer(),
+        FfiConverterString.lower(itemId),$0
+    )
+})
+}
+    
+    /**
      * Queries the recovery diagnosis report if database recovery occurred during startup.
      */
 open func getRecoveryReport() -> DatabaseRecoveryReportDto? {
@@ -888,6 +910,19 @@ open func togglePin(itemId: String)throws  -> Bool {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
     uniffi_mimra_core_fn_method_mimracorehandle_toggle_pin(self.uniffiClonePointer(),
         FfiConverterString.lower(itemId),$0
+    )
+})
+}
+    
+    /**
+     * Updates the OCR-extracted text for an existing history item (P6-05 / F-043, T-OCR-01).
+     * Returns true if updated, false if the item was not found.
+     */
+open func updateOcrText(itemId: String, ocrText: String)throws  -> Bool {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError.lift) {
+    uniffi_mimra_core_fn_method_mimracorehandle_update_ocr_text(self.uniffiClonePointer(),
+        FfiConverterString.lower(itemId),
+        FfiConverterString.lower(ocrText),$0
     )
 })
 }
@@ -2572,6 +2607,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_mimra_core_checksum_method_mimracorehandle_get_item_representations() != 306) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_get_ocr_text() != 39442) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_get_recovery_report() != 3990) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2615,6 +2653,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_toggle_pin() != 22350) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mimra_core_checksum_method_mimracorehandle_update_ocr_text() != 21118) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mimra_core_checksum_method_mimracorehandle_vacuum_database() != 14185) {

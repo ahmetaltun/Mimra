@@ -92,6 +92,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/tests/capture_pipeline_tests.swift" \
     -o /tmp/mimra_capture_pipeline_test_runner
@@ -124,6 +125,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
@@ -160,6 +162,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
@@ -189,6 +192,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
@@ -216,6 +220,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/tests/paste_replay_tests.swift" \
@@ -235,6 +240,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
@@ -262,6 +268,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
@@ -282,6 +289,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
@@ -309,6 +317,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/tests/paste_error_tests.swift" \
@@ -328,6 +337,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/tests/rich_text_tests.swift" \
@@ -348,6 +358,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/tests/image_type_tests.swift" \
@@ -368,6 +379,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/tests/file_url_tests.swift" \
@@ -389,6 +401,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
@@ -411,6 +424,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
@@ -434,6 +448,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
@@ -457,6 +472,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
@@ -479,6 +495,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -503,6 +520,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -527,6 +545,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -552,6 +571,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -577,6 +597,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -599,6 +620,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -639,6 +661,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -664,6 +687,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -691,6 +715,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -718,6 +743,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -745,6 +771,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -772,6 +799,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -800,6 +828,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -828,6 +857,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -856,6 +886,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -884,6 +915,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -912,6 +944,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
@@ -927,7 +960,83 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 /tmp/mimra_image_preview_test_runner
 rm -f /tmp/mimra_image_preview_test_runner
 
-echo -e "\n=== 44. Building Native macOS App (Mimra.app) via Xcode ==="
+echo -e "\n=== 44. Running OCR Service & Multilingual Vision Recognition Tests (P6-05 / F-043, T-OCR-01) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/tests/ocr_service_tests.swift" \
+    -o /tmp/mimra_ocr_service_test_runner
+
+/tmp/mimra_ocr_service_test_runner
+rm -f /tmp/mimra_ocr_service_test_runner
+
+echo -e "\n=== 45. Running OCR Results & Copy Action Integration Tests (P6-06 / F-044, T-OCR-02) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Preview/ImagePreviewService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Preview/ImagePreviewView.swift" \
+    "$PROJECT_ROOT/tests/ocr_results_tests.swift" \
+    -o /tmp/mimra_ocr_results_test_runner
+
+/tmp/mimra_ocr_results_test_runner
+rm -f /tmp/mimra_ocr_results_test_runner
+
+echo -e "\n=== 46. Running OCR Race Protection & High-Concurrency Dismissal Stress Tests (P6-07 / T-PREV-02, T-SRCH-04) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/HotkeyManager.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/tests/ocr_race_protection_tests.swift" \
+    -o /tmp/mimra_ocr_race_runner
+
+/tmp/mimra_ocr_race_runner
+rm -f /tmp/mimra_ocr_race_runner
+
+echo -e "\n=== 47. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \
     -scheme Mimra \

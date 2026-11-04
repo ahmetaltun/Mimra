@@ -663,7 +663,7 @@ pub fn list_history_page_with_options(
     };
 
     let sql = format!(
-        "SELECT id, content_kind, title, search_text, is_pinned, pin_order, pin_key,
+        "SELECT id, content_kind, title, search_text, ocr_text, is_pinned, pin_order, pin_key,
                 source_bundle_id, first_copied_at_ms, last_copied_at_ms, copy_count, byte_size
          FROM history_items
          ORDER BY {}
@@ -678,10 +678,15 @@ pub fn list_history_page_with_options(
         let kind_str: String = row.get(1)?;
         let title: String = row.get(2)?;
         let search_text: String = row.get(3)?;
-        let is_pinned_int: i64 = row.get(4)?;
+        let ocr_text: String = row.get(4)?;
+        let is_pinned_int: i64 = row.get(5)?;
 
-        // Snippet is first ~160 characters of search_text
-        let snippet: String = search_text.chars().take(160).collect();
+        // For images with recognized OCR text, display OCR snippet; otherwise use search_text
+        let snippet: String = if kind_str == "image" && !ocr_text.trim().is_empty() {
+            ocr_text.chars().take(160).collect()
+        } else {
+            search_text.chars().take(160).collect()
+        };
 
         Ok((
             id_str,
@@ -689,13 +694,13 @@ pub fn list_history_page_with_options(
             title,
             snippet,
             is_pinned_int != 0,
-            row.get(5)?,
             row.get(6)?,
             row.get(7)?,
             row.get(8)?,
             row.get(9)?,
             row.get(10)?,
             row.get(11)?,
+            row.get(12)?,
         ))
     })?;
 
@@ -1213,6 +1218,35 @@ pub fn edit_pinned_item_text(
         title_highlights: Vec::new(),
         snippet_highlights: Vec::new(),
     })
+}
+
+/// Updates the OCR text for an existing history item (P6-05 / F-043, T-OCR-01).
+///
+/// If the item exists, updates `ocr_text` in `history_items`.
+/// SQLite triggers automatically update the `search_fts` virtual table.
+/// Returns Ok(true) if the item was found and updated, or Ok(false) if the item does not exist.
+pub fn update_ocr_text(
+    conn: &Connection,
+    item_id: &Uuid,
+    ocr_text: &str,
+) -> Result<bool, CoreError> {
+    let rows_affected = conn.execute(
+        "UPDATE history_items SET ocr_text = ?1 WHERE id = ?2;",
+        params![ocr_text, item_id.to_string()],
+    )?;
+    Ok(rows_affected > 0)
+}
+
+/// Retrieves the OCR text for an item if it exists (P6-05 / F-043, T-OCR-01).
+pub fn get_ocr_text(conn: &Connection, item_id: &Uuid) -> Result<Option<String>, CoreError> {
+    let mut stmt = conn.prepare("SELECT ocr_text FROM history_items WHERE id = ?1;")?;
+    let mut rows = stmt.query(params![item_id.to_string()])?;
+    if let Some(row) = rows.next()? {
+        let text: String = row.get(0)?;
+        Ok(Some(text))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Computes current storage metrics: item counts, representation counts, and database size.

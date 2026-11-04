@@ -202,6 +202,7 @@ final class StatusBarCoordinator: NSObject {
 
     @objc public func clearUnpinned() {
         Task {
+            await OCRService.shared.cancelAll()
             _ = try? await coreClient.clearUnpinned()
             _ = try? await coreClient.checkpointWal()
         }
@@ -217,6 +218,7 @@ final class StatusBarCoordinator: NSObject {
 
         if alert.runModal() == .alertFirstButtonReturn {
             Task {
+                await OCRService.shared.cancelAll()
                 _ = try? await coreClient.clearAll()
                 _ = try? await coreClient.checkpointWal()
                 try? await coreClient.vacuumDatabase()

@@ -216,6 +216,17 @@ public actor CoreClient {
         return try handle.getItemRepresentations(itemId: itemId)
     }
 
+    /// Updates the OCR-extracted text for a history item (P6-05 / F-043, T-OCR-01).
+    /// Returns true if updated, false if the item was not found.
+    public func updateOcrText(itemId: String, ocrText: String) throws -> Bool {
+        return try handle.updateOcrText(itemId: itemId, ocrText: ocrText)
+    }
+
+    /// Queries stored OCR-extracted text for a history item if available (P6-05 / F-043, T-OCR-01).
+    public func getOcrText(itemId: String) throws -> String? {
+        return try handle.getOcrText(itemId: itemId)
+    }
+
     /// Deletes a history item by UUID.
     public func deleteItem(itemId: String) throws -> Bool {
         return try handle.deleteItem(itemId: itemId)

@@ -24,6 +24,7 @@ public final class ClipboardMonitor: ObservableObject {
     public let privacyFilter: PrivacyFilter
     public let provenanceGuard: ClipboardProvenance
     public let coreClient: CoreClient
+    public let ocrService: OCRService
 
     private var timer: Timer?
     private var lastChangeCount: Int = -1
@@ -62,7 +63,8 @@ public final class ClipboardMonitor: ObservableObject {
         privacyFilter: PrivacyFilter = PrivacyFilter(),
         provenanceGuard: ClipboardProvenance = ClipboardProvenance(),
         typeConfiguration: ClipboardTypeConfiguration = ClipboardTypeConfiguration.load(),
-        coreClient: CoreClient
+        coreClient: CoreClient,
+        ocrService: OCRService = OCRService.shared
     ) {
         self.pasteboard = pasteboard
         self.privacyFilter = privacyFilter
@@ -70,6 +72,7 @@ public final class ClipboardMonitor: ObservableObject {
         self.typeConfiguration = typeConfiguration
         self.privacyFilter.typeConfiguration = typeConfiguration
         self.coreClient = coreClient
+        self.ocrService = ocrService
         self.lastChangeCount = pasteboard.changeCount
     }
 
@@ -187,6 +190,20 @@ public final class ClipboardMonitor: ObservableObject {
                         object: self,
                         userInfo: ["outcome": outcome]
                     )
+                }
+
+                // Trigger background OCR for image captures (P6-05 / F-043, T-OCR-01)
+                if outcome.contentKind == "image",
+                   let imgRep = capture.representations.first(where: {
+                       $0.uti == "public.png" || $0.uti == "public.tiff" || $0.uti == "public.jpeg" || $0.uti == "public.heic"
+                   }) {
+                    Task {
+                        _ = try? await self.ocrService.recognizeAndIndex(
+                            itemId: outcome.itemId,
+                            imageData: imgRep.payload,
+                            coreClient: self.coreClient
+                        )
+                    }
                 }
             } catch {
                 logger.error("Failed to ingest clipboard capture into RustCore: \(error.localizedDescription, privacy: .public)")

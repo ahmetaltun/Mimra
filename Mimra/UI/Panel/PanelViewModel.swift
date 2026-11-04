@@ -480,7 +480,9 @@ public final class PanelViewModel: ObservableObject {
     }
 
     /// Deletes an item by UUID from SQLite storage while maintaining selection stability (T-KEY-03).
+    /// Cancels any in-flight OCR recognition for this item immediately (P6-07 / T-SRCH-04).
     public func deleteItem(itemId: String) async -> Bool {
+        await OCRService.shared.cancel(itemId: itemId)
         do {
             let deleted = try await coreClient.deleteItem(itemId: itemId)
             if deleted {
@@ -491,6 +493,34 @@ public final class PanelViewModel: ObservableObject {
         } catch {
             self.errorMessage = error.localizedDescription
             return false
+        }
+    }
+
+    /// Clears unpinned items, cancels all pending OCR tasks, and refreshes the panel items.
+    @discardableResult
+    public func clearUnpinned() async -> UInt64 {
+        await OCRService.shared.cancelAll()
+        do {
+            let count = try await coreClient.clearUnpinned()
+            await loadData()
+            return count
+        } catch {
+            self.errorMessage = error.localizedDescription
+            return 0
+        }
+    }
+
+    /// Clears all history items, cancels all pending OCR tasks, and refreshes the panel items.
+    @discardableResult
+    public func clearAll() async -> UInt64 {
+        await OCRService.shared.cancelAll()
+        do {
+            let count = try await coreClient.clearAll()
+            await loadData()
+            return count
+        } catch {
+            self.errorMessage = error.localizedDescription
+            return 0
         }
     }
 

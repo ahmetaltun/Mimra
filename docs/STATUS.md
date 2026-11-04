@@ -130,13 +130,13 @@
 | **P6-02** | Preview shortcuts/settings: Control-Space toggle; auto-open/delay; only local shortcut, not global registration | Completed | `Mimra/UI/Preview/PreviewCoordinator.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Settings/SettingsView.swift` (`tests/preview_settings_tests.swift`, `T-PREV-02`, `F-040`) |
 | **P6-03** | Text preview: native efficient `NSTextView` for long content and accessibility selection | Completed | `Mimra/UI/Preview/NativeTextPreviewView.swift`, `Mimra/UI/Preview/PreviewContainerView.swift` (`tests/text_preview_tests.swift`, `T-PREV-03`, `F-041`) |
 | **P6-04** | Image preview: aspect ratio, HEIC, dimensions and image-byte size; cached scaling | Completed | `Mimra/UI/Preview/ImagePreviewService.swift`, `Mimra/UI/Preview/ImagePreviewView.swift`, `Mimra/UI/Preview/PreviewContainerView.swift` (`tests/image_preview_tests.swift`, `T-PREV-04`, `F-042`) |
-| **P6-05** | OCR service: Vision recognition on background queue, automatic language detection | Pending | In queue (`T-OCR-01`, `F-043`) |
-| **P6-06** | OCR results: searchable image text, copy OCR button, loading/failed states; no network call | Pending | In queue (`T-OCR-02`, `F-044`) |
-| **P6-07** | Race protection: delete/clear while OCR pending; stale callbacks must never resurrect deleted items | Pending | In queue (`T-PREV-02`, `F-040`) |
+| **P6-05** | OCR service: Vision recognition on background queue, automatic language detection | Completed | `Mimra/macOS/OCRService.swift`, `RustCore/src/storage/repository.rs`, `RustCore/src/storage/search.rs`, `RustCore/src/lib.rs`, `Mimra/Bridge/CoreClient.swift`, `Mimra/macOS/ClipboardMonitor.swift` (`tests/ocr_service_tests.swift`, `T-OCR-01`, `F-043`) |
+| **P6-06** | OCR results: searchable image text, copy OCR button, loading/failed states; no network call | Completed | `Mimra/UI/Preview/ImagePreviewView.swift`, `RustCore/src/storage/repository.rs`, `RustCore/src/storage/search.rs`, `Mimra/macOS/OCRService.swift`, `tests/ocr_results_tests.swift` (`T-OCR-02`, `F-044`) |
+| **P6-07** | Race protection: delete/clear while OCR pending; stale callbacks must never resurrect deleted items | Completed | `RustCore/src/storage/search.rs`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/macOS/StatusBarCoordinator.swift`, `Mimra/UI/Settings/SettingsView.swift`, `tests/ocr_race_protection_tests.swift` (`T-PREV-02`, `T-SRCH-04`, `F-040`) |
 
 ---
 
 ## 10. Current Blockers & Risks
 
-* **None.** Task P6-04 (Image preview: aspect ratio, HEIC, dimensions and image-byte size; cached scaling) is COMPLETED! All Rust unit tests, 43 Swift integration test suites, and the native arm64 Xcode build pass cleanly.
-* **Next Task:** P6-05 (OCR service: Vision recognition on background queue, automatic language detection where supported. DoD: synthetic test image in 2 languages indexed; clean cancellation. `T-OCR-01`, `F-043`).
+* **None.** Phase 6 (Slideout Preview & On-Device OCR Experience, Gate G5) is 100% COMPLETED! All 7 tasks (P6-01 through P6-07) are verified. All 75 Rust unit tests, 46 Swift integration test suites, and the native arm64 Xcode build pass cleanly.
+* **Next Task:** P7-01 (General settings: paste mode, launch-at-login with `SMAppService.mainApp`, play sound if verified, clear system clipboard if enabled. DoD: persisted toggles + OS permission/policy handling).
