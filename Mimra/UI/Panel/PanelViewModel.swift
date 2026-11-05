@@ -21,6 +21,7 @@ public final class PanelViewModel: ObservableObject {
     @Published public var searchText: String = "" {
         didSet {
             if oldValue != searchText {
+                cancelHoverDwell()
                 let targetId = selectedItemId ?? selectedItem?.id
                 let list = filteredItems
                 if let targetId = targetId,
@@ -80,6 +81,12 @@ public final class PanelViewModel: ObservableObject {
     /// Timestamp of last keyboard navigation to guard against accidental mouse-hover overrides.
     public private(set) var lastKeyboardNavTime: CFTimeInterval = 0
 
+    // Mouse hover selection preferences (P7 / F-019)
+    @Published public var hoverSelectionMode: HoverSelectionMode = .immediate
+    @Published public var hoverDelayMs: Int = 250
+    @Published public var hoveredRowIndex: Int? = nil
+    private var hoverDwellTask: Task<Void, Never>?
+
     /// Configured maximum history limit (default 200, bounded between 10 and 2000).
     public var historyLimit: UInt32 {
         let count = UserDefaults.standard.object(forKey: "retentionMaxCount") as? Int ?? 200
@@ -94,6 +101,23 @@ public final class PanelViewModel: ObservableObject {
     public init(coreClient: CoreClient) {
         self.coreClient = coreClient
         reloadSearchSettings()
+        reloadHoverSettings()
+
+        NotificationCenter.default.addObserver(
+            forName: AppearanceConfiguration.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.reloadHoverSettings()
+            }
+        }
+    }
+
+    /// Synchronizes active hover selection mode and delay from AppearanceConfiguration.
+    public func reloadHoverSettings() {
+        self.hoverSelectionMode = AppearanceConfiguration.shared.hoverSelectionMode
+        self.hoverDelayMs = AppearanceConfiguration.shared.hoverSelectionDelayMs
     }
 
     /// Synchronizes active search algorithm, sort mode, and pin placement from UserDefaults (P7-03 / F-049).
@@ -211,6 +235,7 @@ public final class PanelViewModel: ObservableObject {
 
     /// Move selection down (wraps around when reaching the bottom).
     public func selectNext() {
+        cancelHoverDwell()
         let count = filteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
@@ -220,6 +245,7 @@ public final class PanelViewModel: ObservableObject {
 
     /// Move selection up (wraps around to the bottom when at index 0).
     public func selectPrevious() {
+        cancelHoverDwell()
         let count = filteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
@@ -233,6 +259,7 @@ public final class PanelViewModel: ObservableObject {
 
     /// Move selection up by a page (T-KEY-03).
     public func selectPageUp(pageSize: Int = 10) {
+        cancelHoverDwell()
         let count = filteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
@@ -242,6 +269,7 @@ public final class PanelViewModel: ObservableObject {
 
     /// Move selection down by a page (T-KEY-03).
     public func selectPageDown(pageSize: Int = 10) {
+        cancelHoverDwell()
         let count = filteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
@@ -251,6 +279,7 @@ public final class PanelViewModel: ObservableObject {
 
     /// Selects the first item in the list (Home key).
     public func selectFirst() {
+        cancelHoverDwell()
         let count = filteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
@@ -260,6 +289,7 @@ public final class PanelViewModel: ObservableObject {
 
     /// Selects the last item in the list (End key).
     public func selectLast() {
+        cancelHoverDwell()
         let count = filteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
@@ -273,6 +303,8 @@ public final class PanelViewModel: ObservableObject {
             // Accidental hover guard: ignore hover events occurring within 250ms of keyboard navigation
             let elapsed = CACurrentMediaTime() - lastKeyboardNavTime
             guard elapsed > 0.25 else { return }
+        } else {
+            cancelHoverDwell()
         }
         let count = filteredItems.count
         guard index >= 0, index < count else { return }
@@ -280,11 +312,63 @@ public final class PanelViewModel: ObservableObject {
         selectedItemId = selectedItem?.id
     }
 
+    /// Handles mouse enter and exit on history rows according to active hoverSelectionMode.
+    public func handleItemHover(index: Int, isHovered: Bool) {
+        if !isHovered {
+            if hoveredRowIndex == index {
+                hoveredRowIndex = nil
+            }
+            if hoverSelectionMode == .delayed {
+                hoverDwellTask?.cancel()
+                hoverDwellTask = nil
+            }
+            return
+        }
+
+        hoveredRowIndex = index
+
+        switch hoverSelectionMode {
+        case .disabled:
+            // Cursor hover is ignored for selection; navigation is keyboard & click only.
+            break
+
+        case .immediate:
+            let elapsed = CACurrentMediaTime() - lastKeyboardNavTime
+            guard elapsed > 0.25 else { return }
+            selectIndex(index, fromHover: true)
+
+        case .delayed:
+            let elapsed = CACurrentMediaTime() - lastKeyboardNavTime
+            guard elapsed > 0.25 else { return }
+            guard index != selectedIndex else { return }
+
+            hoverDwellTask?.cancel()
+            let delayNs = UInt64(max(50, hoverDelayMs)) * 1_000_000
+            hoverDwellTask = Task { @MainActor [weak self] in
+                do {
+                    try await Task.sleep(nanoseconds: delayNs)
+                } catch {
+                    return // Cancelled by mouse exit, keypress, or panel hide
+                }
+                guard let self = self, !Task.isCancelled else { return }
+                self.selectIndex(index, fromHover: true)
+            }
+        }
+    }
+
+    /// Cancels any pending hover dwell task and clears the visual hovered index.
+    public func cancelHoverDwell() {
+        hoverDwellTask?.cancel()
+        hoverDwellTask = nil
+        hoveredRowIndex = nil
+    }
+
     /// Quick-pick shortcut selection (1-9).
     /// Maps directly to the visible filtered order (Definition of Done: P5-05 / F-022, T-KEY-01).
     /// Returns true if an item was successfully picked and committed, false if out of bounds or invalid.
     @discardableResult
     public func quickPick(number: Int, mode: PasteMode = .original, forcePaste: Bool? = nil) -> Bool {
+        cancelHoverDwell()
         guard number >= 1 && number <= 9 else { return false }
         let targetIndex = number - 1
         let list = filteredItems

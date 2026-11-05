@@ -2390,3 +2390,36 @@ Users identified four usability defects in the Settings and Window sizing experi
 ### Consequences
 * **Positive:** Moving the dimension sliders immediately updates the adjacent numeric values in real time without jumping or tick mark clutter; factory defaults can be restored with a single click; adjusting the dimensions immediately resizes and repositions the active floating history and preview windows; users can quit Mimra directly from the Settings window.
 * **Negative:** None.
+
+---
+
+## ADR-065: Configurable History List Hover Selection, Dwell Debouncing, and Decoupled Visual Affordance
+
+* **Status:** Accepted  
+* **Date:** 2026-11-05  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+In Mimra's floating history panel, moving the mouse cursor over history rows immediately changed the selected item (`selectedIndex`). This created several usability problems:
+1. **Accidental Transit Selection:** Sweeping the cursor across items to reach the search field, settings icon, or an adjacent monitor selected every row the cursor crossed.
+2. **Preview Thrashing:** Fleeting row hovers immediately updated the slideout preview panel, causing high CPU usage from unnecessary text parsing, image rendering, and OCR metadata recalculations.
+3. **Loss of Keyboard Focus:** Users navigating with arrow keys or shortcut keys had their active selection hijacked by incidental mouse movements or cursor drift.
+
+### Decision
+1. **Configurable Hover Selection Modes (`HoverSelectionMode`):**
+   - **`immediate` (Default):** Hovering over a row selects it immediately (outside the 250ms keyboard navigation guard).
+   - **`delayed` (Dwell):** The cursor must pause and dwell on a row for a configurable period (150 ms snappy, 250 ms normal default, 400 ms relaxed) before the row is selected and the preview is updated.
+   - **`disabled` (Keyboard & Click Only):** Mouse hover never alters the active list selection or slideout preview; list selection is owned exclusively by keyboard navigation, and clicking a row immediately commits/pastes it.
+2. **Decoupled Visual Hover Affordance (`FloatingPanelView.swift`):**
+   - Unselected rows show a subtle hover background tint (`Color.primary.opacity(0.06)`) when the cursor enters them, providing immediate tactile confirmation of cursor position without altering `selectedIndex` or causing the slideout preview to re-render.
+   - Full accent coloring (`Color.accentColor`) remains reserved strictly for the active selected item.
+3. **State Management & Deterministic Cancellation (`PanelViewModel.swift`, `FloatingPanel.swift`):**
+   - Implemented `handleItemHover(index:isHovered:)` with a debounced async `Task` for dwell mode.
+   - Any mouse exit, search query modification, or keyboard navigation (`selectNext`, `selectPrevious`, `selectFirst`, `selectLast`, `selectPageUp`, `selectPageDown`, `quickPick`, `searchText.didSet`) immediately cancels any active dwell task.
+   - Panel hiding (`hide()`) cancels any active dwell task.
+4. **Settings UI Integration (`SettingsView.swift`, `AppearanceConfiguration.swift`):**
+   - Added a "Mouse Hover Selection" section in `AppearanceSettingsTab` containing a behavior picker (Immediate, Delayed, Disabled) and conditional dwell delay picker (150 ms, 250 ms, 400 ms).
+
+### Consequences
+* **Positive:** Complete elimination of accidental transit selections and preview flickering when moving the mouse across the history list; keyboard navigation is rock-solid and cannot be overridden by casual mouse movement in delayed/disabled modes; subtle visual hover affordance gives responsive feedback without side effects; full user choice with backward compatibility preserved.
+* **Negative:** None.

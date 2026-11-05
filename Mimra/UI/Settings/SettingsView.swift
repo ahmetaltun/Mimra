@@ -633,6 +633,10 @@ public struct AppearanceSettingsTab: View {
     @AppStorage("previewAutoOpenEnabled") private var previewAutoOpenEnabled: Bool = false
     @AppStorage("previewDelayMs") private var previewDelayMs: Int = 400
 
+    // Mouse hover selection preferences
+    @AppStorage("hoverSelectionMode") private var hoverSelectionModeRaw: String = HoverSelectionMode.immediate.rawValue
+    @AppStorage("hoverSelectionDelayMs") private var hoverSelectionDelayMs: Int = 250
+
     public init() {}
 
     public var body: some View {
@@ -744,6 +748,42 @@ public struct AppearanceSettingsTab: View {
                 }
             }
 
+            Section("Mouse Hover Selection") {
+                Picker("Hover Behavior", selection: Binding(
+                    get: {
+                        HoverSelectionMode(rawValue: hoverSelectionModeRaw) ?? .immediate
+                    },
+                    set: { newMode in
+                        hoverSelectionModeRaw = newMode.rawValue
+                        appearanceConfig.hoverSelectionMode = newMode
+                    }
+                )) {
+                    ForEach(HoverSelectionMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+
+                if (HoverSelectionMode(rawValue: hoverSelectionModeRaw) ?? .immediate) == .delayed {
+                    Picker("Hover Delay", selection: Binding(
+                        get: {
+                            hoverSelectionDelayMs
+                        },
+                        set: { newDelay in
+                            hoverSelectionDelayMs = newDelay
+                            appearanceConfig.hoverSelectionDelayMs = newDelay
+                        }
+                    )) {
+                        Text("Snappy (150 ms)").tag(150)
+                        Text("Normal (250 ms)").tag(250)
+                        Text("Relaxed (400 ms)").tag(400)
+                    }
+                }
+
+                Text(hoverDescription(for: HoverSelectionMode(rawValue: hoverSelectionModeRaw) ?? .immediate))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Slideout Preview") {
                 Picker("Preview Behavior", selection: Binding(
                     get: {
@@ -774,6 +814,17 @@ public struct AppearanceSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func hoverDescription(for mode: HoverSelectionMode) -> String {
+        switch mode {
+        case .immediate:
+            return "Moving the mouse cursor over an item selects it and updates the preview immediately."
+        case .delayed:
+            return "Moving the mouse across items won't trigger previews immediately. The cursor must pause on an item to select it."
+        case .disabled:
+            return "Cursor movement is ignored for selection. Navigate using keyboard arrow keys or click an item to commit."
+        }
     }
 }
 

@@ -188,6 +188,7 @@
 | **Fix 15** | End-to-end runtime search pipeline: debounced search trigger, core engine bypass fix, and 8,000+ char verification | Completed | `Mimra/UI/Panel/PanelViewModel.swift`, `FloatingPanelView.swift`, `tests/fuzzy_search_tests.swift` (Step 8, ADR-062) |
 | **Fix 16** | Precision search: word-boundary acronym matching in fuzzy mode and elimination of false-positive body content matches | Completed | `RustCore/src/domain/search.rs`, `RustCore/src/storage/search.rs`, `tests/fuzzy_search_tests.swift` (`test_search_rejects_unrelated_items_in_fuzzy_mode`, ADR-063) |
 | **Fix 17** | Dimension sliders live value reactivity, reset to defaults action, dynamic window & preview frame resizing, and settings window quit action | Completed | `Mimra/macOS/AppearanceConfiguration.swift`, `SettingsView.swift`, `FloatingPanel.swift`, `FloatingPanelView.swift`, `PreviewCoordinator.swift` (`tests/appearance_settings_tests.swift`, `tests/panel_tests.swift`, ADR-064) |
+| **Fix 18** | Configurable history list hover selection (Immediate, Dwell Delayed, Disabled), decoupled visual hover affordance, and delay presets | Completed | `Mimra/macOS/AppearanceConfiguration.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/UI/Settings/SettingsView.swift` (ADR-065, `F-019`) |
 
 ---
 

@@ -110,6 +110,29 @@ public enum PreviewDisplayMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// User configurable behavior for mouse cursor hover on history list items.
+public enum HoverSelectionMode: String, CaseIterable, Identifiable, Sendable {
+    /// Moving cursor over an item selects it immediately (default).
+    case immediate = "immediate"
+    /// Item is selected only after cursor dwells on it for the configured delay.
+    case delayed = "delayed"
+    /// Cursor movement is ignored for selection; navigation is keyboard & click only.
+    case disabled = "disabled"
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .immediate:
+            return "Immediate (Select on hover)"
+        case .delayed:
+            return "Delayed (Select after dwelling)"
+        case .disabled:
+            return "Disabled (Keyboard & click only)"
+        }
+    }
+}
+
 /// Observable singleton managing application appearance, dimensions, and live updates.
 @MainActor
 public final class AppearanceConfiguration: ObservableObject {
@@ -135,6 +158,8 @@ public final class AppearanceConfiguration: ObservableObject {
     public static let panelWidthKey = "panelWidth"
     public static let panelHeightKey = "panelHeight"
     public static let previewWidthKey = "previewWidth"
+    public static let hoverSelectionModeKey = "hoverSelectionMode"
+    public static let hoverSelectionDelayMsKey = "hoverSelectionDelayMs"
     public static let lastSavedOriginXKey = "lastSavedOriginX"
     public static let lastSavedOriginYKey = "lastSavedOriginY"
 
@@ -259,6 +284,28 @@ public final class AppearanceConfiguration: ObservableObject {
         }
         set {
             userDefaults.set(Double(newValue), forKey: Self.previewWidthKey)
+            notifyChange()
+        }
+    }
+
+    public var hoverSelectionMode: HoverSelectionMode {
+        get {
+            let val = userDefaults.string(forKey: Self.hoverSelectionModeKey) ?? HoverSelectionMode.immediate.rawValue
+            return HoverSelectionMode(rawValue: val) ?? .immediate
+        }
+        set {
+            userDefaults.set(newValue.rawValue, forKey: Self.hoverSelectionModeKey)
+            notifyChange()
+        }
+    }
+
+    public var hoverSelectionDelayMs: Int {
+        get {
+            let val = userDefaults.integer(forKey: Self.hoverSelectionDelayMsKey)
+            return val > 0 ? val : 250
+        }
+        set {
+            userDefaults.set(newValue, forKey: Self.hoverSelectionDelayMsKey)
             notifyChange()
         }
     }

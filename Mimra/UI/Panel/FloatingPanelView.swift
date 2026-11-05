@@ -171,9 +171,7 @@ public struct FloatingPanelView: View {
                                     .id(item.id)
                                     .modifier(PinDragAndDropModifier(item: item, viewModel: viewModel))
                                     .onHover { isHovered in
-                                        if isHovered {
-                                            viewModel.selectIndex(index, fromHover: true)
-                                        }
+                                        viewModel.handleItemHover(index: index, isHovered: isHovered)
                                     }
                                     .onTapGesture {
                                         viewModel.selectIndex(index, fromHover: false)
@@ -490,12 +488,17 @@ struct PanelItemRow: View {
 
     private var backgroundView: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isSelected ? Color.accentColor : Color.clear)
-
-            if isSelected && (colorSchemeContrast == .increased || differentiateWithoutColor) {
+            if isSelected {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.primary, lineWidth: 2)
+                    .fill(Color.accentColor)
+
+                if colorSchemeContrast == .increased || differentiateWithoutColor {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.primary, lineWidth: 2)
+                }
+            } else if isHovered {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
             }
         }
     }

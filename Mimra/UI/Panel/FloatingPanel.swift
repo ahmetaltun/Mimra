@@ -701,6 +701,7 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
     /// - Parameter restoringFocus: If true, reactivates the previous application. Pass false when navigating to internal windows like Settings.
     public func hide(restoringFocus: Bool = true) {
         cancelCycle()
+        viewModel.cancelHoverDwell()
         previewCoordinator.hide()
         panel?.orderOut(nil)
         if !viewModel.searchText.isEmpty {
