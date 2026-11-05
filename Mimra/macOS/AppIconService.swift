@@ -48,12 +48,13 @@ private final class IconCacheBox: @unchecked Sendable {
     }
 }
 
-/// Service managing off-main resolution and memory-bounded caching of source application icons.
-public actor AppIconService {
+/// Service managing resolution and memory-bounded caching of source application icons.
+@MainActor
+public final class AppIconService {
     public static let shared = AppIconService()
 
     private let cache = IconCacheBox(countLimit: 120)
-    private var inFlightResolutions: [String: Task<NSImage?, Never>] = [:]
+    private var inFlightResolutions: [String: Task<SendableImage, Never>] = [:]
 
     public init() {}
 
@@ -68,7 +69,7 @@ public actor AppIconService {
 
     // MARK: - Asynchronous Resolution
 
-    /// Resolves an application icon asynchronously off the main thread.
+    /// Resolves an application icon asynchronously.
     /// Deduplicates concurrent requests for the same bundle identifier.
     public func icon(for bundleId: String) async -> NSImage? {
         let trimmed = bundleId.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -92,16 +93,16 @@ public actor AppIconService {
 
         // 2. Coalesce concurrent resolutions for the same bundleId
         if let inFlight = inFlightResolutions[trimmed] {
-            return await inFlight.value
+            return await inFlight.value.image
         }
 
-        let task = Task<NSImage?, Never> {
-            return resolveAppIcon(bundleId: trimmed)
+        let task = Task<SendableImage, Never> { @MainActor in
+            return SendableImage(self.resolveAppIcon(bundleId: trimmed))
         }
         inFlightResolutions[trimmed] = task
         defer { inFlightResolutions.removeValue(forKey: trimmed) }
 
-        return await task.value
+        return await task.value.image
     }
 
     // MARK: - Cache Invalidation

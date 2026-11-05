@@ -166,16 +166,17 @@ struct ImageTypeTests {
             let countingService = ImageThumbnailService(maxPixelSize: 100)
 
             // Launch 10 simultaneous requests for the same uncached item ID
-            let concurrentResults = await withTaskGroup(of: NSImage?.self, returning: [NSImage?].self) { group in
+            let concurrentResults = await withTaskGroup(of: SendableImage.self, returning: [SendableImage].self) { group in
                 for _ in 0..<10 {
                     group.addTask {
-                        await countingService.thumbnail(for: "concurrent-item-1") {
+                        let res = await countingService.thumbnail(for: "concurrent-item-1") {
                             try? await Task.sleep(nanoseconds: 10_000_000)
                             return pngData
                         }
+                        return SendableImage(res)
                     }
                 }
-                var results: [NSImage?] = []
+                var results: [SendableImage] = []
                 for await res in group {
                     results.append(res)
                 }
@@ -184,7 +185,7 @@ struct ImageTypeTests {
 
             assert(concurrentResults.count == 10, "All 10 concurrent requests must complete")
             for res in concurrentResults {
-                assert(res != nil, "Every concurrent request must yield a valid image")
+                assert(res.image != nil, "Every concurrent request must yield a valid image")
             }
             print("✓ T-TYPE-02: Concurrent thumbnail requests coalesced cleanly")
 

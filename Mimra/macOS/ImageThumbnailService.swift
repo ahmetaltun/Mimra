@@ -14,13 +14,23 @@ import os.log
 
 private let logger = Logger(subsystem: "com.mimra.app", category: "ImageThumbnailService")
 
+/// Thread-safe wrapper allowing an optional NSImage to safely cross Swift 6 concurrency boundaries.
+public struct SendableImage: @unchecked Sendable {
+    public let image: NSImage?
+
+    public init(_ image: NSImage?) {
+        self.image = image
+    }
+}
+
 /// Thread-safe storage box wrapping Foundation's NSCache under Swift 6 concurrency.
 private final class ThumbnailCacheBox: @unchecked Sendable {
     let cache = NSCache<NSString, NSImage>()
 }
 
-/// Actor responsible for lazy, off-main-thread image decoding and thumbnail caching.
-public actor ImageThumbnailService {
+/// Service responsible for lazy image decoding and thumbnail caching for the user interface.
+@MainActor
+public final class ImageThumbnailService {
     public static let shared = ImageThumbnailService()
 
     /// Maximum thumbnail dimension in pixels for list rows and preview thumbnails.
@@ -30,7 +40,7 @@ public actor ImageThumbnailService {
     private let storage = ThumbnailCacheBox()
 
     /// Active in-flight decoding tasks to coalesce concurrent duplicate requests.
-    private var inFlightTasks: [String: Task<NSImage?, Never>] = [:]
+    private var inFlightTasks: [String: Task<SendableImage, Never>] = [:]
 
     public init(
         maxPixelSize: Int = 160,
@@ -65,20 +75,21 @@ public actor ImageThumbnailService {
 
         // 2. Coalesce concurrent in-flight requests for same itemId
         if let existingTask = inFlightTasks[itemId] {
-            return await existingTask.value
+            return await existingTask.value.image
         }
 
-        // 3. Launch background decoding task
+        // 3. Launch off-main background decoding task
         let maxPixel = self.maxPixelSize
-        let task = Task<NSImage?, Never> {
+        let task = Task.detached(priority: .userInitiated) {
             guard let rawData = try? await fetchPayload(), !rawData.isEmpty else {
-                return nil
+                return SendableImage(nil)
             }
-            return Self.decodeThumbnail(from: rawData, maxPixelSize: maxPixel)
+            let decoded = Self.decodeThumbnail(from: rawData, maxPixelSize: maxPixel)
+            return SendableImage(decoded)
         }
 
         inFlightTasks[itemId] = task
-        let result = await task.value
+        let result = await task.value.image
         inFlightTasks.removeValue(forKey: itemId)
 
         // 4. Cache valid thumbnails with byte cost estimation

@@ -50,7 +50,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 object: nil,
                 queue: .main
             ) { [weak monitor] _ in
-                monitor?.reloadTypeConfiguration()
+                MainActor.assumeIsolated {
+                    monitor?.reloadTypeConfiguration()
+                }
             }
 
             // Sync initial privacy configuration and observe updates (F-009, F-010, F-057)
