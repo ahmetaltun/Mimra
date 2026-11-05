@@ -1,0 +1,12 @@
+{
+  "name": "Mimra",
+  "primaryColor": "#6C5ECF",
+  "backgroundColor": "#F6F5FD",
+  "textColor": "#1E1A34",
+  "subtitle": "Fast, private clipboard manager for macOS",
+  "footer": "Drag Mimra into Applications to install.",
+  "compatibilityText": "macOS 15.0+  ·  Apple Silicon",
+  "windowPoints": [720, 460],
+  "appIconPosition": [202, 271],
+  "applicationsIconPosition": [520, 271]
+}

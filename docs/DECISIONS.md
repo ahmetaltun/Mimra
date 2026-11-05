@@ -2423,3 +2423,43 @@ In Mimra's floating history panel, moving the mouse cursor over history rows imm
 ### Consequences
 * **Positive:** Complete elimination of accidental transit selections and preview flickering when moving the mouse across the history list; keyboard navigation is rock-solid and cannot be overridden by casual mouse movement in delayed/disabled modes; subtle visual hover affordance gives responsive feedback without side effects; full user choice with backward compatibility preserved.
 * **Negative:** None.
+
+
+---
+
+## ADR-066: Official App Icon Ingestion, Premium Drag-and-Drop macOS DMG Architecture, and Developer ID Notarization CI Pipeline
+
+* **Status:** Accepted  
+* **Date:** 2026-11-05  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+With Mimra exiting Phase 8 hardening, the project lacked three critical distribution capabilities:
+1. **Application Icon:** The application bundle had no bundled icon assets, displaying a default generic system app icon in the Dock, App Switcher, and Finder.
+2. **Branded Installer:** Distributing the application as a raw zip or bare app bundle creates high friction, lacks visual identity, and fails Gatekeeper expectations for a polished macOS utility.
+3. **Automated Signing & Notarization:** Manual Developer ID signing and Apple notary service submission are error-prone and risk key exposure. A reproducible, secure GitHub Actions workflow is needed that imports certificates into an ephemeral keychain, signs with Hardened Runtime, notarizes via `xcrun notarytool`, staples tickets, packages a premium DMG, and publishes GitHub releases.
+
+### Decision
+1. **Asset Catalog & Standalone ICNS Ingestion:**
+   - Ingested all 10 PNG representations from `Mimra_Appicon_Design/AppIcon.appiconset` into `Mimra/Resources/Assets.xcassets/AppIcon.appiconset`.
+   - Generated a standalone, optimized `Mimra/Resources/AppIcon.icns` using macOS `iconutil`.
+   - Configured `Mimra.xcodeproj` via `scripts/generate_xcodeproj.py` with `PBXResourcesBuildPhase` (`Assets.xcassets`, `Localizable.xcstrings`, `AppIcon.icns`) and `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;`.
+   - Declared `CFBundleIconFile = AppIcon` and `CFBundleIconName = AppIcon` in `Mimra/Info.plist`.
+2. **Premium macOS DMG Pipeline (`/premium-macos-dmg` Skill):**
+   - Configured `packaging/dmg/dmg.config.json` with brand parameters matching Mimra's lavender/indigo visual identity (`#6C5ECF` primary, `#F6F5FD` background, `#1E1A34` ink).
+   - Rendered pixel-perfect 720×460 (1x) and 1440×920 (@2x) Finder backgrounds featuring a centered connecting arrow ($x \approx 330 \to 392, y = 271$) and inner card container.
+   - Built a deterministic Swift renderer `scripts/render_dmg_background.swift` that uses native AppKit/CoreGraphics for zero-dependency local and CI asset reproduction.
+   - Implemented `scripts/build-dmg.sh` wrapping `create-dmg` with multi-representation Retina TIFF creation (`tiffutil -cathidpicheck`) and strict geometry (app at `202 271`, drop link at `520 271`, window size `720 460`, icon size `96`).
+   - Implemented `scripts/verify-dmg.py` for automated `hdiutil verify`, read-only mount, single `.app` bundle, valid `/Applications` symlink, and code signature assertion.
+3. **Automated GitHub Actions Release Workflow (`.github/workflows/release.yml`):**
+   - Triggered on tag push (`v*`) and manual `workflow_dispatch`.
+   - Executed on `macos-latest` (Apple Silicon).
+   - Manages an ephemeral macOS keychain (`$RUNNER_TEMP/build.keychain`) with automatic cleanup in an `always()` post block.
+   - Enforces inside-out signing with `ENABLE_HARDENED_RUNTIME = YES` and timestamping via `secrets.APPLE_SIGNING_IDENTITY`.
+   - Submits DMG to Apple Notary Service via `xcrun notarytool submit --wait` using `secrets.APPLE_ID`, `secrets.APPLE_PASSWORD`, and `secrets.APPLE_TEAM_ID`.
+   - Staples notarization ticket using `xcrun stapler staple` and validates Gatekeeper compliance (`spctl --assess`).
+   - Generates SHA256 checksums and publishes the DMG to GitHub Releases via `softprops/action-gh-release@v2`.
+
+### Consequences
+* **Positive:** Mimra presents a cohesive, branded experience across the OS and installer; DMG packaging is 100% reproducible locally and in CI; ephemeral keychain prevents secret leakage; Gatekeeper and Hardened Runtime requirements are fully automated.
+* **Negative:** DMG creation requires `create-dmg` (installed automatically in CI via Homebrew).

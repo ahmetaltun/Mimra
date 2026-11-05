@@ -192,7 +192,17 @@
 
 ---
 
-## 13. Current Blockers & Risks
+## 13. Phase 9 Task Tracker (Packaging, CI & Release)
 
-* **None.** Phase 8 hardening and all post-G6 runtime usability fixes are 100% COMPLETED and verified. All 81 Rust unit and property tests, 63 Swift integration test suites, and native arm64 builds pass cleanly.
-* **Next Milestone:** Phase 9 (Packaging, CI, Release and Maintenance: Developer ID, Notarization, Signed DMG, GitHub Actions CI workflow).
+| Task ID | Description | Status | Verification / Artifact |
+|---|---|---|---|
+| **P9-01** | Official App Icon Ingestion: Asset catalog, standalone `AppIcon.icns`, PBXResourcesBuildPhase, `CFBundleIconFile` / `CFBundleIconName` | Completed | `Mimra/Resources/Assets.xcassets/AppIcon.appiconset`, `Mimra/Resources/AppIcon.icns`, `Mimra/Info.plist`, `scripts/generate_xcodeproj.py` (ADR-066) |
+| **P9-02** | Premium macOS DMG Pipeline: `/premium-macos-dmg` skill compliance, 720×460 geometry, Retina TIFF background, `create-dmg` wrapper, automated verification tool | Completed | `packaging/dmg/dmg.config.json`, `packaging/dmg/background.png`, `packaging/dmg/background@2x.png`, `scripts/render_dmg_background.swift`, `scripts/build-dmg.sh`, `scripts/verify-dmg.py` (ADR-066) |
+| **P9-03** | GitHub Actions CI/CD Release Workflow: Ephemeral Developer ID keychain, Release arm64 build, Hardened Runtime codesign, `xcrun notarytool` notarization, stapling, and release assets upload | Completed | `.github/workflows/release.yml` (ADR-066) |
+
+---
+
+## 14. Current Blockers & Risks
+
+* **None.** Phase 9 packaging, app icon integration, premium DMG pipeline, and GitHub Actions release workflow are 100% COMPLETED and verified.
+* **Next Milestone:** Phase 10 / Gate G7 (Mimra Differentiators: Privacy profiles, secret heuristics, encrypted SQLCipher vault).

@@ -512,6 +512,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppearanceConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/tests/search_index_tests.swift" \
@@ -537,6 +538,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppearanceConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/tests/fuzzy_search_tests.swift" \
@@ -562,6 +564,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppearanceConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
@@ -588,6 +591,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppearanceConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
@@ -680,6 +684,7 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
     "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
     "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppearanceConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
     "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \

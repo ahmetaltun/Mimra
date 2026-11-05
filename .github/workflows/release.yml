@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag Name (e.g. v0.1.0)'
+        required: false
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, Sign, Notarize & Publish
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Install Packaging Dependencies
+        run: |
+          brew install create-dmg
+
+      - name: Setup Apple Developer ID Keychain
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed -e 's/^[ \t]*//' | tr -d '"')
+
+      - name: Build Application (Release arm64)
+        run: |
+          ./scripts/build-app.sh release
+
+      - name: Code Sign Application (Hardened Runtime)
+        env:
+          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          echo "Signing Mimra.app with identity: $SIGNING_IDENTITY"
+          codesign --force --options runtime --deep --sign "$SIGNING_IDENTITY" --timestamp build/Mimra.app
+          codesign --verify --deep --strict --verbose=2 build/Mimra.app
+
+      - name: Package Premium macOS DMG
+        run: |
+          ./scripts/build-dmg.sh build/Mimra.app dist/Mimra.dmg
+
+      - name: Code Sign DMG
+        env:
+          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --sign "$SIGNING_IDENTITY" --timestamp dist/Mimra.dmg
+
+      - name: Notarize DMG with Apple Notary Service
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          echo "Submitting dist/Mimra.dmg to Apple Notary Service..."
+          xcrun notarytool submit dist/Mimra.dmg \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+      - name: Staple Notarization Ticket
+        run: |
+          echo "Stapling notarization ticket to DMG..."
+          xcrun stapler staple dist/Mimra.dmg
+          xcrun stapler validate dist/Mimra.dmg
+          spctl --assess --type open --context context:primary-signature dist/Mimra.dmg
+
+      - name: Verify DMG Artifact Integrity
+        run: |
+          python3 scripts/verify-dmg.py dist/Mimra.dmg
+
+      - name: Compute Checksums
+        run: |
+          cd dist
+          shasum -a 256 Mimra.dmg > Mimra.dmg.sha256
+          cat Mimra.dmg.sha256
+          cd ..
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Mimra.dmg
+            dist/Mimra.dmg.sha256
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+
+      - name: Cleanup Ephemeral Keychain
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/build.keychain" ]; then
+            security delete-keychain "$RUNNER_TEMP/build.keychain" || true
+          fi
+          rm -f "$RUNNER_TEMP/certificate.p12"

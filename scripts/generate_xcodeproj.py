@@ -59,6 +59,9 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		10000035 /* LocalizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000037 /* LocalizationService.swift */; };
 		10000036 /* OnboardingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000038 /* OnboardingService.swift */; };
 		10000037 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000039 /* OnboardingView.swift */; };
+		10000040 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 20000040 /* Assets.xcassets */; };
+		10000041 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 20000041 /* Localizable.xcstrings */; };
+		10000042 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 20000042 /* AppIcon.icns */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -102,6 +105,9 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		20000037 /* LocalizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationService.swift; sourceTree = "<group>"; };
 		20000038 /* OnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingService.swift; sourceTree = "<group>"; };
 		20000039 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		20000040 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		20000041 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		20000042 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -114,6 +120,19 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		30000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10000040 /* Assets.xcassets in Resources */,
+				10000041 /* Localizable.xcstrings in Resources */,
+				10000042 /* AppIcon.icns in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXGroup section */
 		40000001 /* MainGroup */ = {
@@ -133,6 +152,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				40000010 /* Bridge */,
 				40000007 /* macOS */,
 				40000008 /* UI */,
+				40000015 /* Resources */,
 				20000007 /* Info.plist */,
 			);
 			path = Mimra;
@@ -266,6 +286,16 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			path = Preview;
 			sourceTree = "<group>";
 		};
+		40000015 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				20000040 /* Assets.xcassets */,
+				20000041 /* Localizable.xcstrings */,
+				20000042 /* AppIcon.icns */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -275,6 +305,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			buildPhases = (
 				30000002 /* Sources */,
 				30000001 /* Frameworks */,
+				30000003 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -365,6 +396,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
@@ -418,6 +450,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
