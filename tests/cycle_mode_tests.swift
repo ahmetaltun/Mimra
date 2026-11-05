@@ -192,12 +192,13 @@ struct CycleModeTests {
             finalCommitMode = mode
         }
 
+        let expectedItem = coordinator.viewModel.items[3]
         coordinator.handlePanelFlagsChanged(event: releaseEvent)
 
         assert(!coordinator.isCycleActive, "FAIL: Cycle mode must reset to false after commit")
         assert(!panel.isVisible, "FAIL: Panel should hide after commit")
         assert(finalCommittedItem != nil, "FAIL: An item must be committed on modifier release")
-        assert(finalCommittedItem?.id == coordinator.viewModel.items[3].id, "FAIL: Committed item must match item at index 3")
+        assert(finalCommittedItem?.id == expectedItem.id, "FAIL: Committed item must match item at index 3")
         assert(finalCommitMode == .original, "FAIL: Default commit mode should be original")
         print("✓ Step 4: Forward cycling across multiple taps and commit on modifier release verified.")
 
@@ -218,9 +219,10 @@ struct CycleModeTests {
         coordinator.cycleNext()
         assert(coordinator.viewModel.selectedIndex == 1, "FAIL: Subsequent advance must reach index 1")
 
+        let expectedWrapItem = coordinator.viewModel.items[1]
         coordinator.handlePanelFlagsChanged(event: releaseEvent)
         assert(!panel.isVisible, "FAIL: Panel should hide after commit")
-        assert(finalCommittedItem?.id == coordinator.viewModel.items[1].id, "FAIL: Committed item must be index 1 after wrap-around")
+        assert(finalCommittedItem?.id == expectedWrapItem.id, "FAIL: Committed item must be index 1 after wrap-around")
         print("✓ Step 5: Circular boundary wrap-around verified.")
 
         // =====================================================================
@@ -239,8 +241,9 @@ struct CycleModeTests {
         coordinator.cyclePrevious()
         assert(coordinator.viewModel.selectedIndex == 3, "FAIL: cyclePrevious from 4 must move to 3")
 
+        let expectedReverseItem = coordinator.viewModel.items[3]
         coordinator.handlePanelFlagsChanged(event: releaseEvent)
-        assert(finalCommittedItem?.id == coordinator.viewModel.items[3].id, "FAIL: Committed item must be index 3")
+        assert(finalCommittedItem?.id == expectedReverseItem.id, "FAIL: Committed item must be index 3")
         print("✓ Step 6: Reverse cycling and boundary wrap-around verified.")
 
         // =====================================================================
@@ -386,8 +389,9 @@ struct CycleModeTests {
 
         // Release commits index 1
         finalCommittedItem = nil
+        let expectedArrowItem = coordinator.viewModel.items[1]
         coordinator.handlePanelFlagsChanged(event: releaseEvent)
-        assert(finalCommittedItem?.id == coordinator.viewModel.items[1].id, "FAIL: Releasing modifiers after arrow navigation must commit selected item")
+        assert(finalCommittedItem?.id == expectedArrowItem.id, "FAIL: Releasing modifiers after arrow navigation must commit selected item")
         print("✓ Step 10: Arrow key navigation during cycle mode verified.")
 
         // =====================================================================

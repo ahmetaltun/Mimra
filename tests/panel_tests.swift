@@ -116,6 +116,26 @@ struct PanelTests {
         coordinator.onSettingsRequested?()
         assert(settingsCallbackFired, "FAIL: Settings callback not fired")
 
+        // -------------------------------------------------------------------------
+        // 4. Verify Dynamic Window Resizing via AppearanceConfiguration
+        // -------------------------------------------------------------------------
+        coordinator.show()
+        assert(createdPanel.isVisible, "FAIL: Panel should be visible")
+
+        // Modify AppearanceConfiguration
+        AppearanceConfiguration.shared.panelWidth = 560
+        AppearanceConfiguration.shared.panelHeight = 820
+
+        assert(createdPanel.frame.width == 560, "FAIL: Panel width did not dynamically update to 560, got: \(createdPanel.frame.width)")
+        assert(createdPanel.frame.height == 820, "FAIL: Panel height did not dynamically update to 820, got: \(createdPanel.frame.height)")
+
+        // Reset to defaults
+        AppearanceConfiguration.shared.resetDimensionsToDefaults()
+        assert(createdPanel.frame.width == AppearanceConfiguration.defaultPanelWidth, "FAIL: Panel width did not reset to default, got: \(createdPanel.frame.width)")
+        assert(createdPanel.frame.height == AppearanceConfiguration.defaultPanelHeight, "FAIL: Panel height did not reset to default, got: \(createdPanel.frame.height)")
+
+        coordinator.hide()
+
         try? FileManager.default.removeItem(at: tempDir)
 
         print("✓ T-UI-02: PanelCoordinator centering, lifecycle, and toggle verified")

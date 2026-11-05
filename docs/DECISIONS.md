@@ -2355,3 +2355,38 @@ Investigation revealed two root causes:
 ### Consequences
 * **Positive:** Complete elimination of false-positive search results; unrelated pinned items and recent history items no longer pollute search results; genuine word-boundary acronyms (`vsc` for `Visual Studio Code`, `gc` for `git commit`) and exact substrings remain 100% supported; high precision and high recall across all search modes.
 * **Negative:** None.
+
+---
+
+## ADR-064: Observable Appearance Sizing Reactivity, Reset Defaults Action, Dynamic Window Resizing, and Settings Quit Action
+
+* **Status:** Accepted  
+* **Date:** 2026-11-05  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Users identified four usability defects in the Settings and Window sizing experience:
+1. **Dimension Slider Values Not Updating Live:** In the Appearance settings tab, dragging the Panel Width, Panel Height, or Preview Width sliders did not update the numeric labels. The labels remained frozen at their initial values because `AppearanceConfiguration` implemented `ObservableObject` with computed properties reading from `UserDefaults`, but its `notifyChange()` helper only posted a `NotificationCenter` event and never called Combine's `objectWillChange.send()`.
+2. **Dense Slider Tick Marks & Precision Discrepancies:** Sliders used `step: 20`, causing AppKit on macOS to render a cramped comb of 32 vertical tick marks on a 160 pt control and preventing snapping to exact defaults like 756 pt for Panel Height.
+3. **No Reset to Defaults for Dimensions:** There was no quick way to restore factory panel and preview dimensions.
+4. **Window Sizes Not Changing After Value Adjustment:** Changing the dimension sliders had zero effect on the actual floating history panel or preview window. `PanelCoordinator` and `PreviewCoordinator` never observed `AppearanceConfiguration.didChangeNotification`. Furthermore, `PanelCoordinator.positionPanel` only updated the window origin (`panel.setFrameOrigin`) using the stale `panel.frame.size` captured at initial creation rather than setting the window size.
+5. **No Quit App Action in Settings Window:** There was no direct button to quit the application from the Settings window.
+
+### Decision
+1. **ObservableObject Combine Reactivity (`AppearanceConfiguration.swift`):**
+   - Added `objectWillChange.send()` inside `AppearanceConfiguration.notifyChange()`, guaranteeing that all computed property setters notify SwiftUI of incoming updates.
+   - Added factory default constants (`defaultPanelWidth: 440`, `defaultPanelHeight: 756`, `defaultPreviewWidth: 360`) and `resetDimensionsToDefaults()`.
+2. **Clean Slider Layout & Real-Time Numeric Value Display (`SettingsView.swift`):**
+   - Redesigned the "Dimensions & Sizing" section in `AppearanceSettingsTab` to place the feature title on the left, a smooth continuous slider with integer rounding (`round($0)`) in the middle, and a monospaced live numeric indicator (`440 pt`) on the right.
+   - Added a "Reset Dimensions to Defaults" button that immediately restores factory defaults.
+3. **Dynamic Window & Preview Frame Resizing (`FloatingPanel.swift`, `FloatingPanelView.swift`, `PreviewCoordinator.swift`):**
+   - In `PanelCoordinator`, registered an observer for `AppearanceConfiguration.didChangeNotification` and implemented `applyAppearanceDimensions()`.
+   - Updated `positionPanel` and `centerOnActiveScreen` to construct `targetSize = NSSize(width: config.panelWidth, height: config.panelHeight)` and apply both origin and size via `panel.setFrame(NSRect(origin: origin, size: targetSize), display: true)`.
+   - Updated `FloatingPanelView` outer frame from hardcoded min/ideal/max constraints to `.frame(maxWidth: .infinity, maxHeight: .infinity)` so the SwiftUI root view dynamically fills the `NSPanel` content view.
+   - In `PreviewCoordinator`, registered an observer for `AppearanceConfiguration.didChangeNotification` to immediately recalculate and apply the preview frame when visible or hidden.
+4. **Settings Window Quit Action (`SettingsView.swift`):**
+   - Integrated a native "Quit Mimra" button with a power icon and `⌘Q` indicator into the bottom-left sidebar of the Settings window directly above the version information.
+
+### Consequences
+* **Positive:** Moving the dimension sliders immediately updates the adjacent numeric values in real time without jumping or tick mark clutter; factory defaults can be restored with a single click; adjusting the dimensions immediately resizes and repositions the active floating history and preview windows; users can quit Mimra directly from the Settings window.
+* **Negative:** None.

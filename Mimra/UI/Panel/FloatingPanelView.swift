@@ -245,7 +245,7 @@ public struct FloatingPanelView: View {
                 )
             }
         }
-        .frame(minWidth: 340, idealWidth: 440, maxWidth: 800, minHeight: 320, idealHeight: 756, maxHeight: 1000)
+        .frame(minWidth: 340, maxWidth: .infinity, minHeight: 320, maxHeight: .infinity)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(

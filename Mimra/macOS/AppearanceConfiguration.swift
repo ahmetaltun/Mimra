@@ -138,6 +138,11 @@ public final class AppearanceConfiguration: ObservableObject {
     public static let lastSavedOriginXKey = "lastSavedOriginX"
     public static let lastSavedOriginYKey = "lastSavedOriginY"
 
+    // Default Dimensions (F-058, ADR-047)
+    public static let defaultPanelWidth: CGFloat = 440
+    public static let defaultPanelHeight: CGFloat = 756
+    public static let defaultPreviewWidth: CGFloat = 360
+
     public var rowStyle: HistoryRowStyle {
         get {
             let val = userDefaults.string(forKey: Self.rowStyleKey) ?? HistoryRowStyle.standard.rawValue
@@ -228,7 +233,7 @@ public final class AppearanceConfiguration: ObservableObject {
     public var panelWidth: CGFloat {
         get {
             let val = userDefaults.double(forKey: Self.panelWidthKey)
-            return val >= 320 ? CGFloat(val) : 440
+            return val >= 320 ? CGFloat(val) : Self.defaultPanelWidth
         }
         set {
             userDefaults.set(Double(newValue), forKey: Self.panelWidthKey)
@@ -239,7 +244,7 @@ public final class AppearanceConfiguration: ObservableObject {
     public var panelHeight: CGFloat {
         get {
             let val = userDefaults.double(forKey: Self.panelHeightKey)
-            return val >= 300 ? CGFloat(val) : 756
+            return val >= 300 ? CGFloat(val) : Self.defaultPanelHeight
         }
         set {
             userDefaults.set(Double(newValue), forKey: Self.panelHeightKey)
@@ -250,12 +255,19 @@ public final class AppearanceConfiguration: ObservableObject {
     public var previewWidth: CGFloat {
         get {
             let val = userDefaults.double(forKey: Self.previewWidthKey)
-            return val >= 260 ? CGFloat(val) : 360
+            return val >= 260 ? CGFloat(val) : Self.defaultPreviewWidth
         }
         set {
             userDefaults.set(Double(newValue), forKey: Self.previewWidthKey)
             notifyChange()
         }
+    }
+
+    /// Resets panel width, panel height, and slideout preview width to factory defaults.
+    public func resetDimensionsToDefaults() {
+        panelWidth = Self.defaultPanelWidth
+        panelHeight = Self.defaultPanelHeight
+        previewWidth = Self.defaultPreviewWidth
     }
 
     /// Saves the current panel origin for `.rememberLast` mode.
@@ -337,6 +349,7 @@ public final class AppearanceConfiguration: ObservableObject {
     }
 
     private func notifyChange() {
+        objectWillChange.send()
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 }

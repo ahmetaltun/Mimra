@@ -5,6 +5,7 @@
 // ==============================================================================
 
 import AppKit
+import Combine
 import Foundation
 import CoreGraphics
 
@@ -223,7 +224,7 @@ final class AppearanceSettingsTestsRunner {
 
     // 6. Dimensions and Sizing Constraints (F-058, T-SET-03)
     static func testDimensionsAndSizingConstraints() async {
-        print("  Testing panel and preview dimensions...")
+        print("  Testing panel and preview dimensions and reset action...")
 
         let suiteName = "MimraDimensionsTest_\(UUID().uuidString)"
         let testDefaults = UserDefaults(suiteName: suiteName)!
@@ -234,8 +235,16 @@ final class AppearanceSettingsTestsRunner {
         assert(config.panelHeight == 756, "FAIL: Default panel height must be 756 (40% increase over 540)")
         assert(config.previewWidth == 360, "FAIL: Default preview width must be 360")
 
+        var objectWillChangeFired = false
+        let cancellable = config.objectWillChange.sink {
+            objectWillChangeFired = true
+        }
+        _ = cancellable
+
         // Update sizes
+        objectWillChangeFired = false
         config.panelWidth = 520
+        assert(objectWillChangeFired, "FAIL: objectWillChange must fire on panelWidth mutation")
         config.panelHeight = 650
         config.previewWidth = 420
 
@@ -243,12 +252,18 @@ final class AppearanceSettingsTestsRunner {
         assert(testDefaults.double(forKey: AppearanceConfiguration.panelHeightKey) == 650, "FAIL: panelHeight must persist")
         assert(testDefaults.double(forKey: AppearanceConfiguration.previewWidthKey) == 420, "FAIL: previewWidth must persist")
 
+        // Test resetDimensionsToDefaults action
+        config.resetDimensionsToDefaults()
+        assert(config.panelWidth == AppearanceConfiguration.defaultPanelWidth, "FAIL: resetDimensionsToDefaults must reset panelWidth to 440")
+        assert(config.panelHeight == AppearanceConfiguration.defaultPanelHeight, "FAIL: resetDimensionsToDefaults must reset panelHeight to 756")
+        assert(config.previewWidth == AppearanceConfiguration.defaultPreviewWidth, "FAIL: resetDimensionsToDefaults must reset previewWidth to 360")
+
         // Test lower bounds clamping fallback
         testDefaults.set(100.0, forKey: AppearanceConfiguration.panelWidthKey) // Invalid tiny width
         assert(config.panelWidth == 440, "FAIL: panelWidth below 320 must fallback to default 440")
 
         testDefaults.removePersistentDomain(forName: suiteName)
-        print("  ✓ Dimensions and sizing constraints verified")
+        print("  ✓ Dimensions, sizing constraints, and reset action verified")
     }
 
     // 7. History Row Style persistence and notifications (F-028)

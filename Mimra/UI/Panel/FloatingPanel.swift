@@ -189,7 +189,28 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
                 self.positionPanel(panel: p)
             }
         }
+        NotificationCenter.default.addObserver(
+            forName: AppearanceConfiguration.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.applyAppearanceDimensions()
+            }
+        }
         setupKeyMonitor()
+    }
+
+    /// Dynamically applies configured panel width and height to the active floating panel.
+    public func applyAppearanceDimensions() {
+        guard let p = self.panel else { return }
+        let config = AppearanceConfiguration.shared
+        let targetSize = NSSize(width: config.panelWidth, height: config.panelHeight)
+        if p.isVisible {
+            positionPanel(panel: p)
+        } else {
+            p.setContentSize(targetSize)
+        }
     }
 
     private func setupKeyMonitor() {
@@ -725,11 +746,11 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
 
         guard let screen = targetScreen else { return }
         let vf = screen.visibleFrame
-        let panelSize = panel.frame.size
+        let targetSize = NSSize(width: config.panelWidth, height: config.panelHeight)
 
         let lastPos = config.lastSavedPosition()
         let origin = AppearanceConfiguration.computePanelOrigin(
-            panelSize: panelSize,
+            panelSize: targetSize,
             mode: config.positionMode,
             mouseLocation: mouseLocation,
             screenVisibleFrame: vf,
@@ -737,7 +758,7 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             lastPosition: lastPos
         )
 
-        panel.setFrameOrigin(origin)
+        panel.setFrame(NSRect(origin: origin, size: targetSize), display: true)
         previewCoordinator.updateLayout()
     }
 
@@ -750,12 +771,13 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
 
         guard let screen = targetScreen else { return }
         let vf = screen.visibleFrame
-        let panelSize = panel.frame.size
+        let config = AppearanceConfiguration.shared
+        let targetSize = NSSize(width: config.panelWidth, height: config.panelHeight)
 
-        let originX = round(vf.origin.x + (vf.width - panelSize.width) / 2.0)
-        let originY = round(vf.origin.y + (vf.height - panelSize.height) / 2.0)
+        let originX = round(vf.origin.x + (vf.width - targetSize.width) / 2.0)
+        let originY = round(vf.origin.y + (vf.height - targetSize.height) / 2.0)
 
-        panel.setFrameOrigin(NSPoint(x: originX, y: originY))
+        panel.setFrame(NSRect(origin: NSPoint(x: originX, y: originY), size: targetSize), display: true)
         previewCoordinator.updateLayout()
     }
 }

@@ -698,33 +698,49 @@ public struct AppearanceSettingsTab: View {
 
             Section("Dimensions & Sizing") {
                 HStack {
-                    Text("Panel Width: \(Int(appearanceConfig.panelWidth)) pt")
+                    Text("Panel Width")
                     Spacer()
                     Slider(value: Binding(
                         get: { Double(appearanceConfig.panelWidth) },
-                        set: { appearanceConfig.panelWidth = CGFloat($0) }
-                    ), in: 340...640, step: 20)
+                        set: { appearanceConfig.panelWidth = CGFloat(round($0)) }
+                    ), in: 340...640)
                     .frame(width: 160)
+                    Text("\(Int(appearanceConfig.panelWidth)) pt")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 60, alignment: .trailing)
                 }
 
                 HStack {
-                    Text("Panel Height: \(Int(appearanceConfig.panelHeight)) pt")
+                    Text("Panel Height")
                     Spacer()
                     Slider(value: Binding(
                         get: { Double(appearanceConfig.panelHeight) },
-                        set: { appearanceConfig.panelHeight = CGFloat($0) }
-                    ), in: 360...1000, step: 20)
+                        set: { appearanceConfig.panelHeight = CGFloat(round($0)) }
+                    ), in: 360...1000)
                     .frame(width: 160)
+                    Text("\(Int(appearanceConfig.panelHeight)) pt")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 60, alignment: .trailing)
                 }
 
                 HStack {
-                    Text("Preview Width: \(Int(appearanceConfig.previewWidth)) pt")
+                    Text("Preview Width")
                     Spacer()
                     Slider(value: Binding(
                         get: { Double(appearanceConfig.previewWidth) },
-                        set: { appearanceConfig.previewWidth = CGFloat($0) }
-                    ), in: 280...540, step: 20)
+                        set: { appearanceConfig.previewWidth = CGFloat(round($0)) }
+                    ), in: 280...540)
                     .frame(width: 160)
+                    Text("\(Int(appearanceConfig.previewWidth)) pt")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 60, alignment: .trailing)
+                }
+
+                Button("Reset Dimensions to Defaults") {
+                    appearanceConfig.resetDimensionsToDefaults()
                 }
             }
 
@@ -1315,14 +1331,43 @@ public struct SettingsView: View {
 
                 Spacer()
 
-                // Sidebar Footer Info
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Mimra")
-                        .font(.system(size: 11, weight: .semibold))
+                // Sidebar Footer (App Info & Quit Button)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 4) {
+                        Text("Mimra")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.secondary)
+                        Text("Engine \(engineVersion)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.7))
+                    }
+                    .padding(.horizontal, 2)
+
+                    Button(action: {
+                        NSApp.terminate(nil)
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "power")
+                                .font(.system(size: 11, weight: .medium))
+                            Text("Quit Mimra")
+                                .font(.system(size: 12))
+                            Spacer()
+                            Text("⌘Q")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary.opacity(0.6))
+                        }
                         .foregroundColor(.secondary)
-                    Text("Engine \(engineVersion)")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.primary.opacity(0.04))
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Quit Mimra (⌘Q)")
+                    .accessibilityLabel("Quit Mimra")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)

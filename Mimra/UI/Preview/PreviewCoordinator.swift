@@ -94,6 +94,12 @@ public final class PreviewCoordinator: NSObject {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppearanceChanged(_:)),
+            name: AppearanceConfiguration.didChangeNotification,
+            object: nil
+        )
     }
 
     deinit {
@@ -355,5 +361,17 @@ public final class PreviewCoordinator: NSObject {
 
     @objc private func handleScreenParametersChanged(_ notification: Notification) {
         updateLayout()
+    }
+
+    @objc private func handleAppearanceChanged(_ notification: Notification) {
+        let effectiveHeight = parentPanel?.frame.height ?? AppearanceConfiguration.shared.panelHeight
+        self.previewHeight = effectiveHeight
+        if let panel = previewPanel {
+            if isPreviewVisible {
+                updateLayout()
+            } else {
+                panel.setContentSize(NSSize(width: AppearanceConfiguration.shared.previewWidth, height: effectiveHeight))
+            }
+        }
     }
 }
