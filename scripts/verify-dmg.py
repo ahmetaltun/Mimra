@@ -2,7 +2,7 @@
 """
 Mimra — DMG Verification Tool (conforming to the /premium-macos-dmg skill)
 Mounts a macOS DMG read-only, verifies payload, checks /Applications symlink,
-validates code signature, and safely detaches.
+validates code signature, checks background assets, and safely detaches.
 """
 
 import argparse
@@ -86,6 +86,19 @@ def verify_dmg(dmg_path: Path):
                 f"Applications symlink points to unexpected target: {link_target}"
             )
         results["applications_symlink"] = link_target
+
+        # Check .DS_Store presence
+        ds_store = mounted / ".DS_Store"
+        results["has_ds_store"] = ds_store.is_file()
+
+        # Check .background directory and image assets
+        bg_dir = mounted / ".background"
+        if bg_dir.is_dir():
+            bg_files = [f.name for f in bg_dir.iterdir() if f.is_file()]
+            results["background_directory"] = "present"
+            results["background_files"] = bg_files
+        else:
+            results["background_directory"] = "missing"
 
         # Check Info.plist
         info_plist = app_bundle / "Contents" / "Info.plist"

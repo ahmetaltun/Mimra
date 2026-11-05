@@ -18,35 +18,32 @@ func hexColor(_ hex: String) -> NSColor {
     )
 }
 
-func renderBitmap(pixelsWide: Int, pixelsHigh: Int, scale: CGFloat) -> NSBitmapImageRep {
-    guard let rep = NSBitmapImageRep(
-        bitmapDataPlanes: nil,
-        pixelsWide: pixelsWide,
-        pixelsHigh: pixelsHigh,
-        bitsPerSample: 8,
-        samplesPerPixel: 4,
-        hasAlpha: true,
-        isPlanar: false,
-        colorSpaceName: .deviceRGB,
-        bytesPerRow: 0,
-        bitsPerPixel: 0
+func renderBitmap(scale: CGFloat) -> NSBitmapImageRep {
+    let pixelWidth = Int(logicalWidth * scale)
+    let pixelHeight = Int(logicalHeight * scale)
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    
+    guard let ctx = CGContext(
+        data: nil,
+        width: pixelWidth,
+        height: pixelHeight,
+        bitsPerComponent: 8,
+        bytesPerRow: pixelWidth * 4,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
     ) else {
-        fatalError("Failed to create NSBitmapImageRep")
+        fatalError("Failed to create CGContext for scale \(scale)")
     }
     
-    rep.size = NSSize(width: logicalWidth, height: logicalHeight)
-    
-    NSGraphicsContext.saveGraphicsState()
-    guard let context = NSGraphicsContext(bitmapImageRep: rep) else {
-        fatalError("Failed to create NSGraphicsContext")
-    }
-    NSGraphicsContext.current = context
-    let ctx = context.cgContext
-    
-    // Scale coordinate system to logical points, with (0,0) at top-left
+    // Transform coordinate system to logical points with (0,0) at top-left
     ctx.scaleBy(x: scale, y: scale)
     ctx.translateBy(x: 0, y: logicalHeight)
     ctx.scaleBy(x: 1, y: -1)
+    
+    // Wrap CGContext into top-down flipped NSGraphicsContext
+    let nsContext = NSGraphicsContext(cgContext: ctx, flipped: true)
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = nsContext
     
     let bgColor = hexColor("#F6F5FD")
     let cardFill = NSColor.white
@@ -56,21 +53,24 @@ func renderBitmap(pixelsWide: Int, pixelsHigh: Int, scale: CGFloat) -> NSBitmapI
     
     // 1. Fill entire background
     bgColor.setFill()
-    ctx.fill(CGRect(x: 0, y: 0, width: logicalWidth, height: logicalHeight))
+    let bgPath = NSBezierPath(rect: CGRect(x: 0, y: 0, width: logicalWidth, height: logicalHeight))
+    bgPath.fill()
     
-    // 2. Draw rounded card (x: 40, y: 190, w: 640, h: 178, radius: 21)
+    // 2. Draw rounded card (x: 40, y: 190, w: 640, h: 178, radius: 20)
     let cardRect = CGRect(x: 40, y: 190, width: 640, height: 178)
-    let cardPath = NSBezierPath(roundedRect: cardRect, xRadius: 21, yRadius: 21)
+    let cardPath = NSBezierPath(roundedRect: cardRect, xRadius: 20, yRadius: 20)
     cardFill.setFill()
     cardPath.fill()
     cardBorder.setStroke()
     cardPath.lineWidth = 1.5
     cardPath.stroke()
     
-    // 3. Draw Connecting Arrow in Card
+    // 3. Draw Connecting Arrow in Card (centered between app icon at 202 and apps link at 520)
+    // Distance between icons: 520 - 202 = 318. Center point is (202 + 520) / 2 = 361.
+    // Arrow from x: 325 to x: 397 (length: 72 points), at y: 271
     let arrowY: CGFloat = 271
-    let arrowStartX: CGFloat = 330
-    let arrowEndX: CGFloat = 392
+    let arrowStartX: CGFloat = 325
+    let arrowEndX: CGFloat = 397
     
     ctx.saveGState()
     inkColor.setStroke()
@@ -78,30 +78,23 @@ func renderBitmap(pixelsWide: Int, pixelsHigh: Int, scale: CGFloat) -> NSBitmapI
     ctx.setLineCap(.round)
     ctx.setLineJoin(.round)
     
-    // Main arrow shaft
     ctx.beginPath()
     ctx.move(to: CGPoint(x: arrowStartX, y: arrowY))
     ctx.addLine(to: CGPoint(x: arrowEndX, y: arrowY))
-    // Arrowhead
     ctx.move(to: CGPoint(x: arrowEndX - 8, y: arrowY - 6))
     ctx.addLine(to: CGPoint(x: arrowEndX, y: arrowY))
     ctx.addLine(to: CGPoint(x: arrowEndX - 8, y: arrowY + 6))
     ctx.strokePath()
     ctx.restoreGState()
     
-    // 4. Flip coordinate system for AppKit text rendering (top-down)
-    ctx.translateBy(x: 0, y: logicalHeight)
-    ctx.scaleBy(x: 1, y: -1)
-    
     func drawString(_ text: String, x: CGFloat, y: CGFloat, font: NSFont, color: NSColor, kern: CGFloat = 0) {
-        let topY = logicalHeight - y
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: color,
             .kern: kern
         ]
         let attributed = NSAttributedString(string: text, attributes: attributes)
-        let rect = CGRect(x: x, y: topY - font.ascender, width: logicalWidth - x - 20, height: 60)
+        let rect = CGRect(x: x, y: y, width: logicalWidth - x - 20, height: 60)
         attributed.draw(in: rect)
     }
     
@@ -111,11 +104,11 @@ func renderBitmap(pixelsWide: Int, pixelsHigh: Int, scale: CGFloat) -> NSBitmapI
     
     // Title
     let titleFont = NSFont.systemFont(ofSize: 34, weight: .bold)
-    drawString("Welcome to Mimra", x: 43, y: 76, font: titleFont, color: inkColor)
+    drawString("Welcome to Mimra", x: 43, y: 68, font: titleFont, color: inkColor)
     
     // Subtitle
     let subtitleFont = NSFont.systemFont(ofSize: 14.5, weight: .regular)
-    drawString("Fast, private clipboard manager for macOS", x: 44, y: 133, font: subtitleFont, color: mutedColor)
+    drawString("Fast, private clipboard manager for macOS", x: 44, y: 122, font: subtitleFont, color: mutedColor)
     
     // Footer instruction
     let footerFont = NSFont.systemFont(ofSize: 13.5, weight: .medium)
@@ -123,9 +116,16 @@ func renderBitmap(pixelsWide: Int, pixelsHigh: Int, scale: CGFloat) -> NSBitmapI
     
     // Compatibility footer
     let compatFont = NSFont.systemFont(ofSize: 11.5, weight: .regular)
-    drawString("macOS 15.0+  ·  Apple Silicon", x: 44, y: 423, font: compatFont, color: mutedColor)
+    drawString("macOS 15.0+  ·  Apple Silicon", x: 44, y: 418, font: compatFont, color: mutedColor)
     
     NSGraphicsContext.restoreGraphicsState()
+    
+    guard let cgImage = ctx.makeImage() else {
+        fatalError("Failed to make CGImage for scale \(scale)")
+    }
+    
+    let rep = NSBitmapImageRep(cgImage: cgImage)
+    rep.size = NSSize(width: logicalWidth, height: logicalHeight)
     return rep
 }
 
@@ -139,8 +139,8 @@ func savePNG(rep: NSBitmapImageRep, path: String) {
 let args = CommandLine.arguments
 let outputDir = args.count > 1 ? args[1] : "packaging/dmg"
 
-let rep1x = renderBitmap(pixelsWide: 720, pixelsHigh: 460, scale: 1.0)
-let rep2x = renderBitmap(pixelsWide: 1440, pixelsHigh: 920, scale: 2.0)
+let rep1x = renderBitmap(scale: 1.0)
+let rep2x = renderBitmap(scale: 2.0)
 
 savePNG(rep: rep1x, path: "\(outputDir)/background.png")
 savePNG(rep: rep2x, path: "\(outputDir)/background@2x.png")

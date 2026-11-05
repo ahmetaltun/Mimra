@@ -2463,3 +2463,41 @@ With Mimra exiting Phase 8 hardening, the project lacked three critical distribu
 ### Consequences
 * **Positive:** Mimra presents a cohesive, branded experience across the OS and installer; DMG packaging is 100% reproducible locally and in CI; ephemeral keychain prevents secret leakage; Gatekeeper and Hardened Runtime requirements are fully automated.
 * **Negative:** DMG creation requires `create-dmg` (installed automatically in CI via Homebrew).
+
+
+---
+
+## ADR-067: Resolution-Independent DMG Background Rendering, Coordinate Normalization, and Finder Artifact Hardening
+
+* **Status:** Accepted  
+* **Date:** 2026-11-05  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+When mounting the Mimra DMG installer on macOS Retina displays, the visual presentation displayed major defects:
+1. The background appeared 200% zoomed in, displaying only the lower-left quadrant of the artwork. "Welcome to Mimra" was cut off off-screen, the connecting arrow was pushed to the far top-right edge, and the footer text was pushed into the center of the window.
+2. The `Mimra.app` and `Applications` icons overlapped the background text rather than resting within the designated white card container.
+3. The `.background` folder was visibly exposed as a translucent icon in the upper-left corner when hidden files were toggled.
+4. A horizontal scrollbar appeared at the bottom of the Finder window.
+
+### Root Cause Analysis
+1. **Double Scaling Bug:** `render_dmg_background.swift` assigned `rep.size = NSSize(720, 460)` on a bitmap of `1440x920` pixels. AppKit's `NSGraphicsContext(bitmapImageRep:)` already applies a `2.0` scale factor to map points to pixels. Calling `ctx.scaleBy(2.0, 2.0)` multiplied this scale a second time, resulting in a 4x area blow-up (200% zoom) on the `@2x` asset.
+2. **Coordinate & Typography Flips:** The script mixed bottom-up and top-down coordinates three times (`translateBy`/`scaleBy` in CoreGraphics, followed by re-flipping before AppKit text, followed by manual ascender subtraction in `drawString`). This clipped the top wordmark `"MIMRA"` against `y = 0` and degraded baseline alignment.
+3. **Exposed `.background` Folder:** `create-dmg` creates `.background` without filesystem invisibility attributes (`SetFile -a V` / `chflags hidden`), so Finder displays it whenever hidden files are enabled (`Cmd + Shift + .`).
+4. **Scrollbar Canvas Expansion:** `create-dmg`'s AppleScript repositions items to `{theBottomRightX + 100, 100}` (`{1020, 100}`), which lies 300 points past the 720-point window border, expanding the scroll canvas and setting a horizontal scroll offset in `.DS_Store`.
+
+### Decision
+1. **Top-Down Coordinate Normalization in `render_dmg_background.swift`:**
+   - Create an unscaled bitmap context and apply `scaleBy(scale, scale)` exactly once.
+   - Wrap in `NSGraphicsContext(cgContext: ctx, flipped: true)` so all AppKit drawing (paths, text) operates in top-down coordinates `(0, 0 = top-left)` natively.
+   - Draw all text and geometric elements with direct, verified logical point coordinates matching the `/premium-macos-dmg` specification.
+   - Encode strict DPI metadata: 72 DPI on 1x, 144 DPI on 2x.
+2. **Pre-Staged `.background` Attributes in `build-dmg.sh`:**
+   - Pre-stage `.background` in the temporary directory prior to `create-dmg` execution.
+   - Enforce `SetFile -a V` and `chflags hidden` so the folder is invisible at the filesystem level regardless of Finder view settings.
+3. **Enhanced DMG Verification in `verify-dmg.py`:**
+   - Check `.DS_Store` presence and `.background` directory integrity upon mounting.
+
+### Consequences
+* **Positive:** Complete visual and dimensional parity between 1x and 2x representations; crisp, legible typography on both Standard and Retina displays; icons centered neatly inside the card (`202, 271` and `520, 271`); zero horizontal/vertical scrollbars; clean installer presentation even with developer hidden-file view options enabled.
+* **Negative:** None.

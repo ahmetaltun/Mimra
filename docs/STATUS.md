@@ -198,6 +198,7 @@
 |---|---|---|---|
 | **P9-01** | Official App Icon Ingestion: Asset catalog, standalone `AppIcon.icns`, PBXResourcesBuildPhase, `CFBundleIconFile` / `CFBundleIconName` | Completed | `Mimra/Resources/Assets.xcassets/AppIcon.appiconset`, `Mimra/Resources/AppIcon.icns`, `Mimra/Info.plist`, `scripts/generate_xcodeproj.py` (ADR-066) |
 | **P9-02** | Premium macOS DMG Pipeline: `/premium-macos-dmg` skill compliance, 720×460 geometry, Retina TIFF background, `create-dmg` wrapper, automated verification tool | Completed | `packaging/dmg/dmg.config.json`, `packaging/dmg/background.png`, `packaging/dmg/background@2x.png`, `scripts/render_dmg_background.swift`, `scripts/build-dmg.sh`, `scripts/verify-dmg.py` (ADR-066) |
+| **P9-04** | DMG Alignment & Layout Hardening: Top-down coordinate normalization, 2x scale blow-up resolution, `.background` invisibility (`chflags`/`SetFile`), and scrollbar elimination | Completed | `scripts/render_dmg_background.swift`, `scripts/build-dmg.sh`, `scripts/verify-dmg.py`, `packaging/dmg/` (ADR-067) |
 | **P9-03** | GitHub Actions CI/CD Release Workflow: Ephemeral Developer ID keychain, Release arm64 build, Hardened Runtime codesign, `xcrun notarytool` notarization, stapling, and release assets upload | Completed | `.github/workflows/release.yml` (ADR-066) |
 
 ---

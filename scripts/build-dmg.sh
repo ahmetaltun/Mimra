@@ -5,6 +5,7 @@
 # - Window content-space: 720x460 points
 # - App icon positioned at (202, 271), Applications link at (520, 271)
 # - Multi-representation Retina TIFF background via tiffutil
+# - Pre-stages .background with invisible & hidden flags
 # - Preserves original code signatures and architecture
 # ==============================================================================
 
@@ -45,6 +46,12 @@ echo "Output:      $OUTPUT_DMG"
 mkdir -p "$(dirname "$OUTPUT_DMG")"
 rm -f "$OUTPUT_DMG"
 
+# Auto-regenerate background assets if missing
+if [[ ! -f "$BACKGROUND_DIR/background.png" || ! -f "$BACKGROUND_DIR/background@2x.png" ]]; then
+    echo "Rendering fresh background assets..."
+    swift "$PROJECT_ROOT/scripts/render_dmg_background.swift" "$BACKGROUND_DIR"
+fi
+
 # Prepare staging directory
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp/}mimra-dmg-staging.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -69,6 +76,12 @@ if [[ ! -f "$BACKGROUND_TO_USE" ]]; then
     echo "ERROR: Background image not found in $BACKGROUND_DIR" >&2
     exit 1
 fi
+
+# Pre-stage hidden .background directory in staging folder
+mkdir -p "$WORK_DIR/.background"
+cp "$BACKGROUND_TO_USE" "$WORK_DIR/.background/$(basename "$BACKGROUND_TO_USE")"
+SetFile -a V "$WORK_DIR/.background" 2>/dev/null || true
+chflags hidden "$WORK_DIR/.background" 2>/dev/null || true
 
 echo "Invoking create-dmg..."
 create-dmg \
