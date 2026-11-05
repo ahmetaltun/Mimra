@@ -2453,7 +2453,7 @@ With Mimra exiting Phase 8 hardening, the project lacked three critical distribu
    - Implemented `scripts/verify-dmg.py` for automated `hdiutil verify`, read-only mount, single `.app` bundle, valid `/Applications` symlink, and code signature assertion.
 3. **Automated GitHub Actions Release Workflow (`.github/workflows/release.yml`):**
    - Triggered on tag push (`v*`) and manual `workflow_dispatch`.
-   - Executed on `macos-latest` (Apple Silicon).
+   - Executed on `macos-15` (Apple Silicon).
    - Manages an ephemeral macOS keychain (`$RUNNER_TEMP/build.keychain`) with automatic cleanup in an `always()` post block.
    - Enforces inside-out signing with `ENABLE_HARDENED_RUNTIME = YES` and timestamping via `secrets.APPLE_SIGNING_IDENTITY`.
    - Submits DMG to Apple Notary Service via `xcrun notarytool submit --wait` using `secrets.APPLE_ID`, `secrets.APPLE_PASSWORD`, and `secrets.APPLE_TEAM_ID`.
