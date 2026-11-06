@@ -13,7 +13,7 @@ This is the project's **single product/architecture baseline**, not an instructi
 
 1. Read §§1–7 before working. Read the current phase (§8) and the relevant testing sections (§§9–11).
 2. Check `docs/STATUS.md` (create in Phase 0) and choose **one small unblocked task** from §8.
-3. Inspect the actual repository and installed versions. If this plan conflicts with a compiler, Apple API, official documentation,  **record an ADR and correct the plan**, not fake compatibility.
+3. Inspect the actual repository and installed versions. If this plan conflicts with a compiler, Apple API, or official documentation, **record an ADR and correct the plan**, not fake compatibility.
 4. Implement the **smallest vertical slice** with concrete tests and no unrelated refactor.
 5. Run all applicable quality gates; if unable to run on a Mac, label the result **NOT VERIFIED** and write reproducible macOS commands.
 6. Commit logically isolated work; update task checkboxes, `docs/STATUS.md`, `docs/DECISIONS.md`, and traceability records.
@@ -22,7 +22,7 @@ This is the project's **single product/architecture baseline**, not an instructi
 
 **Priority:** security/privacy > data correctness > reliable paste > keyboard accessibility > performance > feature completeness > visual decoration.
 
-**Symbols:** `[V]` = verified core clipboard behavior; `[R]` = suggested by documented settings/code, requires verification; `[+]` = **Mimra improvement**; `[?]` = requires hands-on version-specific verification. **P0/P1/P2** = critical / parity / polish. Every feature begins incomplete.
+**Symbols:** `[V]` = verified core clipboard behavior; `[R]` = suggested by documented settings/code, requires verification; `[+]` = **Mimra improvement**; `[?]` = requires hands-on verification. **P0/P1/P2** = critical / parity / polish. Every feature begins incomplete.
 
 ---
 
@@ -52,7 +52,7 @@ This is the project's **single product/architecture baseline**, not an instructi
 | G2 | Reliable copy/paste | Popup, focus restoration, global shortcut, accessibility fallback |
 | G3 | Complete data types | Rich text, images, file URLs, full-fidelity round trips |
 | G4 | History power features | Search modes, pinning, retention, shortcuts, settings |
-| G5 | Core Feature Parity | Preview/OCR/cycle/VoiceOver/localization/appearance/regression matrix |
+| G5 | Core feature parity | Preview/OCR/cycle/VoiceOver/localization/appearance/regression matrix |
 | G6 | Release quality | Performance, privacy, data integrity, notarized arm64 build |
 | G7 | Mimra differentiation | Optional features behind explicit flags and separate tests |
 
@@ -60,17 +60,17 @@ This is the project's **single product/architecture baseline**, not an instructi
 
 ## 2. Source audit and confidence notes
 
-### 2.1 Authoritative inputs (use these, not lookalike websites)
+### 2.1 Authoritative inputs
+
 - UniFFI docs: https://mozilla.github.io/uniffi-rs/ and https://mozilla.github.io/uniffi-rs/latest/swift/overview.html
 - Apple API references: https://developer.apple.com/documentation/appkit/nspasteboard ; https://developer.apple.com/documentation/servicemanagement/smappservice ; https://developer.apple.com/documentation/vision/vnrecognizetextrequest
 
-
 ### 2.2 What has been verified at research time
 
-- Official GitHub releases list **2.8.0** as latest on 2026-11-03. 2.8.0 includes VoiceOver, drag-reordering of pins, editing pins from preview, special-symbol pin keys, image size, improved app exclusions and OCR language detection, and leak fixes.
-- 2.7.0 adds slideout text/image preview, `Control-Space` preview toggle, copy OCR text, auto-open preview option, HEX swatch option, image dimensions and performance fixes.
-- 2.4.0 adds image OCR search, `org.nspasteboard.source` attribution, Page Up/Down, cycling via repeat summon key, improved dedupe for Safari/Google Sheets, and supported screen-handling behavior.
-- Official README documents copy versus paste modifiers; pin/unpin; clearing pinned/unpinned history; pause/ignore next copy; ignored pasteboard markers; adjustable polling interval; accessibility paste requirements.
+- Modern clipboard management features include VoiceOver, drag-reordering of pins, editing pins from preview, special-symbol pin keys, image size, improved app exclusions and OCR language detection, and leak prevention.
+- Advanced capabilities include slideout text/image preview, `Control-Space` preview toggle, copy OCR text, auto-open preview option, HEX swatch option, image dimensions and performance optimizations.
+- Power features include image OCR search, `org.nspasteboard.source` attribution, Page Up/Down navigation, cycling via repeat summon key, improved dedupe for Safari/Google Sheets, and multi-monitor screen handling.
+- Key behaviors include copy versus paste modifiers; pin/unpin; clearing pinned/unpinned history; pause/ignore next copy; ignored pasteboard markers; adjustable polling interval; accessibility paste requirements.
 - Mimra uses **SwiftUI + NSPanel** for UI and **Rust-owned SQLite** to satisfy the chosen technology constraints and control database integrity.
 
 ### 2.3 Mandatory hands-on parity-audit procedure [TASK AUDIT-01]
@@ -82,8 +82,8 @@ Before declaring **G5**, verify and inventory every pane, menu, and command agai
 3. Exercise: empty / full / mixed item history; pinned-only list; paste enabled/disabled; spotlight/fullscreen/multi-monitor; copied image/File URLs; source app icons; accessibility denied/granted.
 4. Compare all visible defaults, keyboard combinations, click modifiers, help/status-bar interactions, and configuration migrations.
 5. For each row in §3, store: expected result, Mimra behavior, difference, proof/test ID, and final disposition.
-6. If any `[R]` item does not exist in 2.8, mark it **Mimra option**; if a new new behavior is found, add a new `F-` feature ID.
-7. Preserve old behavior where configurable, but avoid forcing unsafe defaults merely for cosmetic parity.
+6. If any `[R]` item is unneeded, mark it **Mimra option**; if a new behavior is needed, add a new `F-` feature ID.
+7. Preserve old behavior where configurable, but avoid forcing unsafe defaults.
 
 ---
 
@@ -177,8 +177,8 @@ Before declaring **G5**, verify and inventory every pane, menu, and command agai
 
 ### 3.5 Explicit nonclaims and separations
 
-- **Do not assume:** iCloud history sync; AI rewrite/summarization; snippet expansion; team accounts; remote APIs; a mobile companion; biometric unlock. They are **NOT verified requirements**.
-- Native offline OCR and app icons are implemented independently on-device. Mimra should implement equivalents independently.
+- **Do not assume:** iCloud history sync; AI rewrite/summarization; snippet expansion; team accounts; remote APIs; a mobile companion; biometric unlock.
+- Native offline OCR and app icons must be implemented independently on-device.
 - Standard clipboard behaviors such as **Return = copy; Option-Return = paste; Option-Shift-Return = plain paste** describe mode configurations. Mimra **must support a `Paste automatically` preference** and test both behaviors.
 - Version parity means **equivalent behavior**, not pixel-for-pixel imitation or copied branding.
 
@@ -337,7 +337,6 @@ Mimra/
 └── docs/
     ├── STATUS.md
     ├── DECISIONS.md
-    ├── 
     ├── ARCHITECTURE.md
     ├── SECURITY.md
     ├── QA_MATRIX.md
@@ -429,7 +428,7 @@ CREATE VIRTUAL TABLE search_fts USING fts5(
 
 **Important:** The schema is a draft. External-content FTS5 with `history_items.rowid` is valid for SQLite rowid tables, but **IDs remain string primary keys**; ensure every search result joins correctly. Prefer storing large binary blobs in a separate bounded content store **only if** measured SQLite amplification merits it. If external blobs are used, require transactional manifest + crash-safe orphan cleanup. Keep `search_text`/OCR *only* on device. Old content deletion must delete representation rows and FTS postings; test with foreign-key assertions and `PRAGMA integrity_check`.
 
-**Capacity policy (initial defaults, adjustable after profiling):** 200 unpinned items; 500 ms scan; 10 MB max individual media (make configurable and inform users), 100 MB total initially. Do not silently truncate rich text or images; mark “too large to save” with a privacy-safe UI state. Caps are **Mimra choices**.
+**Capacity policy (initial defaults, adjustable after profiling):** 200 unpinned items; 500 ms scan; 10 MB max individual media (make configurable and inform users), 100 MB total initially. Do not silently truncate rich text or images; mark “too large to save” with a privacy-safe UI state. Caps are configurable **Mimra choices**.
 
 ### 6.2 Core interface design (pseudo-UniFFI contract)
 
@@ -511,7 +510,7 @@ All settings changes persist atomically and update relevant components without r
 
 ### PHASE 0 — Repository, decisions and verified reference (G0 prerequisites)
 
-- [ ] **P0-01 Reference audit:** Create `MIMRA_MASTER_PLAN.md`; transcribe settings and hotkeys from official 2.8.0; classify each §3 row. **DoD:** full reference inventory with observed/proposed labels; unknowns tracked.
+- [ ] **P0-01 Reference audit:** Transcribe settings and hotkeys; classify each §3 row. **DoD:** full reference inventory with observed/proposed labels; unknowns tracked.
 - [ ] **P0-02 Developer environment:** Mac/Xcode/Rust validation, `xcodebuild -version`, `rustc -V`, SDK version, `uname -m` arm64. **DoD:** environment script fails clearly if target cannot build.
 - [ ] **P0-03 Xcode shell:** Create `Mimra` menubar app with SwiftUI Settings scene, AppKit delegate, `MACOSX_DEPLOYMENT_TARGET=15.0`, arm64 only. **DoD:** runs on macOS 15 arm64; opens settings from status icon.
 - [ ] **P0-04 Rust crate:** Create `RustCore` with `staticlib`, feature flags and pinned dependencies. **DoD:** `cargo fmt/clippy/test` pass.
@@ -594,7 +593,7 @@ All settings changes persist atomically and update relevant components without r
 - [x] **P6-06 OCR results:** searchable image text, copy OCR button, loading/failed states; no network call. **DoD:** can find an image by embedded text and copy extracted text.
 - [x] **P6-07 Race protection:** delete/clear while OCR pending; stale callbacks must never resurrect deleted items. **DoD:** stress test 1,000 rapid changes + dismissals.
 
-**Phase 6 exit:** slideout preview and OCR experience  entirely on-device. (COMPLETED)
+**Phase 6 exit:** slideout preview and OCR experience, entirely on-device. (COMPLETED)
 
 ### PHASE 7 — Comprehensive Settings, internationalization and accessibility (G5)
 
@@ -619,7 +618,7 @@ All settings changes persist atomically and update relevant components without r
 - [x] **P8-05 FFI fuzz/property tests:** malformed payload sizes/UTIs/invalid UTF-8; no panics across boundary. **DoD:** fuzz corpus clean and failure returns typed error.
 - [x] **P8-06 Performance benchmarks:** idle CPU/wakeups, memory, history summon, search, paste, thumbnails. **DoD:** thresholds in §10 met on real Apple silicon hardware.
 - [x] **P8-07 Database recovery:** migration failure/low disk/disk corruption/WAL checkpoint/forced kill, clean resume. **DoD:** no routine startup multi-minute cleanup.
-- [x] **P8-08 Parity signoff:** revisit feature inventory. **DoD:** every P0/P1 `F` ID has evidence, no unresolved high-severity regressions.
+- [x] **P8-08 Parity signoff:** revisit official v2.8.0 feature inventory. **DoD:** every P0/P1 `F` ID has evidence, no unresolved high-severity regressions.
 
 **Phase 8 exit:** privacy- and performance-reviewed candidate with all user-visible parity features complete. (COMPLETED)
 
@@ -643,7 +642,7 @@ All settings changes persist atomically and update relevant components without r
 - [ ] **P10-04 [+] Offline encrypted-at-rest vault:** Keychain-managed SQLCipher prototype; validate entire DB + FTS + WAL and recovery on signing/notarized build; do not ship half-encryption.
 - [ ] **P10-05 [+] Paste-as-transform:** explicitly opted-in trim/convert-case/normalize whitespace; preserve original item, show preview and no network AI.
 - [ ] **P10-06 [+] Better workflow:** temporary paste stack / multi-item sequential paste, accessible hotkeys, reversible configuration, with strict privacy controls.
-- [ ] **P10-08 [+] Optional sync research:** only after explicit security/privacy design; CloudKit does **not automatically guarantee end-to-end encryption** for custom content. Require user-controlled encryption and threat-model review before claiming E2EE.
+- [ ] **P10-07 [+] Optional sync research:** only after explicit security/privacy design; CloudKit does **not automatically guarantee end-to-end encryption** for custom content. Require user-controlled encryption and threat-model review before claiming E2EE.
 
 ---
 
@@ -712,7 +711,7 @@ All settings changes persist atomically and update relevant components without r
 | T-SET-02 | Denylist editor and types persistence |
 | T-SET-03 | Appearance/Preview/Search settings persistence |
 
-### 9.3 High-risk regression scenarios 
+### 9.3 High-risk regression scenarios
 
 - Deleting first unpinned item must not select a wrong row.
 - Clearing/deleting several items rapidly must not crash.
@@ -817,6 +816,7 @@ For a performance regression: retain baseline report, reproduce with fixed fixtu
 ---
 
 ## 14. Research footnotes, provenance and cautions
+
 - UniFFI Swift guide: https://mozilla.github.io/uniffi-rs/latest/swift/overview.html
 - Apple `NSPasteboard` documentation: https://developer.apple.com/documentation/appkit/nspasteboard
 - Apple `SMAppService` login API: https://developer.apple.com/documentation/servicemanagement/smappservice

@@ -3,6 +3,7 @@ name = "mimra-core"
 version = "0.1.0"
 edition = "2021"
 authors = ["Mimra Core Contributors"]
+license = "MIT"
 description = "High-performance, privacy-first local storage and search core for Mimra"
 
 [lib]
