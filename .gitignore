@@ -40,5 +40,11 @@ main
 .idea/
 .vscode/
 
+# Sparkle Signing Secrets & Binaries
+*.key
+.sparkle_*
+Frameworks/
+bin/
+
 # Graphify
 graphify-out/

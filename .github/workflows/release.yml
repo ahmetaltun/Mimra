@@ -95,6 +95,21 @@ jobs:
         env:
           SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
+          echo "Signing Sparkle embedded components with identity: $SIGNING_IDENTITY"
+          SPARKLE_DIR="build/Mimra.app/Contents/Frameworks/Sparkle.framework"
+          if [ -d "$SPARKLE_DIR" ]; then
+            for xpc in "$SPARKLE_DIR"/Versions/B/XPCServices/*.xpc; do
+              if [ -d "$xpc" ]; then
+                codesign --force --options runtime --sign "$SIGNING_IDENTITY" --timestamp "$xpc"
+              fi
+            done
+            for tool in "$SPARKLE_DIR"/Versions/B/Autoupdate "$SPARKLE_DIR"/Versions/B/Updater.app; do
+              if [ -e "$tool" ]; then
+                codesign --force --options runtime --sign "$SIGNING_IDENTITY" --timestamp "$tool"
+              fi
+            done
+            codesign --force --options runtime --sign "$SIGNING_IDENTITY" --timestamp "$SPARKLE_DIR"
+          fi
           echo "Signing Mimra.app with identity: $SIGNING_IDENTITY"
           codesign --force --options runtime --deep --sign "$SIGNING_IDENTITY" --timestamp build/Mimra.app
           codesign --verify --deep --strict --verbose=2 build/Mimra.app
@@ -140,16 +155,34 @@ jobs:
           cat Mimra.dmg.sha256
           cd ..
 
+      - name: Sign DMG & Generate Sparkle Appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" build/Mimra.app/Contents/Info.plist)
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" build/Mimra.app/Contents/Info.plist)
+          echo "Generating Sparkle Appcast for Mimra v$VERSION (Build $BUILD)..."
+          ./scripts/generate-appcast.sh dist/Mimra.dmg "$VERSION" "$BUILD" "$SPARKLE_PRIVATE_KEY"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/Mimra.dmg
             dist/Mimra.dmg.sha256
+            appcast.xml
           draft: false
           prerelease: false
           generate_release_notes: true
           tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+
+      - name: Commit Updated Appcast to Repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "Update appcast.xml for ${{ github.event.inputs.tag_name || github.ref_name }} [skip ci]" || echo "No changes to commit"
+          git push origin master || echo "Push skipped or not on master branch"
 
       - name: Cleanup Ephemeral Keychain
         if: always()

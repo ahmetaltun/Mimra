@@ -1294,6 +1294,122 @@ public struct HotkeysSettingsTab: View {
 }
 
 // ==============================================================================
+// Mimra — Updates Settings Tab (P9-05 / F-062, T-REL-01)
+// Software update preferences, check button, and cryptographic security status.
+// ==============================================================================
+
+public struct UpdatesSettingsTab: View {
+    @ObservedObject var updateService = UpdateService.shared
+    let engineVersion: String
+
+    public init(engineVersion: String = coreVersion()) {
+        self.engineVersion = engineVersion
+    }
+
+    private var appVersionString: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "v\(version) (Build \(build))"
+    }
+
+    public var body: some View {
+        Form {
+            Section("Current Version & Status") {
+                LabeledContent("Application Version", value: appVersionString)
+                LabeledContent("RustCore Engine", value: "v\(engineVersion) (arm64)")
+                LabeledContent("Last Update Check", value: updateService.formattedLastCheckDate)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Software Updates")
+                            .font(.body)
+                        if let status = updateService.statusMessage {
+                            Text(status)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Check for newer versions and security releases of Mimra.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    Button(action: {
+                        updateService.checkForUpdates()
+                    }) {
+                        if updateService.isChecking {
+                            ProgressView()
+                                .controlSize(.small)
+                                .padding(.horizontal, 8)
+                        } else {
+                            Text("Check Now...")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
+                    .disabled(!updateService.canCheckForUpdates || updateService.isChecking)
+                }
+            }
+
+            Section("Automatic Updates") {
+                Toggle("Automatically check for updates", isOn: $updateService.automaticallyChecksForUpdates)
+
+                Text("When enabled, Mimra automatically checks for updates on launch and in the background.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if updateService.automaticallyChecksForUpdates {
+                    Picker("Check Frequency", selection: $updateService.updateCheckInterval) {
+                        ForEach(UpdateCheckFrequency.allCases) { freq in
+                            Text(freq.displayName).tag(freq.rawValue)
+                        }
+                    }
+
+                    Toggle("Automatically download new updates", isOn: $updateService.automaticallyDownloadsUpdates)
+
+                    Text("When enabled, new update packages are downloaded silently in the background and ready to install on relaunch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Security & Privacy Guarantee") {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.shield.fill")
+                            .foregroundColor(.green)
+                        Text("Cryptographic Ed25519 Signatures")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    Text("Every update archive is cryptographically signed with an Ed25519 key and notarized by Apple. Downgrades or modified packages are strictly rejected.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Divider()
+                        .padding(.vertical, 2)
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.shield.fill")
+                            .foregroundColor(.accentColor)
+                        Text("Zero Telemetry Policy")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    Text("Update checks transmit only standard HTTP GET requests to GitHub over HTTPS. No system profiles, hardware IDs, tokens, or clipboard contents are ever sent.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// ==============================================================================
 // Mimra — Settings Category Definition & Main Settings View
 // ==============================================================================
 
@@ -1304,6 +1420,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Sendable {
     case search = "Search & Sorting"
     case storage = "Storage"
     case privacy = "Privacy"
+    case updates = "Updates"
 
     public var id: String { rawValue }
 
@@ -1315,6 +1432,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Sendable {
         case .search: return "arrow.up.arrow.down.circle"
         case .storage: return "cylinder.split.1x2"
         case .privacy: return "hand.raised"
+        case .updates: return "arrow.triangle.2.circlepath.circle"
         }
     }
 }
@@ -1446,6 +1564,8 @@ public struct SettingsView: View {
                     StorageSettingsTab(viewModel: storageViewModel)
                 case .privacy:
                     PrivacySettingsTab()
+                case .updates:
+                    UpdatesSettingsTab(engineVersion: engineVersion)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

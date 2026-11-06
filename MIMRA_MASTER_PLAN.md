@@ -628,7 +628,7 @@ All settings changes persist atomically and update relevant components without r
 - [ ] **P9-01 Developer ID:** hardened runtime, entitlement review, macOS 15 minimum, arm64-only archive. **DoD:** `codesign --verify --deep --strict` and arm64 architecture checks.
 - [ ] **P9-02 Notarization:** Apple notary service credentials stored in secure CI secret provider; staple DMG. **DoD:** notarization approved and Gatekeeper test on separate Mac.
 - [ ] **P9-03 Package:** accessible install experience, signed DMG, distribution manifest, checksums. **DoD:** fresh install/uninstall tested without leaving sensitive files unexpectedly.
-- [ ] **P9-04 Update plan:** evaluate Sparkle signed appcast or manual downloads; verify threat model. **DoD:** downgrade/upgrades tested; no insecure auto-update mechanism.
+- [x] **P9-04 Update plan:** evaluate Sparkle signed appcast or manual downloads; verify threat model. **DoD:** downgrade/upgrades tested; no insecure auto-update mechanism. Sparkle 2 signed appcast pipeline implemented (ADR-068).
 - [ ] **P9-05 CI:** format, clippy, Rust tests, Swift build/tests, architecture check, dependency license audit, release artifacts. **DoD:** PR cannot merge with failing verified gates.
 - [ ] **P9-06 Documentation:** README, keyboard guide, privacy note, permission troubleshooting, advanced `defaults`, changelog, issue template, third-party notices. **DoD:** clean-room user can install/use without support.
 - [ ] **P9-07 RC testing:** two different Apple silicon Macs/OS versions if accessible; Mac 15.x and 26.x specifically. **DoD:** complete §9 manual test sheet, release tag, known limitations.

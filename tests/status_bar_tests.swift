@@ -50,6 +50,7 @@ struct StatusBarTests {
         assert(menuTitles.contains("Clear Unpinned History"), "FAIL: Missing Clear Unpinned History")
         assert(menuTitles.contains("Clear All History..."), "FAIL: Missing Clear All History")
         assert(menuTitles.contains("Settings..."), "FAIL: Missing Settings...")
+        assert(menuTitles.contains("Check for Updates..."), "FAIL: Missing Check for Updates...")
         assert(menuTitles.contains("Quit Mimra"), "FAIL: Missing Quit Mimra")
         print("✓ T-UI-01: Status item and context menu items verified")
 
@@ -86,7 +87,7 @@ struct StatusBarTests {
         assert(contentRect.width == 720, "FAIL: Settings window content width must be 720, got \(contentRect.width)")
         assert(contentRect.height == 530, "FAIL: Settings window content height must be 530, got \(contentRect.height)")
         assert(win.level == .normal, "FAIL: Settings window level must be .normal, got \(win.level)")
-        assert(SettingsCategory.allCases.count == 6, "FAIL: SettingsCategory must have 6 categories")
+        assert(SettingsCategory.allCases.count == 7, "FAIL: SettingsCategory must have 7 categories")
         print("✓ T-UI-01 / F-027: Option-Shift-click successfully opens Settings window at 720x530 with .normal level")
 
         // 5. Test Ignore Next Copy Action (F-026)

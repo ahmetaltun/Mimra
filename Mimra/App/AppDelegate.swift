@@ -117,6 +117,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if OnboardingService.shared.shouldShowOnboarding {
                 OnboardingWindowController.shared.show()
             }
+
+            // 7. Initialize Update Service with Sparkle 2 (P9-05 / F-062)
+            UpdateService.defaultProviderFactory = {
+                SparkleUpdateProvider()
+            }
+            _ = UpdateService.shared
         } catch {
             let errorMsg: String
             if case let CoreError.SchemaMismatch(details) = error {

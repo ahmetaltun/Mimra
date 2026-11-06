@@ -19,6 +19,7 @@ final class StatusBarCoordinator: NSObject, NSWindowDelegate {
     public let panelCoordinator: PanelCoordinator
 
     private var pauseMenuItem: NSMenuItem?
+    private var checkForUpdatesMenuItem: NSMenuItem?
 
     public var statusItemButton: NSStatusBarButton? {
         return statusItem?.button
@@ -122,6 +123,16 @@ final class StatusBarCoordinator: NSObject, NSWindowDelegate {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        // Check for updates (P9-05 / F-062)
+        let updateItem = NSMenuItem(
+            title: "Check for Updates...",
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        updateItem.target = self
+        menu.addItem(updateItem)
+        self.checkForUpdatesMenuItem = updateItem
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(
@@ -150,6 +161,17 @@ final class StatusBarCoordinator: NSObject, NSWindowDelegate {
         // Observe privacy configuration changes (P7-04 / F-057)
         NotificationCenter.default.addObserver(
             forName: PrivacyConfiguration.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.updateStatusItemAppearance()
+            }
+        }
+
+        // Observe update service notifications (P9-05 / F-062)
+        NotificationCenter.default.addObserver(
+            forName: UpdateService.didCheckForUpdatesNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -186,6 +208,7 @@ final class StatusBarCoordinator: NSObject, NSWindowDelegate {
         }
 
         pauseMenuItem?.title = isPaused ? "Resume Capture" : "Pause Capture"
+        checkForUpdatesMenuItem?.isEnabled = UpdateService.shared.canCheckForUpdates
     }
 
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -265,6 +288,10 @@ final class StatusBarCoordinator: NSObject, NSWindowDelegate {
                 try? await coreClient.vacuumDatabase()
             }
         }
+    }
+
+    @objc public func checkForUpdates() {
+        UpdateService.shared.checkForUpdates()
     }
 
     @objc public func openSettings() {

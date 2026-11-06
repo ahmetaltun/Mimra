@@ -21,6 +21,11 @@ echo "=== 1. Building RustCore Static Library ($BUILD_MODE) ==="
 echo -e "\n=== 2. Generating UniFFI Bindings ==="
 "$PROJECT_ROOT/scripts/generate-bindings.sh"
 
+if [ ! -d "$PROJECT_ROOT/Frameworks/Sparkle.framework" ]; then
+    echo -e "\n=== Setting up Sparkle Framework ==="
+    "$PROJECT_ROOT/scripts/setup-sparkle.sh"
+fi
+
 echo -e "\n=== 3. Building Mimra.app via Xcode ($CONFIGURATION) ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \

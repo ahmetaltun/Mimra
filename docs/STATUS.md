@@ -200,10 +200,11 @@
 | **P9-02** | Premium macOS DMG Pipeline: `/premium-macos-dmg` skill compliance, 720×460 geometry, Retina TIFF background, `create-dmg` wrapper, automated verification tool | Completed | `packaging/dmg/dmg.config.json`, `packaging/dmg/background.png`, `packaging/dmg/background@2x.png`, `scripts/render_dmg_background.swift`, `scripts/build-dmg.sh`, `scripts/verify-dmg.py` (ADR-066) |
 | **P9-04** | DMG Alignment & Layout Hardening: Top-down coordinate normalization, 2x scale blow-up resolution, `.background` invisibility (`chflags`/`SetFile`), and scrollbar elimination | Completed | `scripts/render_dmg_background.swift`, `scripts/build-dmg.sh`, `scripts/verify-dmg.py`, `packaging/dmg/` (ADR-067) |
 | **P9-03** | GitHub Actions CI/CD Release Workflow: Ephemeral Developer ID keychain, Release arm64 build, Hardened Runtime codesign, `xcrun notarytool` notarization, stapling, and release assets upload | Completed | `.github/workflows/release.yml` (ADR-066) |
+| **P9-05** | Sparkle 2 Update Flow: Protocol-based `UpdateService` abstraction, `SparkleUpdateProvider` driver, Settings Updates tab, status bar item, Ed25519 signing, zero-telemetry policy, and automated appcast pipeline | Completed | `Mimra/macOS/UpdateService.swift`, `SparkleUpdateProvider.swift`, `StatusBarCoordinator.swift`, `SettingsView.swift`, `appcast.xml`, `scripts/generate-appcast.sh`, `tests/update_service_tests.swift` (`F-062`, `T-REL-01`, ADR-068) |
 
 ---
 
 ## 14. Current Blockers & Risks
 
-* **None.** Phase 9 packaging, app icon integration, premium DMG pipeline, and GitHub Actions release workflow are 100% COMPLETED and verified.
+* **None.** Phase 9 packaging, app icon integration, premium DMG pipeline, Sparkle 2 update flow, and GitHub Actions release workflow are 100% COMPLETED and verified.
 * **Next Milestone:** Phase 10 / Gate G7 (Mimra Differentiators: Privacy profiles, secret heuristics, encrypted SQLCipher vault).

@@ -62,6 +62,10 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		10000040 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 20000040 /* Assets.xcassets */; };
 		10000041 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 20000041 /* Localizable.xcstrings */; };
 		10000042 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 20000042 /* AppIcon.icns */; };
+		10000043 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000043 /* UpdateService.swift */; };
+		10000044 /* SparkleUpdateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000044 /* SparkleUpdateProvider.swift */; };
+		10000045 /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 20000045 /* Sparkle.framework */; };
+		10000046 /* Sparkle.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 20000045 /* Sparkle.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -108,7 +112,24 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		20000040 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		20000041 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		20000042 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		20000043 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
+		20000044 /* SparkleUpdateProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateProvider.swift; sourceTree = "<group>"; };
+		20000045 /* Sparkle.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Sparkle.framework; path = Frameworks/Sparkle.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		30000004 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				10000046 /* Sparkle.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		30000001 /* Frameworks */ = {
@@ -116,6 +137,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			buildActionMask = 2147483647;
 			files = (
 				10000006 /* libmimra_core.a in Frameworks */,
+				10000045 /* Sparkle.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -171,6 +193,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			isa = PBXGroup;
 			children = (
 				20000006 /* libmimra_core.a */,
+				20000045 /* Sparkle.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -221,6 +244,8 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				20000036 /* HotkeyConfiguration.swift */,
 				20000037 /* LocalizationService.swift */,
 				20000038 /* OnboardingService.swift */,
+				20000043 /* UpdateService.swift */,
+				20000044 /* SparkleUpdateProvider.swift */,
 			);
 			path = macOS;
 			sourceTree = "<group>";
@@ -305,6 +330,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			buildPhases = (
 				30000002 /* Sources */,
 				30000001 /* Frameworks */,
+				30000004 /* Embed Frameworks */,
 				30000003 /* Resources */,
 			);
 			buildRules = (
@@ -385,6 +411,8 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				10000035 /* LocalizationService.swift in Sources */,
 				10000036 /* OnboardingService.swift in Sources */,
 				10000037 /* OnboardingView.swift in Sources */,
+				10000043 /* UpdateService.swift in Sources */,
+				10000044 /* SparkleUpdateProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -409,6 +437,10 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Frameworks",
+				);
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -422,6 +454,10 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 					"$(PROJECT_DIR)/Generated",
 				);
 				INFOPLIST_FILE = Mimra/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/RustCore/target/aarch64-apple-darwin/debug",
@@ -462,6 +498,10 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Frameworks",
+				);
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				HEADER_SEARCH_PATHS = (
@@ -469,6 +509,10 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 					"$(PROJECT_DIR)/Generated",
 				);
 				INFOPLIST_FILE = Mimra/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/RustCore/target/aarch64-apple-darwin/release",

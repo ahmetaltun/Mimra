@@ -28,5 +28,17 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/ahmetaltun/Mimra/master/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>L5KBcYB05T8B0hhvJaLS4lN4+LcEfEQ+UdkWY4JAGoc=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableSystemProfiling</key>
+	<false/>
+	<key>SUSendProfileInfo</key>
+	<false/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<true/>
 </dict>
 </plist>

@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="https://sparkle-project.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Mimra Updates</title>
+    <link>https://raw.githubusercontent.com/ahmetaltun/Mimra/master/appcast.xml</link>
+    <description>Most recent changes with links to updates for Mimra Clipboard Manager.</description>
+    <language>en</language>
+    <item>
+      <title>Mimra 0.1.0</title>
+      <pubDate>Fri, 06 Nov 2026 12:52:09 +0000</pubDate>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description>Bug fixes and performance improvements.</description>
+      <enclosure url="https://github.com/ahmetaltun/Mimra/releases/download/v0.1.0/Mimra.dmg" sparkle:version="1" sparkle:shortVersionString="0.1.0" length="13" type="application/octet-stream" sparkle:edSignature="ijjdkx0ciQXZEbc1FDSUNaro688sf7TAaBslp8fL3D4C1BUpo52Apeiw4eg3dppkJTT2O9rhX+s11tTVOftjAw==" />
+    </item>
+  </channel>
+</rss>

@@ -30,6 +30,7 @@ SETTINGS_EXTRA_SOURCES=(
     "$PROJECT_ROOT/Mimra/macOS/LocalizationService.swift"
     "$PROJECT_ROOT/Mimra/macOS/OnboardingService.swift"
     "$PROJECT_ROOT/Mimra/UI/Onboarding/OnboardingView.swift"
+    "$PROJECT_ROOT/Mimra/macOS/UpdateService.swift"
     "$PROJECT_ROOT/Mimra/UI/Settings/SettingsView.swift"
 )
 
@@ -1407,7 +1408,18 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 /tmp/mimra_move_to_top_test_runner
 rm -f /tmp/mimra_move_to_top_test_runner
 
-echo -e "\n=== 64. Building Native macOS App (Mimra.app) via Xcode ==="
+echo -e "\n=== 64. Running Update Service & Release Verification Tests (P9-05 / F-062, T-REL-01) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    "$PROJECT_ROOT/Mimra/macOS/UpdateService.swift" \
+    "$PROJECT_ROOT/tests/update_service_tests.swift" \
+    -o /tmp/mimra_update_service_test_runner
+
+/tmp/mimra_update_service_test_runner
+rm -f /tmp/mimra_update_service_test_runner
+
+echo -e "\n=== 65. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \
     -scheme Mimra \

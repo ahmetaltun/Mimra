@@ -2501,3 +2501,44 @@ When mounting the Mimra DMG installer on macOS Retina displays, the visual prese
 ### Consequences
 * **Positive:** Complete visual and dimensional parity between 1x and 2x representations; crisp, legible typography on both Standard and Retina displays; icons centered neatly inside the card (`202, 271` and `520, 271`); zero horizontal/vertical scrollbars; clean installer presentation even with developer hidden-file view options enabled.
 * **Negative:** None.
+
+---
+
+## ADR-068: Sparkle 2 Software Update Architecture, Zero-Telemetry Privacy Policy, and GitHub Release Appcast Pipeline
+
+* **Status:** Accepted  
+* **Date:** 2026-11-06  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Mimra distributes notarized macOS disk images (`Mimra.dmg`) via GitHub Releases, but previously required users to manually check the repository and re-download new releases. Adding an in-app software update flow must satisfy strict architectural requirements:
+1. **Privacy & Security First:** In compliance with `docs/THREAT_MODEL.md` (Threat 2), the updater must never transmit system profiling, hardware identifiers, usage metrics, or clipboard contents over the network.
+2. **Cryptographic Verification:** Every downloaded binary and disk image must be cryptographically verified using Ed25519 digital signatures (`SUPublicEDKey`) and notarized by Apple before installation.
+3. **Decoupled Architecture & Swift 6 Concurrency:** The update service must be thoroughly testable in headless CLI test runners without requiring AppKit/Sparkle binary linkage, and conform strictly to Swift 6 complete concurrency checking (`-strict-concurrency=complete`).
+4. **Collision Protection:** Automated appcast generation must avoid duplicate item collisions for the same version/build.
+
+### Decision
+1. **Protocol-Driven Abstraction (`UpdateProvider`):**
+   - Implemented `@MainActor public protocol UpdateProvider` and observable `@MainActor public final class UpdateService`.
+   - Production driver `SparkleUpdateProvider` wraps Sparkle 2's `SPUStandardUpdaterController` and implements `SPUUpdaterDelegate`.
+   - Test double `MockUpdateProvider` enables comprehensive unit and regression testing (`tests/update_service_tests.swift`) under Swift 6 strict concurrency without external framework dependencies.
+2. **Strict Zero-Telemetry Configuration:**
+   - In `Mimra/Info.plist`, explicitly declared `SUEnableSystemProfiling = false` and `SUSendProfileInfo = false`.
+   - Transport is restricted to standard HTTPS GET requests to GitHub Releases.
+   - Initialized `SUEnableAutomaticChecks = true` by default (with user toggle in Settings), and `SUAllowsAutomaticUpdates = false` (requiring user confirmation prior to package installation).
+3. **Cryptographic Ed25519 Key Infrastructure:**
+   - Embedded official 32-byte Ed25519 public key `L5KBcYB05T8B0hhvJaLS4lN4+LcEfEQ+UdkWY4JAGoc=` into `Mimra/Info.plist` (`SUPublicEDKey`).
+   - Created `scripts/generate-sparkle-keys.sh` supporting both Sparkle CLI and offline Apple `CryptoKit` key generation for headless environments.
+   - Stored private key secret in CI for signing with `sign_update`.
+4. **Native User Interface Integration:**
+   - Added `Check for Updates...` item in `StatusBarCoordinator` context menu, dynamically validated against `updateService.canCheckForUpdates`.
+   - Added dedicated `Updates` category in `SettingsView` (`UpdatesSettingsTab`) displaying application and RustCore engine versions, check button with progress indicator, check frequency picker (Daily, Weekly, Monthly), automatic download toggle, and security guarantees.
+5. **Hardened Runtime Inside-Out Codesigning:**
+   - In `.github/workflows/release.yml`, enforce inside-out codesigning order for Sparkle nested components (`Installer.xpc`, `Downloader.xpc`, `Autoupdate`, `Updater.app`, and `Sparkle.framework`) before signing the root `Mimra.app` bundle.
+6. **Automated Appcast Pipeline & Collision Protection:**
+   - Created `scripts/generate-appcast.sh` which signs `dist/Mimra.dmg`, computes file length, generates RFC 822 timestamps, and inserts update items into `appcast.xml`.
+   - Enforced collision protection: Automatically prunes existing items with matching version or build numbers before inserting new releases.
+
+### Consequences
+* **Positive:** Seamless in-app update checks and installations; zero telemetry leakage; full Swift 6 strict concurrency compliance; 100% automated CI release workflow; clean separation between UI, service layer, and Sparkle framework.
+* **Negative:** Staged `Sparkle.framework` dependency added to Xcode project; requires `SPARKL_PRIVATE_KEY` repository secret in GitHub Actions.
