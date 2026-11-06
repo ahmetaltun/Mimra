@@ -40,4 +40,21 @@ mkdir -p "$PROJECT_ROOT/build"
 rm -rf "$PROJECT_ROOT/build/Mimra.app"
 cp -R "/tmp/MimraDerivedData/Build/Products/$CONFIGURATION/Mimra.app" "$PROJECT_ROOT/build/"
 
+echo -e "\n=== 5. Verifying Static Linkage (Zero Dynamic Rust Dependencies) ==="
+DYLIB_DEPS=$(otool -L "$PROJECT_ROOT/build/Mimra.app/Contents/MacOS/Mimra" | grep "mimra_core" || true)
+if [ -n "$DYLIB_DEPS" ]; then
+    echo "ERROR: Mimra binary has dynamic dependency on libmimra_core: $DYLIB_DEPS" >&2
+    echo "Expected pure static linkage via libmimra_core.a." >&2
+    exit 1
+fi
+echo "✓ Verified: Mimra binary is 100% statically linked with libmimra_core.a"
+
+if [ "${2:-}" = "--install" ] || [ "${1:-}" = "--install" ]; then
+    echo -e "\n=== Installing Mimra.app to /Applications ==="
+    pkill -x Mimra 2>/dev/null || true
+    rm -rf /Applications/Mimra.app
+    cp -R "$PROJECT_ROOT/build/Mimra.app" /Applications/
+    echo "✓ Installed freshly built Mimra.app to /Applications/Mimra.app"
+fi
+
 echo -e "\n✓ Mimra.app successfully built at: $PROJECT_ROOT/build/Mimra.app"

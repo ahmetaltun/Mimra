@@ -21,6 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             CoreClient.setSharedInstance(client)
             self.coreClient = client
 
+            // 2. Initialize Update Service with Sparkle 2 (P9-05 / F-062)
+            UpdateService.defaultProviderFactory = {
+                SparkleUpdateProvider()
+            }
+            _ = UpdateService.shared
+
             // Check if resilient recovery occurred on startup (P4-07 / T-DB-01)
             if let report = client.recoveryReport, report.wasRecovered {
                 let backupPath = report.quarantinedBackupPath ?? "Application Support/com.mimra.app"
@@ -117,12 +123,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if OnboardingService.shared.shouldShowOnboarding {
                 OnboardingWindowController.shared.show()
             }
-
-            // 7. Initialize Update Service with Sparkle 2 (P9-05 / F-062)
-            UpdateService.defaultProviderFactory = {
-                SparkleUpdateProvider()
-            }
-            _ = UpdateService.shared
         } catch {
             let errorMsg: String
             if case let CoreError.SchemaMismatch(details) = error {

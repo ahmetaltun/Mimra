@@ -136,7 +136,6 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				10000006 /* libmimra_core.a in Frameworks */,
 				10000045 /* Sparkle.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -468,7 +467,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
-					"-lmimra_core",
+					"$(PROJECT_DIR)/RustCore/target/aarch64-apple-darwin/debug/libmimra_core.a",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.mimra.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -521,7 +520,7 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				MTL_FAST_MATH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
-					"-lmimra_core",
+					"$(PROJECT_DIR)/RustCore/target/aarch64-apple-darwin/release/libmimra_core.a",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.mimra.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";

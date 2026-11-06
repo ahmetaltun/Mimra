@@ -20,9 +20,15 @@ cd "$RUST_DIR"
 if [ "$BUILD_MODE" = "release" ]; then
     cargo build --release --target "$TARGET"
     LIB_PATH="$RUST_DIR/target/$TARGET/release/libmimra_core.a"
+    # Remove target dylib so Apple linker never binds dynamically to build-host paths
+    rm -f "$RUST_DIR/target/$TARGET/release/libmimra_core.dylib"
+    rm -f "$RUST_DIR/target/$TARGET/release/deps/libmimra_core.dylib"
 else
     cargo build --target "$TARGET"
     LIB_PATH="$RUST_DIR/target/$TARGET/debug/libmimra_core.a"
+    # Remove target dylib so Apple linker never binds dynamically to build-host paths
+    rm -f "$RUST_DIR/target/$TARGET/debug/libmimra_core.dylib"
+    rm -f "$RUST_DIR/target/$TARGET/debug/deps/libmimra_core.dylib"
 fi
 
 if [ ! -f "$LIB_PATH" ]; then

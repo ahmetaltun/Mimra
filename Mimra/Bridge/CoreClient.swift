@@ -95,6 +95,10 @@ public actor CoreClient {
 
     /// Standard database directory in Application Support.
     public static var defaultDatabasePath: String {
+        if let envPath = ProcessInfo.processInfo.environment["MIMRA_DATABASE_PATH"], !envPath.isEmpty {
+            return envPath
+        }
+
         let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
@@ -104,11 +108,15 @@ public actor CoreClient {
 
         // Ensure directory exists with 0700 permissions (privacy first)
         if !FileManager.default.fileExists(atPath: mimraDir.path) {
-            try? FileManager.default.createDirectory(
-                at: mimraDir,
-                withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700]
-            )
+            do {
+                try FileManager.default.createDirectory(
+                    at: mimraDir,
+                    withIntermediateDirectories: true,
+                    attributes: [.posixPermissions: 0o700]
+                )
+            } catch {
+                logger.error("Failed to create Application Support directory '\(mimraDir.path, privacy: .public)': \(error.localizedDescription, privacy: .public)")
+            }
         }
 
         return mimraDir.appendingPathComponent("mimra.sqlite").path

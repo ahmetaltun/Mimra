@@ -25,6 +25,12 @@ impl Default for DatabaseConfig {
 /// Opens and configures a SQLite connection at the given path.
 /// Sets `foreign_keys = ON`, `journal_mode = WAL`, and `busy_timeout`.
 pub fn open_database(path: &Path, config: &DatabaseConfig) -> Result<Connection, CoreError> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+    }
+
     let conn = Connection::open(path)?;
 
     // Configure SQLite pragmas for performance, concurrency, and integrity

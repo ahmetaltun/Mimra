@@ -1428,4 +1428,12 @@ xcodebuild -project Mimra.xcodeproj \
     -destination 'platform=macOS,arch=arm64' \
     build
 
+echo -e "\n=== 66. Verifying Pure Static Linkage for RustCore ==="
+DYLIB_DEPS=$(otool -L /tmp/MimraDerivedData/Build/Products/Debug/Mimra.app/Contents/MacOS/Mimra | grep "mimra_core" || true)
+if [ -n "$DYLIB_DEPS" ]; then
+    echo "ERROR: Built Mimra application dynamically links libmimra_core: $DYLIB_DEPS" >&2
+    exit 1
+fi
+echo "✓ Verified: Mimra binary has zero dynamic dependencies on libmimra_core"
+
 echo -e "\n✓ ALL QUALITY GATES, FFI INTEGRATION, SUITE TESTS, AND NATIVE XCODE BUILDS PASSED!"
