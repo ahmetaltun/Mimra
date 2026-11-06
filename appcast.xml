@@ -7,10 +7,10 @@
     <language>en</language>
     <item>
       <title>Mimra 0.1.0</title>
-      <pubDate>Fri, 06 Nov 2026 14:40:25 +0000</pubDate>
+      <pubDate>Fri, 06 Nov 2026 18:20:53 +0000</pubDate>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
       <description>Bug fixes and performance improvements.</description>
-      <enclosure url="https://github.com/ahmetaltun/Mimra/releases/download/v0.1.0/Mimra.dmg" sparkle:version="1" sparkle:shortVersionString="0.1.0" length="3290513" type="application/octet-stream" sparkle:edSignature="8S1KhQHP15Kdwh82BXMHwUVIZ+USAkS234tBQFNoNuolgA+BTctw4xBfSVdctKujHAXuVeyjlnjCb3AnkFy/Dw==" />
+      <enclosure url="https://github.com/ahmetaltun/Mimra/releases/download/v0.1.0/Mimra.dmg" sparkle:version="1" sparkle:shortVersionString="0.1.0" length="7718062" type="application/octet-stream" sparkle:edSignature="8KtA5wko0mW2JIpq+Lf49BiWlLdsVXPfTxbKQPKl1U8RLcfQt0/Q/QQV2IhLRQzYIxuUThVdh6k4zcBfl2AoDA==" />
     </item>
   </channel>
 </rss>
