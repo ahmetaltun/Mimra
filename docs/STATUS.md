@@ -189,6 +189,7 @@
 | **Fix 16** | Precision search: word-boundary acronym matching in fuzzy mode and elimination of false-positive body content matches | Completed | `RustCore/src/domain/search.rs`, `RustCore/src/storage/search.rs`, `tests/fuzzy_search_tests.swift` (`test_search_rejects_unrelated_items_in_fuzzy_mode`, ADR-063) |
 | **Fix 17** | Dimension sliders live value reactivity, reset to defaults action, dynamic window & preview frame resizing, and settings window quit action | Completed | `Mimra/macOS/AppearanceConfiguration.swift`, `SettingsView.swift`, `FloatingPanel.swift`, `FloatingPanelView.swift`, `PreviewCoordinator.swift` (`tests/appearance_settings_tests.swift`, `tests/panel_tests.swift`, ADR-064) |
 | **Fix 18** | Configurable history list hover selection (Immediate, Dwell Delayed, Disabled), decoupled visual hover affordance, and delay presets | Completed | `Mimra/macOS/AppearanceConfiguration.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/UI/Settings/SettingsView.swift` (ADR-065, `F-019`) |
+| **Fix 19** | History retention 2,000 items limit fix: engine startup persistence sync, unified Settings view models, and search candidate limit expansion | Completed | `Mimra/Bridge/CoreClient.swift`, `Mimra/App/AppDelegate.swift`, `Mimra/UI/Settings/SettingsView.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `RustCore/src/storage/search.rs` (`tests/retention_limit_2000_tests.swift`, ADR-069, `F-025`, `F-052`, `F-055`, `T-HIST-06`) |
 
 ---
 

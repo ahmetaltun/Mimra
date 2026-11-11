@@ -1419,7 +1419,36 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 /tmp/mimra_update_service_test_runner
 rm -f /tmp/mimra_update_service_test_runner
 
-echo -e "\n=== 65. Building Native macOS App (Mimra.app) via Xcode ==="
+echo -e "\n=== 65. Running Retention Limit 2000 & Multi-Tab Sync Tests (F-025, F-052, F-055, T-HIST-06) ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PasteCoordinator.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AccessibilityService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardMonitor.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/PanelViewModel.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/FloatingPanelView.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppearanceConfiguration.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/HotkeyConfiguration.swift" \
+    "${SETTINGS_EXTRA_SOURCES[@]}" \
+    "$PROJECT_ROOT/tests/retention_limit_2000_tests.swift" \
+    -o /tmp/mimra_retention_2000_test_runner
+
+/tmp/mimra_retention_2000_test_runner
+rm -f /tmp/mimra_retention_2000_test_runner
+
+echo -e "\n=== 66. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"
 xcodebuild -project Mimra.xcodeproj \
     -scheme Mimra \
@@ -1428,7 +1457,7 @@ xcodebuild -project Mimra.xcodeproj \
     -destination 'platform=macOS,arch=arm64' \
     build
 
-echo -e "\n=== 66. Verifying Pure Static Linkage for RustCore ==="
+echo -e "\n=== 67. Verifying Pure Static Linkage for RustCore ==="
 DYLIB_DEPS=$(otool -L /tmp/MimraDerivedData/Build/Products/Debug/Mimra.app/Contents/MacOS/Mimra | grep "mimra_core" || true)
 if [ -n "$DYLIB_DEPS" ]; then
     echo "ERROR: Built Mimra application dynamically links libmimra_core: $DYLIB_DEPS" >&2

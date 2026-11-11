@@ -17,8 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             // 1. Initialize RustCore storage engine off-main actor
-            let client = try CoreClient()
-            CoreClient.setSharedInstance(client)
+            let client = CoreClient.shared
+            client.loadPersistedRetentionPolicy()
             self.coreClient = client
 
             // 2. Initialize Update Service with Sparkle 2 (P9-05 / F-062)

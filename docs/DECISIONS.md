@@ -2542,3 +2542,44 @@ Mimra distributes notarized macOS disk images (`Mimra.dmg`) via GitHub Releases,
 ### Consequences
 * **Positive:** Seamless in-app update checks and installations; zero telemetry leakage; full Swift 6 strict concurrency compliance; 100% automated CI release workflow; clean separation between UI, service layer, and Sparkle framework.
 * **Negative:** Staged `Sparkle.framework` dependency added to Xcode project; requires `SPARKL_PRIVATE_KEY` repository secret in GitHub Actions.
+
+---
+
+## ADR-069: History Item Limit 2,000 Fix, Engine Startup Persistence Sync, and Multi-Tab Settings Unification
+
+* **Status:** Accepted  
+* **Date:** 2026-11-12  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Users selecting an item count limit of 2,000 in Settings reported being unable to retain or copy more than 200 history items (`F-025`, `F-052`, `F-055`, `T-HIST-06`). Comprehensive codebase analysis revealed four interrelated root causes:
+1. **Engine Startup Persistence Gap:** The multi-dimensional retention policy was stored purely in memory within `RustCore`'s `MimraCoreHandle.retention_policy: Mutex<RetentionPolicy>`. `MimraCoreHandle::open()` initializes `retention_policy` with default `max_count: Some(200)`. Neither `CoreClient.init` nor `AppDelegate.applicationDidFinishLaunching` synchronized the persisted `retentionMaxCount` (or age/size limits) from `UserDefaults.standard` into the Rust handle on app launch. Consequently, every cold launch or restart reverted `RustCore`'s active limit to 200, and `enforce_retention_policy` during `ingest` immediately evicted items exceeding 200.
+2. **Multiple Desynchronized `CoreClient` Instances:** `MimraApp.swift` declared `Settings { SettingsView() }`, which initialized `StorageSettingsViewModel` using `CoreClient.shared` during SwiftUI app initialization. Subsequently, `AppDelegate.applicationDidFinishLaunching` created a second `CoreClient()` instance (`let client = try CoreClient()`) and passed it to `ClipboardMonitor`. As a result, modifications made in `StorageSettingsViewModel` updated the first handle, while `ClipboardMonitor` continued ingesting clipboard captures using the second handle capped at 200.
+3. **Split State Across Settings Tabs:** `GeneralSettingsTab` maintained a separate `@AppStorage("retentionMaxCount")` property, while `StorageSettingsTab` bound directly to `StorageSettingsViewModel.maxCount`. If a user selected 2,000 in `GeneralSettingsTab`, `StorageSettingsViewModel` retained its stale initial value of 200. When the user navigated to `StorageSettingsTab`, the picker showed 200, and clicking "Apply & Enforce Retention" or editing other storage parameters overwrote `retentionMaxCount` back to 200 and evicted items 201–2000.
+4. **Search Candidate Scan Truncation:** In `RustCore/src/storage/search.rs`, recent history retrieval for fuzzy/regex search candidates hardcoded `let recent_limit = if mode == SearchMode::Regex { 500 } else { 200 };`. With history limits up to 2,000 items, items beyond the 200th recent item were excluded from fuzzy acronym matching.
+
+### Decision
+1. **Engine Startup Policy Synchronization (`CoreClient.swift`, `AppDelegate.swift`):**
+   - Added `nonisolated func loadPersistedRetentionPolicy(from defaults: UserDefaults = .standard)` to `CoreClient`.
+   - In `CoreClient.init(databasePath:)`, automatically synchronize the persisted retention policy from `UserDefaults.standard` whenever opening the default production database path.
+   - In `AppDelegate.applicationDidFinishLaunching`, unified `CoreClient` access around `CoreClient.shared` and explicitly invoke `client.loadPersistedRetentionPolicy()`.
+2. **Unified Single Source of Truth in Settings (`SettingsView.swift`):**
+   - Injected `StorageSettingsViewModel` into `GeneralSettingsTab` so both `GeneralSettingsTab` and `StorageSettingsTab` share the exact same `@ObservedObject` view model and bind to `$storageViewModel.maxCount`.
+   - Added bidirectional observation of `UserDefaults.didChangeNotification` in `StorageSettingsViewModel` with a reentrancy guard (`isReloadingFromDefaults`) to synchronize if `UserDefaults` is modified externally.
+   - Synchronous invocation of `coreClient.setRetentionPolicy(policy:)` (which is nonisolated and non-blocking), removing unnecessary asynchronous floating `Task` delays.
+3. **Panel Requery Reactivity (`PanelViewModel.swift`):**
+   - Added observation of `UserDefaults.didChangeNotification` in `PanelViewModel.init`.
+   - Detected changes in `historyLimit` and automatically triggered `loadData()` to refresh displayed item counts immediately when the user changes limits in Settings.
+4. **Search Candidate Limit Expansion (`RustCore/src/storage/search.rs`):**
+   - Updated candidate scan in `search_history_page_with_options` to `let recent_limit = limit.max(if mode == SearchMode::Regex { 500 } else { 200 });`, ensuring queries with limits up to 2,000 items scan all available items for acronym and substring matching.
+5. **Automated Verification (`tests/retention_limit_2000_tests.swift`):**
+   - Added test suite `T-HIST-06` verifying:
+     - 2,000-item retention policy synchronization on startup.
+     - Ingestion of 250 distinct items without truncation at 200.
+     - Cold restart survival and subsequent ingestion up to 251 items without truncation.
+     - Bi-directional view model and `UserDefaults` synchronization.
+     - Downscale eviction to 50 items when explicitly requested.
+
+### Consequences
+* **Positive:** Users can reliably retain and copy up to 2,000 items; limits persist across application restarts; Settings tabs are 100% synchronized with zero stale-state overwrites; search finds items across the full 2,000 item corpus; zero main actor blocking; all 85 Rust unit tests, 67 Swift verification tests, and native Xcode builds pass cleanly.
+* **Negative:** None.

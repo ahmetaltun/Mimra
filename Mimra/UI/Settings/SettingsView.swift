@@ -22,29 +22,35 @@ public final class StorageSettingsViewModel: ObservableObject {
     @Published public var showClearUnpinnedAlert: Bool = false
     @Published public var showClearAllAlert: Bool = false
 
+    private var isReloadingFromDefaults: Bool = false
+
     // Retention policy settings (F-055, P4-05)
     // 0 represents unlimited / disabled for that dimension
     @Published public var maxCount: Int {
         didSet {
+            guard !isReloadingFromDefaults else { return }
             UserDefaults.standard.set(maxCount, forKey: "retentionMaxCount")
             syncPolicyToEngine()
         }
     }
     @Published public var maxAgeDays: Int {
         didSet {
+            guard !isReloadingFromDefaults else { return }
             UserDefaults.standard.set(maxAgeDays, forKey: "retentionMaxAgeDays")
             syncPolicyToEngine()
         }
     }
     @Published public var maxSizeBytes: Int64 {
         didSet {
+            guard !isReloadingFromDefaults else { return }
             UserDefaults.standard.set(maxSizeBytes, forKey: "retentionMaxSizeBytes")
             syncPolicyToEngine()
         }
     }
 
     public init(coreClient: CoreClient? = nil) {
-        self.coreClient = coreClient ?? CoreClient.shared
+        let client = coreClient ?? CoreClient.shared
+        self.coreClient = client
 
         // Load persisted preferences or fallback to sensible defaults
         let savedCount = UserDefaults.standard.object(forKey: "retentionMaxCount") as? Int ?? 200
@@ -57,6 +63,47 @@ public final class StorageSettingsViewModel: ObservableObject {
 
         // Sync initial policy to engine
         syncPolicyToEngine()
+
+        // Observe external changes to UserDefaults
+        NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.reloadFromUserDefaults()
+            }
+        }
+    }
+
+    public func reloadFromUserDefaults() {
+        guard !isReloadingFromDefaults else { return }
+        let savedCount = UserDefaults.standard.object(forKey: "retentionMaxCount") as? Int ?? 200
+        let savedAge = UserDefaults.standard.object(forKey: "retentionMaxAgeDays") as? Int ?? 30
+        let savedSize = UserDefaults.standard.object(forKey: "retentionMaxSizeBytes") as? Int64 ?? (100 * 1024 * 1024)
+
+        var changed = false
+        if self.maxCount != savedCount {
+            isReloadingFromDefaults = true
+            self.maxCount = savedCount
+            isReloadingFromDefaults = false
+            changed = true
+        }
+        if self.maxAgeDays != savedAge {
+            isReloadingFromDefaults = true
+            self.maxAgeDays = savedAge
+            isReloadingFromDefaults = false
+            changed = true
+        }
+        if self.maxSizeBytes != savedSize {
+            isReloadingFromDefaults = true
+            self.maxSizeBytes = savedSize
+            isReloadingFromDefaults = false
+            changed = true
+        }
+        if changed {
+            syncPolicyToEngine()
+        }
     }
 
     public var formattedDbSize: String {
@@ -74,9 +121,7 @@ public final class StorageSettingsViewModel: ObservableObject {
 
     public func syncPolicyToEngine() {
         let policy = currentPolicyDto
-        Task {
-            await coreClient.setRetentionPolicy(policy: policy)
-        }
+        coreClient.setRetentionPolicy(policy: policy)
     }
 
     public func loadStats() async {
@@ -96,7 +141,7 @@ public final class StorageSettingsViewModel: ObservableObject {
         statusMessage = nil
         do {
             let policy = currentPolicyDto
-            await coreClient.setRetentionPolicy(policy: policy)
+            coreClient.setRetentionPolicy(policy: policy)
             let report = try await coreClient.enforceRetention(policy: policy)
             _ = try? await coreClient.checkpointWal()
             await loadStats()
@@ -418,16 +463,17 @@ public struct GeneralSettingsTab: View {
     @ObservedObject var soundService = SoundFeedbackService.shared
     @ObservedObject var accessibilityService = AccessibilityService.shared
     @ObservedObject var localizationService = LocalizationService.shared
+    @ObservedObject var storageViewModel: StorageSettingsViewModel
 
     @AppStorage("pasteAutomatically") private var pasteAutomatically: Bool = true
     @AppStorage("moveToTopOnPaste") private var moveToTopOnPaste: Bool = true
     @AppStorage("clearSystemClipboard") private var clearSystemClipboard: Bool = false
     @AppStorage("cycleModeEnabled") private var cycleModeEnabled: Bool = true
-    @AppStorage("retentionMaxCount") private var maxHistoryItems: Int = 200
 
     let engineVersion: String
 
-    public init(engineVersion: String = coreVersion()) {
+    public init(storageViewModel: StorageSettingsViewModel? = nil, engineVersion: String = coreVersion()) {
+        self.storageViewModel = storageViewModel ?? StorageSettingsViewModel()
         self.engineVersion = engineVersion
     }
 
@@ -480,25 +526,13 @@ public struct GeneralSettingsTab: View {
             }
 
             Section("History Item Limit") {
-                Picker("Maximum History Items", selection: $maxHistoryItems) {
+                Picker("Maximum History Items", selection: $storageViewModel.maxCount) {
                     Text("50 items").tag(50)
                     Text("100 items").tag(100)
                     Text("200 items (Recommended)").tag(200)
                     Text("500 items").tag(500)
                     Text("1,000 items").tag(1000)
                     Text("2,000 items (Maximum Limit)").tag(2000)
-                }
-                .onChange(of: maxHistoryItems) { _, newValue in
-                    let age = UserDefaults.standard.object(forKey: "retentionMaxAgeDays") as? Int ?? 30
-                    let size = UserDefaults.standard.object(forKey: "retentionMaxSizeBytes") as? Int64 ?? (100 * 1024 * 1024)
-                    let policy = RetentionPolicyDto(
-                        maxCount: UInt32(newValue),
-                        maxAgeDays: age > 0 ? UInt32(age) : nil,
-                        maxSizeBytes: size > 0 ? UInt64(size) : nil
-                    )
-                    Task {
-                        await CoreClient.shared.setRetentionPolicy(policy: policy)
-                    }
                 }
 
                 Text("Controls the maximum number of items retained in history (solid limit: 2,000). When exceeded, older unpinned clips are automatically pruned. Pinned items are always preserved.")
@@ -1553,7 +1587,7 @@ public struct SettingsView: View {
             Group {
                 switch selectedCategory {
                 case .general:
-                    GeneralSettingsTab(engineVersion: engineVersion)
+                    GeneralSettingsTab(storageViewModel: storageViewModel, engineVersion: engineVersion)
                 case .appearance:
                     AppearanceSettingsTab()
                 case .hotkeys:

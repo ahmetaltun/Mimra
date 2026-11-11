@@ -365,7 +365,7 @@ pub fn search_history_page_with_options(
 
     // 2. Also retrieve recent history items to support acronyms, literal substrings, and regex scanning
     {
-        let recent_limit = if mode == SearchMode::Regex { 500 } else { 200 };
+        let recent_limit = limit.max(if mode == SearchMode::Regex { 500 } else { 200 });
         let mut stmt = conn.prepare(
             "SELECT id, content_kind, title, search_text, ocr_text, is_pinned, pin_order, pin_key,
                     source_bundle_id, first_copied_at_ms, last_copied_at_ms, copy_count, byte_size

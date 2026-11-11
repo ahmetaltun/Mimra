@@ -140,6 +140,20 @@ public actor CoreClient {
         if let report = report, report.wasRecovered {
             logger.warning("Database was recovered from corruption. Quarantined backup: \(report.quarantinedBackupPath ?? "none", privacy: .public), salvaged items: \(report.salvagedItemsCount)")
         }
+
+        // Automatically synchronize persisted retention policy when opening default application database
+        if databasePath == nil {
+            let savedCount = UserDefaults.standard.object(forKey: "retentionMaxCount") as? Int ?? 200
+            let savedAge = UserDefaults.standard.object(forKey: "retentionMaxAgeDays") as? Int ?? 30
+            let savedSize = UserDefaults.standard.object(forKey: "retentionMaxSizeBytes") as? Int64 ?? (100 * 1024 * 1024)
+
+            let policy = RetentionPolicyDto(
+                maxCount: savedCount > 0 ? UInt32(savedCount) : nil,
+                maxAgeDays: savedAge > 0 ? UInt32(savedAge) : nil,
+                maxSizeBytes: savedSize > 0 ? UInt64(savedSize) : nil
+            )
+            handle.setRetentionPolicy(policy: policy)
+        }
     }
 
     /// Creates an in-memory CoreClient instance, ideal for testing and ephemeral sessions.
@@ -293,12 +307,26 @@ public actor CoreClient {
     }
 
     /// Configures the multi-dimensional history retention policy (count, age, size).
-    public func setRetentionPolicy(policy: RetentionPolicyDto) {
+    public nonisolated func setRetentionPolicy(policy: RetentionPolicyDto) {
+        handle.setRetentionPolicy(policy: policy)
+    }
+
+    /// Synchronizes the persisted retention policy from UserDefaults into the Rust engine.
+    public nonisolated func loadPersistedRetentionPolicy(from defaults: UserDefaults = .standard) {
+        let savedCount = defaults.object(forKey: "retentionMaxCount") as? Int ?? 200
+        let savedAge = defaults.object(forKey: "retentionMaxAgeDays") as? Int ?? 30
+        let savedSize = defaults.object(forKey: "retentionMaxSizeBytes") as? Int64 ?? (100 * 1024 * 1024)
+
+        let policy = RetentionPolicyDto(
+            maxCount: savedCount > 0 ? UInt32(savedCount) : nil,
+            maxAgeDays: savedAge > 0 ? UInt32(savedAge) : nil,
+            maxSizeBytes: savedSize > 0 ? UInt64(savedSize) : nil
+        )
         handle.setRetentionPolicy(policy: policy)
     }
 
     /// Queries the currently configured retention policy.
-    public func getRetentionPolicy() -> RetentionPolicyDto {
+    public nonisolated func getRetentionPolicy() -> RetentionPolicyDto {
         return handle.getRetentionPolicy()
     }
 

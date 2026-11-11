@@ -92,6 +92,7 @@ public final class PanelViewModel: ObservableObject {
         let count = UserDefaults.standard.object(forKey: "retentionMaxCount") as? Int ?? 200
         return UInt32(max(10, min(2000, count > 0 ? count : 2000)))
     }
+    private var lastObservedHistoryLimit: UInt32 = 0
 
     public var onCommitItem: ((HistoryItemSummaryDto, PasteMode, Bool?) -> Void)?
     public var onDismiss: (() -> Void)?
@@ -110,6 +111,16 @@ public final class PanelViewModel: ObservableObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.reloadHoverSettings()
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.reloadSearchSettings()
             }
         }
     }
@@ -166,9 +177,21 @@ public final class PanelViewModel: ObservableObject {
                 needsRequery = true
             }
         }
-        if needsRequery && !searchText.isEmpty {
-            lastSearchQuery = nil
-            triggerSearch()
+        let currentLimit = self.historyLimit
+        if lastObservedHistoryLimit != 0 && lastObservedHistoryLimit != currentLimit {
+            needsRequery = true
+        }
+        lastObservedHistoryLimit = currentLimit
+
+        if needsRequery {
+            if searchText.isEmpty {
+                Task { [weak self] in
+                    await self?.loadData()
+                }
+            } else {
+                lastSearchQuery = nil
+                triggerSearch()
+            }
         }
     }
 
