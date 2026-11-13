@@ -211,10 +211,14 @@ jobs:
           # Preserve newly generated appcast.xml across checkout
           cp appcast.xml "$RUNNER_TEMP/appcast.xml"
           
+          # Discard intermediate build artifacts so working directory is clean
+          git reset --hard HEAD
+          git clean -fd
+          
           # Switch to master branch to avoid detached HEAD refspec errors
           git fetch origin master
           git checkout master
-          git pull --rebase origin master
+          git pull origin master
           
           # Restore updated appcast.xml and push
           cp "$RUNNER_TEMP/appcast.xml" appcast.xml
