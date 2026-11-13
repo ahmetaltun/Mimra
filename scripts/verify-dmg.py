@@ -140,6 +140,18 @@ def verify_dmg(dmg_path: Path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dmg", help="Path to DMG file")
+    parser.add_argument(
+        "--expected-version",
+        dest="expected_version",
+        help="Optional CFBundleShortVersionString assertion",
+        default=None,
+    )
+    parser.add_argument(
+        "--expected-build",
+        dest="expected_build",
+        help="Optional CFBundleVersion assertion",
+        default=None,
+    )
     args = parser.parse_args()
 
     dmg_path = Path(args.dmg).expanduser().resolve()
@@ -147,6 +159,16 @@ def main():
         report = verify_dmg(dmg_path)
         print("\n=== Verification Report ===")
         print(json.dumps(report, indent=2, ensure_ascii=False))
+
+        if args.expected_version and report.get("version") != args.expected_version:
+            raise ValueError(
+                f"Version mismatch: expected '{args.expected_version}', got '{report.get('version')}'"
+            )
+        if args.expected_build and str(report.get("build_version")) != str(args.expected_build):
+            raise ValueError(
+                f"Build version mismatch: expected '{args.expected_build}', got '{report.get('build_version')}'"
+            )
+
         if report.get("codesign_verify") == "failed-or-unsigned":
             print(
                 "\nWARNING: Code signature check did not pass (may be unsigned local build).",

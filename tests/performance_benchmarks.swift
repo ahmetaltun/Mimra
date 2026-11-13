@@ -100,7 +100,7 @@ struct PerformanceBenchmarks {
             // -----------------------------------------------------------------
             print("\n--- 2. Populating corpus for Search Benchmark ---")
             await core.setMaxUnpinned(limit: 5_000)
-            await core.setRetentionPolicy(policy: RetentionPolicyDto(maxCount: 5_000, maxAgeDays: nil, maxSizeBytes: nil))
+            core.setRetentionPolicy(policy: RetentionPolicyDto(maxCount: 5_000, maxAgeDays: nil, maxSizeBytes: nil))
 
             let batchSize = 500
             for batch in 0..<4 {

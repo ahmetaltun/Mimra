@@ -1,7 +1,7 @@
 # Mimra — Project Status & Roadmap Tracker
 
-> **Active Milestone:** Gate G6 Completed — Entering Phase 9 (Packaging & CI)  
-> **Last Updated:** 2026-11-04  
+> **Active Milestone:** Phase 9 (Packaging & CI) Completed — v0.2.0 Release Prepared  
+> **Last Updated:** 2026-11-13  
 > **Target Environment:** macOS 15.0+ (`aarch64-apple-darwin`), Apple Silicon only
 
 ---
@@ -202,6 +202,7 @@
 | **P9-04** | DMG Alignment & Layout Hardening: Top-down coordinate normalization, 2x scale blow-up resolution, `.background` invisibility (`chflags`/`SetFile`), and scrollbar elimination | Completed | `scripts/render_dmg_background.swift`, `scripts/build-dmg.sh`, `scripts/verify-dmg.py`, `packaging/dmg/` (ADR-067) |
 | **P9-03** | GitHub Actions CI/CD Release Workflow: Ephemeral Developer ID keychain, Release arm64 build, Hardened Runtime codesign, `xcrun notarytool` notarization, stapling, and release assets upload | Completed | `.github/workflows/release.yml` (ADR-066) |
 | **P9-05** | Sparkle 2 Update Flow: Protocol-based `UpdateService` abstraction, `SparkleUpdateProvider` driver, Settings Updates tab, status bar item, Ed25519 signing, zero-telemetry policy, and automated appcast pipeline | Completed | `Mimra/macOS/UpdateService.swift`, `SparkleUpdateProvider.swift`, `StatusBarCoordinator.swift`, `SettingsView.swift`, `appcast.xml`, `scripts/generate-appcast.sh`, `tests/update_service_tests.swift` (`F-062`, `T-REL-01`, ADR-068) |
+| **P9-06** | Release v0.2.0 Preparation & Pipeline Hardening: Synchronize version 0.2.0 (Build 2) across Info.plist, Cargo manifests, UniFFI tests; fix detached HEAD CI appcast push, add pre-build version consistency gate, add verify-dmg assertions, update CHANGELOG/docs, and verify zero regressions | Completed | Repository root, `CHANGELOG.md`, `Mimra/Info.plist`, `RustCore/Cargo.toml`, `.github/workflows/release.yml`, `scripts/verify-dmg.py` (ADR-070) |
 
 ---
 

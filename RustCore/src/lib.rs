@@ -586,7 +586,8 @@ mod tests {
     fn test_core_version_is_valid_semver() {
         let version = core_version();
         assert!(!version.is_empty(), "Version must not be empty");
-        assert_eq!(version, "0.1.0");
+        assert_eq!(version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(version, "0.2.0");
     }
 
     #[test]

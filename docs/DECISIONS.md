@@ -2583,3 +2583,47 @@ Users selecting an item count limit of 2,000 in Settings reported being unable t
 ### Consequences
 * **Positive:** Users can reliably retain and copy up to 2,000 items; limits persist across application restarts; Settings tabs are 100% synchronized with zero stale-state overwrites; search finds items across the full 2,000 item corpus; zero main actor blocking; all 85 Rust unit tests, 67 Swift verification tests, and native Xcode builds pass cleanly.
 * **Negative:** None.
+
+---
+
+## ADR-070: Mimra v0.2.0 Release Preparation
+
+* **Status:** Accepted  
+* **Date:** 2026-11-13  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Following the initial v0.1.0 release, multiple critical enhancements, architectural hardenings, and usability fixes were completed across the Mimra codebase:
+1. **Sparkle 2 Software Update Flow (ADR-068):** Native update checks, frequency settings, on-demand updates, and Ed25519 signature verification in `appcast.xml`.
+2. **History Item Retention 2,000-Item Synchronization (ADR-069):** Engine startup persistence restoration from `UserDefaults`, unified `CoreClient.shared` lifecycle, bi-directional settings synchronization, and dynamic search candidate expansion.
+3. **RustCore Pure Static Linkage:** Enforced zero dynamic library dependencies on `libmimra_core` in the `Mimra.app` bundle and corrected Sparkle startup ordering.
+4. **DMG Packaging Alignment Hardening (ADR-067):** Top-down coordinate normalization, Retina 2x scale blow-up resolution, and invisible `.background` staging.
+5. **Swift 6 Strict Concurrency Compliance:** MainActor isolation and `SendableImage` wrappers for image services under Xcode 16.4 / macOS 15.
+6. **Public Documentation & Licensing Suite:** MIT License in `LICENSE` and crate manifests, alongside `README.md`, `PRIVACY.md`, `SECURITY.md`, and `CONTRIBUTING.md`.
+
+To package these milestones into an official production release, project metadata, build configurations, and test suites must be synchronized to version `0.2.0` (Build `2`).
+
+### Decision
+1. **Version Synchronization:**
+   - Update `CFBundleShortVersionString` to `0.2.0` and `CFBundleVersion` to `2` in `Mimra/Info.plist`.
+   - Update package version to `0.2.0` in `RustCore/Cargo.toml` and update `Cargo.lock`.
+   - Synchronize version assertions in `RustCore/src/lib.rs` and `tests/ffi_spike.swift` to `0.2.0`.
+   - Update fallback version string in `Mimra/UI/Settings/SettingsView.swift` to `0.2.0`.
+   - Update GitHub Actions release workflow input default to `v0.2.0`.
+2. **Documentation & Release Notes:**
+   - Document all changes in `CHANGELOG.md` under `[0.2.0] - 2026-11-13`.
+   - Update release badge in `README.md` and supported version matrix in `SECURITY.md`.
+   - Update milestone tracker in `docs/STATUS.md`.
+3. **Comprehensive Quality Verification:**
+   - Verify `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test --all --locked`.
+   - Rebuild static library and regenerate UniFFI Swift bindings.
+   - Run end-to-end test suite (`scripts/test-all.sh`) and release application build (`scripts/build-app.sh release`).
+4. **CI/CD Pipeline Hardening & Sparkle Appcast Sync:**
+   - Enforce pre-build tag/version consistency verification in `.github/workflows/release.yml` so CI fails immediately if `Mimra/Info.plist` or `RustCore/Cargo.toml` do not match the git release tag.
+   - Add `--expected-version` and `--expected-build` assertion flags to `scripts/verify-dmg.py` ensuring packaged DMG payload matches release version metadata before notarization.
+   - Resolve detached HEAD git push failures in GitHub Actions by fetching `origin/master`, checking out `master`, rebasing, and committing/pushing the updated `appcast.xml` directly to `master`.
+   - Strip leading `v` prefixes in `scripts/generate-appcast.sh` for robust URL and version handling.
+
+### Consequences
+* **Positive:** Versioning is strictly aligned across Swift, Rust, Xcode, and CI/CD; automated test harness confirms zero regressions; release artifacts, appcast feeds, and changelogs are prepared and protected against silent packaging mismatches.
+* **Negative:** None.

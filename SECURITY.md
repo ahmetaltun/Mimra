@@ -6,6 +6,7 @@ Mimra is currently maintained for the following versions on supported platforms:
 
 | Version | Supported | Architecture | Target OS |
 |---|---|---|---|
+| `0.2.x` | :white_check_mark: | Apple Silicon (`arm64`) | macOS 15.0+ |
 | `0.1.x` | :white_check_mark: | Apple Silicon (`arm64`) | macOS 15.0+ |
 | `< 0.1.0` | :x: | Any | Unsupported |
 

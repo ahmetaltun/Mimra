@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag Name (e.g. v0.1.0)'
+        description: 'Release Tag Name (e.g. v0.2.0)'
         required: false
-        default: 'v0.1.0'
+        default: 'v0.2.0'
 
 permissions:
   contents: write
@@ -25,6 +25,31 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Verify Release Version Consistency
+        run: |
+          RAW_TAG="${{ github.event.inputs.tag_name || github.ref_name }}"
+          TARGET_VERSION="${RAW_TAG#v}"
+          
+          INFO_VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Mimra/Info.plist)
+          INFO_BUILD=$(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" Mimra/Info.plist)
+          CARGO_VERSION=$(grep '^version = ' RustCore/Cargo.toml | head -n1 | cut -d'"' -f2)
+          
+          echo "=== Release Tag: $RAW_TAG ==="
+          echo "Target Version:     $TARGET_VERSION"
+          echo "Info.plist Version: $INFO_VERSION (Build $INFO_BUILD)"
+          echo "Cargo.toml Version: $CARGO_VERSION"
+          
+          if [ "$INFO_VERSION" != "$TARGET_VERSION" ]; then
+            echo "::error::Version mismatch! Release tag is '$RAW_TAG' (expected $TARGET_VERSION), but Mimra/Info.plist has '$INFO_VERSION'. Ensure the version bump is committed to master before tagging!" >&2
+            exit 1
+          fi
+          
+          if [ "$CARGO_VERSION" != "$TARGET_VERSION" ]; then
+            echo "::error::Version mismatch! Release tag is '$RAW_TAG' (expected $TARGET_VERSION), but RustCore/Cargo.toml has '$CARGO_VERSION'!" >&2
+            exit 1
+          fi
+          echo "✓ All project version declarations match release tag $TARGET_VERSION"
 
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -146,7 +171,9 @@ jobs:
 
       - name: Verify DMG Artifact Integrity
         run: |
-          python3 scripts/verify-dmg.py dist/Mimra.dmg
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" build/Mimra.app/Contents/Info.plist)
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" build/Mimra.app/Contents/Info.plist)
+          python3 scripts/verify-dmg.py dist/Mimra.dmg --expected-version "$VERSION" --expected-build "$BUILD"
 
       - name: Compute Checksums
         run: |
@@ -180,9 +207,27 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Preserve newly generated appcast.xml across checkout
+          cp appcast.xml "$RUNNER_TEMP/appcast.xml"
+          
+          # Switch to master branch to avoid detached HEAD refspec errors
+          git fetch origin master
+          git checkout master
+          git pull --rebase origin master
+          
+          # Restore updated appcast.xml and push
+          cp "$RUNNER_TEMP/appcast.xml" appcast.xml
           git add appcast.xml
-          git commit -m "Update appcast.xml for ${{ github.event.inputs.tag_name || github.ref_name }} [skip ci]" || echo "No changes to commit"
-          git push origin master || echo "Push skipped or not on master branch"
+          
+          if ! git diff --cached --quiet; then
+            RELEASE_TAG="${{ github.event.inputs.tag_name || github.ref_name }}"
+            git commit -m "chore(release): update appcast.xml for $RELEASE_TAG [skip ci]"
+            git push origin master
+            echo "✓ Successfully committed and pushed updated appcast.xml to master branch"
+          else
+            echo "No changes in appcast.xml to commit"
+          fi
 
       - name: Cleanup Ephemeral Keychain
         if: always()

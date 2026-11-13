@@ -8,7 +8,7 @@ struct SpikeRunner {
         // 1. Test version retrieval across FFI
         let version = coreVersion()
         print("RustCore Version via FFI: \(version)")
-        assert(version == "0.1.0", "Version must match Cargo.toml version")
+        assert(version == "0.2.0", "Version must match Cargo.toml version")
 
         // 2. Test BLAKE3 fingerprinting across FFI
         let testData = "Hello Mimra Bridge".data(using: .utf8)!

@@ -6,7 +6,7 @@ Mimra remembers what you copy, finds it instantly with embedded full-text search
 
 [![Platform: macOS 15.0+](https://img.shields.io/badge/platform-macOS%2015.0%2B-blue.svg?style=flat-square)](https://apple.com/macos)
 [![Architecture: arm64](https://img.shields.io/badge/arch-Apple%20Silicon%20(arm64)-orange.svg?style=flat-square)](https://apple.com/mac)
-[![Release: 0.1.0](https://img.shields.io/badge/release-v0.1.0-green.svg?style=flat-square)](https://github.com/ahmetaltun/Mimra/releases/tag/v0.1.0)
+[![Release: 0.2.0](https://img.shields.io/badge/release-v0.2.0-green.svg?style=flat-square)](https://github.com/ahmetaltun/Mimra/releases/tag/v0.2.0)
 [![License: MIT](https://img.shields.io/badge/license-MIT-purple.svg?style=flat-square)](LICENSE)
 
 ---

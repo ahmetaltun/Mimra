@@ -12,6 +12,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 DMG_PATH="${1:-}"
 VERSION="${2:-}"
+VERSION="${VERSION#v}"
 BUILD="${3:-}"
 KEY_INPUT="${4:-}"
 NOTES_FILE="${5:-}"

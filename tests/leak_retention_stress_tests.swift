@@ -77,7 +77,7 @@ struct LeakRetentionStressTests {
                 maxAgeDays: 14,
                 maxSizeBytes: 200_000 // 200 KB cap for unpinned items
             )
-            await core.setRetentionPolicy(policy: retentionPolicy)
+            core.setRetentionPolicy(policy: retentionPolicy)
 
             // -----------------------------------------------------------------
             // Step 4: Synthetic High-Volume Churn (3,000 Ingestion Cycles)
