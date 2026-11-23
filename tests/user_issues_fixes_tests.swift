@@ -208,9 +208,12 @@ struct UserIssuesFixesTests {
         UserDefaults.standard.set(2000, forKey: "retentionMaxCount")
         assert(vm.historyLimit == 2000, "FAIL: historyLimit should be 2000, got \(vm.historyLimit)")
 
-        // Exceeding 2000 is clamped to solid maximum limit of 2000
+        UserDefaults.standard.set(5000, forKey: "retentionMaxCount")
+        assert(vm.historyLimit == 5000, "FAIL: historyLimit should be 5000, got \(vm.historyLimit)")
+
+        // Exceeding 5000 is clamped to solid maximum limit of 5000
         UserDefaults.standard.set(10000, forKey: "retentionMaxCount")
-        assert(vm.historyLimit == 2000, "FAIL: historyLimit should clamp to 2000 maximum, got \(vm.historyLimit)")
+        assert(vm.historyLimit == 5000, "FAIL: historyLimit should clamp to 5000 maximum, got \(vm.historyLimit)")
 
         // Reset to default
         UserDefaults.standard.set(200, forKey: "retentionMaxCount")

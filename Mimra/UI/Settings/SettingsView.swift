@@ -320,7 +320,10 @@ public struct StorageSettingsTab: View {
                     Text("200 items (Recommended)").tag(200)
                     Text("500 items").tag(500)
                     Text("1,000 items").tag(1000)
-                    Text("2,000 items (Maximum Limit)").tag(2000)
+                    Text("2,000 items").tag(2000)
+                    Text("3,000 items").tag(3000)
+                    Text("4,000 items").tag(4000)
+                    Text("5,000 items (Maximum Limit)").tag(5000)
                 }
 
                 Picker("Retention Duration", selection: $viewModel.maxAgeDays) {
@@ -532,10 +535,13 @@ public struct GeneralSettingsTab: View {
                     Text("200 items (Recommended)").tag(200)
                     Text("500 items").tag(500)
                     Text("1,000 items").tag(1000)
-                    Text("2,000 items (Maximum Limit)").tag(2000)
+                    Text("2,000 items").tag(2000)
+                    Text("3,000 items").tag(3000)
+                    Text("4,000 items").tag(4000)
+                    Text("5,000 items (Maximum Limit)").tag(5000)
                 }
 
-                Text("Controls the maximum number of items retained in history (solid limit: 2,000). When exceeded, older unpinned clips are automatically pruned. Pinned items are always preserved.")
+                Text("Controls the maximum number of items retained in history (solid limit: 5,000). When exceeded, older unpinned clips are automatically pruned. Pinned items are always preserved.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

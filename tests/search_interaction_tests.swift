@@ -130,10 +130,59 @@ struct SearchInteractionTests {
         assert(vm.filteredItems.count == 1, "FAIL: Case-insensitive 'BETA' should match 1 item")
         assert(vm.filteredItems.first?.id == "id-2", "FAIL: Matched item should be Beta Clip")
 
+        // Multi-result search when a middle item was previously selected must reset to index 0
+        vm.searchText = ""
+        vm.items = [item1, item2, item3, item4]
+        vm.selectedIndex = 2
+        vm.selectedItemId = item3.id
+        vm.searchText = "Clip"
+        assert(vm.filteredItems.count == 4, "FAIL: Search 'Clip' should match all 4 items")
+        assert(vm.selectedIndex == 0, "FAIL: Search with multiple results must reset selectedIndex to 0, got \(vm.selectedIndex)")
+        assert(vm.selectedItemId == vm.filteredItems.first?.id, "FAIL: Search with multiple results must select the first item")
+
         // Reset search query
         vm.searchText = ""
         assert(vm.filteredItems.count == 4, "FAIL: Clearing search should restore all 4 items")
         print("✓ T-UI-03: Search-as-you-type and automatic selection reset verified")
+
+        // ---------------------------------------------------------------------
+        // 2b. Core performSearch Selection Reset vs Background Refresh (F-019)
+        // ---------------------------------------------------------------------
+        for (offset, label) in ["Alpha", "Beta", "Gamma"].enumerated() {
+            let cap = RawCapture(
+                timestampMs: Int64(10_000 + offset * 100),
+                sourceBundleId: "com.apple.Terminal",
+                representations: [
+                    RawRepresentation(
+                        groupIndex: 0,
+                        uti: "public.utf8-plain-text",
+                        payload: Data("SearchResult \(label)".utf8)
+                    )
+                ]
+            )
+            _ = try! await core.ingest(capture: cap)
+        }
+
+        await vm.loadData()
+        assert(vm.items.count >= 3, "FAIL: Expected at least 3 ingested items")
+        vm.selectedIndex = 2
+        vm.selectedItemId = vm.items[2].id
+
+        await vm.performSearch(query: "SearchResult")
+        assert(vm.items.count == 3, "FAIL: performSearch should return 3 matching items")
+        assert(vm.selectedIndex == 0, "FAIL: New performSearch must select index 0, got \(vm.selectedIndex)")
+        assert(vm.selectedItemId == vm.items.first?.id, "FAIL: New performSearch must select first result")
+
+        // Re-running the exact same query (e.g. background ingest refresh) preserves user's navigation
+        vm.selectNext()
+        assert(vm.selectedIndex == 1, "FAIL: selectNext should move to index 1 in search results")
+        let selectedBeforeRefresh = vm.selectedItemId
+        await vm.performSearch(query: "SearchResult")
+        assert(vm.selectedIndex == 1, "FAIL: Same-query refresh should preserve selectedIndex 1")
+        assert(vm.selectedItemId == selectedBeforeRefresh, "FAIL: Same-query refresh should preserve selectedItemId")
+        vm.items = [item1, item2, item3, item4]
+        vm.selectedIndex = 0
+        print("✓ T-UI-03: performSearch resets to first result on new query and preserves on same-query refresh")
 
         // ---------------------------------------------------------------------
         // 3. Spurious Hover Override Protection (T-UI-03)

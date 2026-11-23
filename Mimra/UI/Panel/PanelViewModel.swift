@@ -9,9 +9,23 @@ import AppKit
 import Foundation
 import QuartzCore
 
+/// Isolated selection state so arrow-key/hover selection changes only re-render visible rows
+/// instead of invalidating the entire 5,000-item list container in `FloatingPanelView`.
+@MainActor
+public final class PanelSelectionState: ObservableObject {
+    @Published public var selectedIndex: Int = 0
+    @Published public var selectedItemId: String?
+    /// Monotonically increasing counter incremented only on keyboard-initiated selection changes
+    /// so ScrollViewReader scrolls to reveal off-screen selection without jumping on mouse hover.
+    @Published public var keyboardScrollGeneration: UInt64 = 0
+
+    public init() {}
+}
+
 @MainActor
 public final class PanelViewModel: ObservableObject {
     public let coreClient: CoreClient
+    public let selectionState = PanelSelectionState()
 
     private var searchTask: Task<Void, Never>?
 
@@ -29,15 +43,11 @@ public final class PanelViewModel: ObservableObject {
             if oldValue != searchText {
                 cancelHoverDwell()
                 rebuildFilteredCache()
-                let targetId = selectedItemId ?? selectedItem?.id
                 let list = cachedFilteredItems
-                if let targetId = targetId,
-                   let foundIndex = list.firstIndex(where: { $0.id == targetId }) {
-                    selectedIndex = foundIndex
-                    selectedItemId = targetId
-                } else {
-                    selectedIndex = 0
-                    selectedItemId = list.first?.id
+                selectedIndex = 0
+                selectedItemId = list.first?.id
+                if !list.isEmpty {
+                    keyboardScrollGeneration &+= 1
                 }
                 triggerSearch()
             }
@@ -48,21 +58,32 @@ public final class PanelViewModel: ObservableObject {
             rebuildFilteredCache()
         }
     }
-    @Published public var selectedIndex: Int = 0 {
-        didSet {
-            notifySelectionChangedIfNeeded()
+    public var selectedIndex: Int {
+        get { selectionState.selectedIndex }
+        set {
+            if selectionState.selectedIndex != newValue {
+                selectionState.selectedIndex = newValue
+                notifySelectionChangedIfNeeded()
+            }
         }
     }
-    @Published public var selectedItemId: String? {
-        didSet {
-            notifySelectionChangedIfNeeded()
+    public var selectedItemId: String? {
+        get { selectionState.selectedItemId }
+        set {
+            if selectionState.selectedItemId != newValue {
+                selectionState.selectedItemId = newValue
+                notifySelectionChangedIfNeeded()
+            }
         }
     }
     private var lastNotifiedSelectionId: String?
 
     /// Monotonically increasing counter incremented only on keyboard-initiated selection changes
     /// so ScrollViewReader scrolls to reveal off-screen selection without jumping on mouse hover.
-    @Published public private(set) var keyboardScrollGeneration: UInt64 = 0
+    public var keyboardScrollGeneration: UInt64 {
+        get { selectionState.keyboardScrollGeneration }
+        set { selectionState.keyboardScrollGeneration = newValue }
+    }
     @Published public var isLoading: Bool = false
     @Published public var stats: StorageStatsDto?
     @Published public var errorMessage: String?
@@ -114,15 +135,18 @@ public final class PanelViewModel: ObservableObject {
 
     // Cached filtered list & section boundary metadata for O(1) row rendering
     private var cachedFilteredItems: [HistoryItemSummaryDto] = []
+    private var cachedIndexById: [String: Int] = [:]
     private var cachedHasPinnedItems: Bool = false
     private var cachedHasUnpinnedItems: Bool = false
     /// Index `i` after which the section divider ("HISTORY" or "PINNED") should be drawn, or `nil` if none.
     public private(set) var sectionDividerAfterIndex: Int? = nil
+    /// Item ID after which the section divider ("HISTORY" or "PINNED") should be drawn, or `nil` if none.
+    public private(set) var sectionDividerAfterItemId: String? = nil
 
-    /// Configured maximum history limit (default 200, bounded between 10 and 2000).
+    /// Configured maximum history limit (default 200, bounded between 10 and 5000).
     public var historyLimit: UInt32 {
         let count = UserDefaults.standard.object(forKey: "retentionMaxCount") as? Int ?? 200
-        return UInt32(max(10, min(2000, count > 0 ? count : 2000)))
+        return UInt32(max(10, min(5000, count > 0 ? count : 5000)))
     }
     private var lastObservedHistoryLimit: UInt32 = 0
 
@@ -243,15 +267,18 @@ public final class PanelViewModel: ObservableObject {
         rebuildSectionMetadata()
     }
 
-    /// Recomputes O(1) pinned/unpinned flags and section transition index in a single pass.
+    /// Recomputes O(1) pinned/unpinned flags, ID->index lookup, and section transition metadata in a single pass.
     private func rebuildSectionMetadata() {
         var hasPin = false
         var hasUnpin = false
         var dividerIdx: Int? = nil
+        var dividerItemId: String? = nil
         let count = cachedFilteredItems.count
+        var indexById = [String: Int](minimumCapacity: count)
 
         for i in 0..<count {
             let item = cachedFilteredItems[i]
+            indexById[item.id] = i
             if item.isPinned {
                 hasPin = true
             } else {
@@ -261,15 +288,25 @@ public final class PanelViewModel: ObservableObject {
                 let nextIsPinned = cachedFilteredItems[i + 1].isPinned
                 if pinArrangement == .top && item.isPinned && !nextIsPinned {
                     dividerIdx = i
+                    dividerItemId = item.id
                 } else if pinArrangement == .bottom && !item.isPinned && nextIsPinned {
                     dividerIdx = i
+                    dividerItemId = item.id
                 }
             }
         }
 
+        cachedIndexById = indexById
         cachedHasPinnedItems = hasPin
         cachedHasUnpinnedItems = hasUnpin
         sectionDividerAfterIndex = dividerIdx
+        sectionDividerAfterItemId = dividerItemId
+    }
+
+    /// Returns 1-based quick-pick shortcut index (1...9) for the given item ID in O(1), or nil.
+    public func shortcutIndex(for itemId: String) -> Int? {
+        guard let idx = cachedIndexById[itemId], idx < 9 else { return nil }
+        return idx + 1
     }
 
     /// Items filtered in real-time (O(1) cached access during SwiftUI list rendering).
@@ -310,6 +347,21 @@ public final class PanelViewModel: ObservableObject {
         if currentId != lastNotifiedSelectionId {
             lastNotifiedSelectionId = currentId
             onSelectionChanged?(current)
+        }
+    }
+
+    /// Applies updated items and selects the first item (index 0) when available.
+    public func applyItemsSelectingFirst(_ newItems: [HistoryItemSummaryDto]) {
+        self.items = newItems
+
+        let list = cachedFilteredItems
+        if list.isEmpty {
+            self.selectedIndex = 0
+            self.selectedItemId = nil
+        } else {
+            self.selectedIndex = 0
+            self.selectedItemId = list[0].id
+            self.keyboardScrollGeneration &+= 1
         }
     }
 
@@ -417,6 +469,18 @@ public final class PanelViewModel: ObservableObject {
         guard index >= 0, index < count else { return }
         selectedIndex = index
         selectedItemId = selectedItem?.id
+    }
+
+    /// Set selection by item ID in O(1) with optional hover guard.
+    public func selectItem(itemId: String, fromHover: Bool = false) {
+        guard let index = cachedIndexById[itemId] else { return }
+        selectIndex(index, fromHover: fromHover)
+    }
+
+    /// Handles mouse enter and exit on history rows by item ID in O(1).
+    public func handleItemHover(itemId: String, isHovered: Bool) {
+        guard let index = cachedIndexById[itemId] else { return }
+        handleItemHover(index: index, isHovered: isHovered)
     }
 
     /// Handles mouse enter and exit on history rows according to active hoverSelectionMode.
@@ -884,6 +948,7 @@ public final class PanelViewModel: ObservableObject {
         let effectiveMode = mode ?? self.searchMode
         let effectiveLimit = limit ?? self.historyLimit
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isNewQuery = trimmed != (self.lastSearchQuery ?? "")
 
         isLoading = true
         regexErrorMessage = nil
@@ -897,7 +962,11 @@ public final class PanelViewModel: ObservableObject {
                     offset: offset
                 )
                 guard currentGen == self.searchGeneration else { return }
-                applyItemsPreservingSelection(loaded)
+                if isNewQuery {
+                    applyItemsSelectingFirst(loaded)
+                } else {
+                    applyItemsPreservingSelection(loaded)
+                }
                 self.lastSearchQuery = ""
             } else {
                 let results = try await coreClient.searchPageWithOptions(
@@ -909,7 +978,11 @@ public final class PanelViewModel: ObservableObject {
                     offset: offset
                 )
                 guard currentGen == self.searchGeneration else { return }
-                applyItemsPreservingSelection(results)
+                if isNewQuery {
+                    applyItemsSelectingFirst(results)
+                } else {
+                    applyItemsPreservingSelection(results)
+                }
                 self.lastSearchQuery = trimmed
             }
             self.isLoading = false

@@ -106,18 +106,18 @@ public struct FloatingPanelView: View {
                 } else {
                     let filtered = viewModel.filteredItems
                     let mixedSections = viewModel.hasMixedPinnedAndUnpinned
-                    let dividerAfterIndex = viewModel.sectionDividerAfterIndex
+                    let firstItemId = filtered.first?.id
+                    let dividerAfterItemId = viewModel.sectionDividerAfterItemId
                     let pinArr = viewModel.pinArrangement
-                    let selectedIdx = viewModel.selectedIndex
                     let isCompactRow = (rowStyleRaw == "compact")
                     let activeHighlightStyle = SearchHighlightStyle(rawValue: searchHighlightStyleRaw) ?? .bold
 
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(spacing: 2) {
-                                ForEach(Array(filtered.enumerated()), id: \.element.id) { index, item in
+                                ForEach(filtered, id: \.id) { item in
                                     // Section Header for top section when mixed pinned & unpinned items exist (P5-07 / F-036, T-UI-10)
-                                    if index == 0 && mixedSections {
+                                    if item.id == firstItemId && mixedSections {
                                         if pinArr == .top && item.isPinned {
                                             HStack {
                                                 Text("PINNED")
@@ -141,52 +141,17 @@ public struct FloatingPanelView: View {
                                         }
                                     }
 
-                                    PanelItemRow(
+                                    SelectablePanelItemRow(
                                         item: item,
-                                        shortcutIndex: index < 9 ? (index + 1) : nil,
-                                        isSelected: index == selectedIdx,
+                                        shortcutIndex: viewModel.shortcutIndex(for: item.id),
+                                        selectionState: viewModel.selectionState,
                                         showColorSwatches: showColorSwatches,
                                         showUrlPreviews: showUrlPreviews,
                                         showSourceAppIcon: showSourceAppIcon,
                                         highlightStyle: activeHighlightStyle,
                                         isCompact: isCompactRow,
-                                        coreClient: viewModel.coreClient,
-                                        onTogglePin: {
-                                            Task {
-                                                _ = await viewModel.togglePin(for: item)
-                                            }
-                                        },
-                                        onSetPinKey: { newKey in
-                                            Task {
-                                                _ = await viewModel.setPinKey(for: item, key: newKey)
-                                            }
-                                        },
-                                        onMovePinUp: {
-                                            Task {
-                                                _ = await viewModel.movePinUp(item: item)
-                                            }
-                                        },
-                                        onMovePinDown: {
-                                            Task {
-                                                _ = await viewModel.movePinDown(item: item)
-                                            }
-                                        },
-                                        onEditPin: {
-                                            Task {
-                                                await viewModel.startEditing(item: item)
-                                            }
-                                        },
-                                        onCommit: { mode, forcePaste in
-                                            viewModel.selectIndex(index, fromHover: false)
-                                            viewModel.commitSelection(mode: mode, forcePaste: forcePaste)
-                                        },
-                                        onDelete: {
-                                            Task {
-                                                _ = await viewModel.deleteItem(itemId: item.id)
-                                            }
-                                        }
+                                        viewModel: viewModel
                                     )
-                                    .equatable()
                                     .id(item.id)
                                     .modifier(PinDragAndDropModifier(
                                         itemId: item.id,
@@ -198,15 +163,15 @@ public struct FloatingPanelView: View {
                                         }
                                     ))
                                     .onHover { isHovered in
-                                        viewModel.handleItemHover(index: index, isHovered: isHovered)
+                                        viewModel.handleItemHover(itemId: item.id, isHovered: isHovered)
                                     }
                                     .onTapGesture {
-                                        viewModel.selectIndex(index, fromHover: false)
+                                        viewModel.selectItem(itemId: item.id, fromHover: false)
                                         viewModel.commitSelection()
                                     }
 
                                     // Stable section divider separating pinned items from history (P5-01 / F-036)
-                                    if index == dividerAfterIndex {
+                                    if item.id == dividerAfterItemId {
                                         HStack {
                                             Text(pinArr == .top ? "HISTORY" : "PINNED")
                                                 .font(.system(size: 9, weight: .bold))
@@ -226,17 +191,12 @@ public struct FloatingPanelView: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
                         }
-                        .onChange(of: viewModel.keyboardScrollGeneration) { _, _ in
-                            let list = viewModel.filteredItems
-                            if viewModel.selectedIndex >= 0 && viewModel.selectedIndex < list.count {
-                                let targetId = list[viewModel.selectedIndex].id
-                                var transaction = Transaction()
-                                transaction.disablesAnimations = true
-                                withTransaction(transaction) {
-                                    proxy.scrollTo(targetId)
-                                }
-                            }
-                        }
+                        .background(
+                            ScrollSelectionObserver(
+                                selectionState: viewModel.selectionState,
+                                proxy: proxy
+                            )
+                        )
                     }
                 }
             }
@@ -466,6 +426,164 @@ struct PinDragAndDropModifier: ViewModifier {
 
 // MARK: - History Item Row Component
 
+/// Observes `PanelSelectionState.keyboardScrollGeneration` without invalidating `FloatingPanelView.body`.
+private struct ScrollSelectionObserver: View {
+    @ObservedObject var selectionState: PanelSelectionState
+    let proxy: ScrollViewProxy
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onChange(of: selectionState.keyboardScrollGeneration) { _, _ in
+                if let targetId = selectionState.selectedItemId {
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        proxy.scrollTo(targetId)
+                    }
+                }
+            }
+    }
+}
+
+/// Isolates selection observation to each materialized row inside `LazyVStack`
+/// so changing selection never triggers a full 5,000-item `ForEach` diff.
+private struct SelectablePanelItemRow: View {
+    let item: HistoryItemSummaryDto
+    let shortcutIndex: Int?
+    @ObservedObject var selectionState: PanelSelectionState
+    let showColorSwatches: Bool
+    let showUrlPreviews: Bool
+    let showSourceAppIcon: Bool
+    let highlightStyle: SearchHighlightStyle
+    let isCompact: Bool
+    let viewModel: PanelViewModel
+
+    var body: some View {
+        PanelItemRow(
+            item: item,
+            shortcutIndex: shortcutIndex,
+            isSelected: selectionState.selectedItemId == item.id,
+            showColorSwatches: showColorSwatches,
+            showUrlPreviews: showUrlPreviews,
+            showSourceAppIcon: showSourceAppIcon,
+            highlightStyle: highlightStyle,
+            isCompact: isCompact,
+            coreClient: viewModel.coreClient,
+            onTogglePin: {
+                Task {
+                    _ = await viewModel.togglePin(for: item)
+                }
+            },
+            onSetPinKey: { newKey in
+                Task {
+                    _ = await viewModel.setPinKey(for: item, key: newKey)
+                }
+            },
+            onMovePinUp: {
+                Task {
+                    _ = await viewModel.movePinUp(item: item)
+                }
+            },
+            onMovePinDown: {
+                Task {
+                    _ = await viewModel.movePinDown(item: item)
+                }
+            },
+            onEditPin: {
+                Task {
+                    await viewModel.startEditing(item: item)
+                }
+            },
+            onCommit: { mode, forcePaste in
+                viewModel.selectItem(itemId: item.id, fromHover: false)
+                viewModel.commitSelection(mode: mode, forcePaste: forcePaste)
+            },
+            onDelete: {
+                Task {
+                    _ = await viewModel.deleteItem(itemId: item.id)
+                }
+            }
+        )
+        .equatable()
+    }
+}
+
+/// Cached display metadata computed lazily when a row actually renders its `body`,
+/// keeping `PanelItemRow.init` lightweight across 5,000+ items.
+@MainActor
+private final class PanelRowDisplayMetadata {
+    let title: String
+    let snippet: String
+    let showColorSwatches: Bool
+    let showUrlPreviews: Bool
+    let parsedColor: HexColorInfo?
+    let parsedUrl: UrlInfo?
+    let displayTitle: String
+    let displaySnippet: String
+    let isMissingOnDisk: Bool
+
+    init(
+        title: String,
+        snippet: String,
+        showColorSwatches: Bool,
+        showUrlPreviews: Bool,
+        parsedColor: HexColorInfo?,
+        parsedUrl: UrlInfo?,
+        displayTitle: String,
+        displaySnippet: String,
+        isMissingOnDisk: Bool
+    ) {
+        self.title = title
+        self.snippet = snippet
+        self.showColorSwatches = showColorSwatches
+        self.showUrlPreviews = showUrlPreviews
+        self.parsedColor = parsedColor
+        self.parsedUrl = parsedUrl
+        self.displayTitle = displayTitle
+        self.displaySnippet = displaySnippet
+        self.isMissingOnDisk = isMissingOnDisk
+    }
+}
+
+@MainActor
+private enum PanelRowMetadataCache {
+    private static let cache: NSCache<NSString, PanelRowDisplayMetadata> = {
+        let c = NSCache<NSString, PanelRowDisplayMetadata>()
+        c.countLimit = 2000
+        return c
+    }()
+
+    static func metadata(
+        for item: HistoryItemSummaryDto,
+        showColorSwatches: Bool,
+        showUrlPreviews: Bool
+    ) -> PanelRowDisplayMetadata {
+        let key = item.id as NSString
+        if let cached = cache.object(forKey: key),
+           cached.title == item.title,
+           cached.snippet == item.snippet,
+           cached.showColorSwatches == showColorSwatches,
+           cached.showUrlPreviews == showUrlPreviews {
+            return cached
+        }
+
+        let meta = PanelRowDisplayMetadata(
+            title: item.title,
+            snippet: item.snippet,
+            showColorSwatches: showColorSwatches,
+            showUrlPreviews: showUrlPreviews,
+            parsedColor: showColorSwatches ? ColorDetector.detect(in: item.title) : nil,
+            parsedUrl: showUrlPreviews ? UrlDetector.detect(in: item.title) : nil,
+            displayTitle: PanelItemRow.computeDisplayTitle(for: item),
+            displaySnippet: PanelItemRow.computeDisplaySnippet(for: item),
+            isMissingOnDisk: item.contentKind == "file_urls" && PanelItemRow.isFileVanished(path: item.snippet)
+        )
+        cache.setObject(meta, forKey: key)
+        return meta
+    }
+}
+
 struct PanelItemRow: View, Equatable {
     let item: HistoryItemSummaryDto
     let shortcutIndex: Int?
@@ -483,13 +601,6 @@ struct PanelItemRow: View, Equatable {
     var onEditPin: (() -> Void)? = nil
     var onCommit: ((PasteMode, Bool?) -> Void)? = nil
     var onDelete: (() -> Void)? = nil
-
-    // Precomputed per-item display metadata to avoid repeated string/URL/color/disk evaluation during render passes
-    private let parsedColor: HexColorInfo?
-    private let parsedUrl: UrlInfo?
-    private let displayTitle: String
-    private let displaySnippet: String
-    private let isMissingOnDisk: Bool
 
     @State private var isHovered: Bool = false
 
@@ -515,10 +626,8 @@ struct PanelItemRow: View, Equatable {
         self.shortcutIndex = shortcutIndex
         self.isSelected = isSelected
         let defaults = UserDefaults.standard
-        let resolvedSwatches = showColorSwatches ?? (defaults.object(forKey: "showColorSwatches") as? Bool ?? true)
-        let resolvedUrls = showUrlPreviews ?? (defaults.object(forKey: "showUrlPreviews") as? Bool ?? true)
-        self.showColorSwatches = resolvedSwatches
-        self.showUrlPreviews = resolvedUrls
+        self.showColorSwatches = showColorSwatches ?? (defaults.object(forKey: "showColorSwatches") as? Bool ?? true)
+        self.showUrlPreviews = showUrlPreviews ?? (defaults.object(forKey: "showUrlPreviews") as? Bool ?? true)
         self.showSourceAppIcon = showSourceAppIcon ?? (defaults.object(forKey: "showSourceAppIcon") as? Bool ?? true)
         self.highlightStyle = highlightStyle ?? (SearchHighlightStyle(rawValue: defaults.string(forKey: "searchHighlightStyle") ?? "") ?? .bold)
         self.isCompact = isCompact ?? ((defaults.string(forKey: "historyRowStyle") ?? "standard") == "compact")
@@ -530,12 +639,6 @@ struct PanelItemRow: View, Equatable {
         self.onEditPin = onEditPin
         self.onCommit = onCommit
         self.onDelete = onDelete
-
-        self.parsedColor = resolvedSwatches ? ColorDetector.detect(in: item.title) : nil
-        self.parsedUrl = resolvedUrls ? UrlDetector.detect(in: item.title) : nil
-        self.displayTitle = Self.computeDisplayTitle(for: item)
-        self.displaySnippet = Self.computeDisplaySnippet(for: item)
-        self.isMissingOnDisk = item.contentKind == "file_urls" && Self.isFileVanished(path: item.snippet)
     }
 
     nonisolated static func == (lhs: PanelItemRow, rhs: PanelItemRow) -> Bool {
@@ -546,16 +649,35 @@ struct PanelItemRow: View, Equatable {
         lhs.showUrlPreviews == rhs.showUrlPreviews &&
         lhs.showSourceAppIcon == rhs.showSourceAppIcon &&
         lhs.highlightStyle == rhs.highlightStyle &&
-        lhs.isCompact == rhs.isCompact &&
-        lhs.isMissingOnDisk == rhs.isMissingOnDisk
+        lhs.isCompact == rhs.isCompact
+    }
+
+    private var displayMetadata: PanelRowDisplayMetadata {
+        PanelRowMetadataCache.metadata(
+            for: item,
+            showColorSwatches: showColorSwatches,
+            showUrlPreviews: showUrlPreviews
+        )
+    }
+
+    private var displayTitle: String {
+        displayMetadata.displayTitle
+    }
+
+    private var displaySnippet: String {
+        displayMetadata.displaySnippet
+    }
+
+    private var isMissingOnDisk: Bool {
+        displayMetadata.isMissingOnDisk
     }
 
     private var detectedColor: HexColorInfo? {
-        parsedColor
+        displayMetadata.parsedColor
     }
 
     private var detectedUrl: UrlInfo? {
-        parsedUrl
+        displayMetadata.parsedUrl
     }
 
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
@@ -982,7 +1104,7 @@ struct PanelItemRow: View, Equatable {
         return hints.joined(separator: ", ")
     }
 
-    private static func computeDisplayTitle(for item: HistoryItemSummaryDto) -> String {
+    fileprivate static func computeDisplayTitle(for item: HistoryItemSummaryDto) -> String {
         if item.contentKind == "file_urls" {
             if item.title.hasPrefix("id=") || item.title.contains("/.file/id=") {
                 let firstLine = item.snippet.components(separatedBy: .newlines).first ?? item.snippet
@@ -995,7 +1117,7 @@ struct PanelItemRow: View, Equatable {
         return item.title.isEmpty ? "Untitled" : item.title
     }
 
-    private static func computeDisplaySnippet(for item: HistoryItemSummaryDto) -> String {
+    fileprivate static func computeDisplaySnippet(for item: HistoryItemSummaryDto) -> String {
         guard item.contentKind == "file_urls" else { return item.snippet }
         let lines = item.snippet.components(separatedBy: .newlines).map { line -> String in
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1014,7 +1136,7 @@ struct PanelItemRow: View, Equatable {
         return lines.joined(separator: "\n")
     }
 
-    private static func isFileVanished(path: String) -> Bool {
+    fileprivate static func isFileVanished(path: String) -> Bool {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
         let firstLine = trimmed.components(separatedBy: .newlines).first ?? trimmed
