@@ -24,8 +24,9 @@ struct PreviewPanelTestsRunner {
         testRapidTogglesStability()
         testMainPanelHideDismissesPreview()
         testScreenParametersNotificationHandling()
+        await testPreviewSyncsWhenSelectedItemDeleted()
 
-        print("=== All Preview Panel Tests PASSED (10/10) ===")
+        print("=== All Preview Panel Tests PASSED (11/11) ===")
     }
 
     // MARK: - Test 1: Geometry Right Placement
@@ -348,5 +349,69 @@ struct PreviewPanelTestsRunner {
         coordinator.hide()
 
         print("  -> Passed screen parameters notification check.")
+    }
+
+    // MARK: - Test 11: Preview Syncs When Selected Item Is Deleted
+
+    static func testPreviewSyncsWhenSelectedItemDeleted() async {
+        print("  [Test 11] Preview syncs to replacement item when selected item is deleted...")
+
+        let tempDb = "/tmp/mimra_prev_del_test_\(UUID().uuidString).sqlite"
+        defer {
+            try? FileManager.default.removeItem(atPath: tempDb)
+        }
+
+        do {
+            let client = try CoreClient(databasePath: tempDb)
+            let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+            for i in 0..<3 {
+                let cap = RawCapture(
+                    timestampMs: nowMs + Int64(i * 100),
+                    sourceBundleId: "com.apple.Safari",
+                    representations: [
+                        RawRepresentation(groupIndex: 0, uti: "public.utf8-plain-text", payload: "Preview Delete Item \(i)".data(using: .utf8)!)
+                    ]
+                )
+                _ = try await client.ingest(capture: cap)
+            }
+
+            let panelCoord = PanelCoordinator(coreClient: client)
+            _ = panelCoord.getOrCreatePanel()
+            await panelCoord.viewModel.loadData()
+
+            assert(panelCoord.viewModel.filteredItems.count == 3, "Expected 3 items loaded")
+            let firstId = panelCoord.viewModel.filteredItems[0].id
+            let secondId = panelCoord.viewModel.filteredItems[1].id
+            let thirdId = panelCoord.viewModel.filteredItems[2].id
+
+            panelCoord.togglePreview()
+            assert(panelCoord.previewCoordinator.isPreviewVisible, "Preview must be visible")
+            assert(panelCoord.previewCoordinator.currentItem?.id == firstId, "Preview must initially show first item")
+
+            // Delete item at index 0; index stays 0 while second item takes its place
+            let deletedFirst = await panelCoord.viewModel.deleteSelectedItem()
+            assert(deletedFirst, "Deleting first item must succeed")
+            assert(panelCoord.viewModel.selectedIndex == 0, "Selected index must remain 0")
+            assert(panelCoord.viewModel.selectedItem?.id == secondId, "Selected item must advance to replacement item")
+            assert(panelCoord.previewCoordinator.currentItem?.id == secondId, "Preview must sync to replacement item instead of showing deleted item")
+
+            // Delete item at index 0 again; third item takes its place
+            let deletedSecond = await panelCoord.viewModel.deleteSelectedItem()
+            assert(deletedSecond, "Deleting second item must succeed")
+            assert(panelCoord.viewModel.selectedIndex == 0, "Selected index must remain 0")
+            assert(panelCoord.previewCoordinator.currentItem?.id == thirdId, "Preview must sync to third item")
+
+            // Delete final item; list becomes empty and preview must clear currentItem
+            let deletedThird = await panelCoord.viewModel.deleteSelectedItem()
+            assert(deletedThird, "Deleting final item must succeed")
+            assert(panelCoord.viewModel.filteredItems.isEmpty, "List must now be empty")
+            assert(panelCoord.previewCoordinator.currentItem == nil, "Preview currentItem must be nil when list is empty")
+
+            panelCoord.hide()
+        } catch {
+            fatalError("Failed in testPreviewSyncsWhenSelectedItemDeleted: \(error)")
+        }
+
+        print("  -> Passed preview sync on selected item deletion check.")
     }
 }

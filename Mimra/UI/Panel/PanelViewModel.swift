@@ -50,12 +50,15 @@ public final class PanelViewModel: ObservableObject {
     }
     @Published public var selectedIndex: Int = 0 {
         didSet {
-            if oldValue != selectedIndex {
-                onSelectionChanged?(selectedItem)
-            }
+            notifySelectionChangedIfNeeded()
         }
     }
-    @Published public var selectedItemId: String?
+    @Published public var selectedItemId: String? {
+        didSet {
+            notifySelectionChangedIfNeeded()
+        }
+    }
+    private var lastNotifiedSelectionId: String?
 
     /// Monotonically increasing counter incremented only on keyboard-initiated selection changes
     /// so ScrollViewReader scrolls to reveal off-screen selection without jumping on mouse hover.
@@ -297,6 +300,17 @@ public final class PanelViewModel: ObservableObject {
         let list = cachedFilteredItems
         guard !list.isEmpty, selectedIndex >= 0, selectedIndex < list.count else { return nil }
         return list[selectedIndex]
+    }
+
+    /// Emits `onSelectionChanged` whenever the effective selected item ID changes,
+    /// including when deleting an item causes the next item to take the same `selectedIndex`.
+    private func notifySelectionChangedIfNeeded() {
+        let current = selectedItem
+        let currentId = current?.id
+        if currentId != lastNotifiedSelectionId {
+            lastNotifiedSelectionId = currentId
+            onSelectionChanged?(current)
+        }
     }
 
     /// Applies updated items while preserving the selected item by ID (Definition of Done: P4-04).

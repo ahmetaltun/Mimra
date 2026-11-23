@@ -108,34 +108,60 @@ public struct NativeTextPreviewView: NSViewRepresentable {
             let targetFont = isMonospaced
                 ? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
                 : NSFont.systemFont(ofSize: fontSize)
+            let plainAttributes: [NSAttributedString.Key: Any] = [
+                .font: targetFont,
+                .foregroundColor: NSColor.textColor
+            ]
 
             let textChanged = textView.string != text
-            if textChanged || textView.typingAttributes[.backgroundColor] != nil || hasMixedAttributes(textView) {
+            if textChanged || hasNonPlainAttributes(textView, expectedFont: targetFont) {
                 textView.textStorage?.setAttributedString(NSAttributedString(
                     string: text,
-                    attributes: [
-                        .font: targetFont,
-                        .foregroundColor: NSColor.textColor
-                    ]
+                    attributes: plainAttributes
                 ))
                 textView.font = targetFont
+                textView.textColor = .textColor
+                textView.typingAttributes = plainAttributes
                 textView.sizeToFit()
                 if textChanged {
                     scrollView.contentView.scroll(to: .zero)
-                    scrollView.reflectScrolledClipView(scrollView.contentView)
                 }
-            } else if textView.font != targetFont {
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+            } else if textView.font != targetFont || textView.typingAttributes[.backgroundColor] != nil {
                 textView.font = targetFont
+                textView.textColor = .textColor
+                textView.typingAttributes = plainAttributes
                 textView.sizeToFit()
             }
         }
     }
 
-    private func hasMixedAttributes(_ textView: NSTextView) -> Bool {
+    private func hasNonPlainAttributes(_ textView: NSTextView, expectedFont: NSFont) -> Bool {
         guard let storage = textView.textStorage, storage.length > 0 else { return false }
         var effectiveRange = NSRange(location: 0, length: 0)
-        _ = storage.attributes(at: 0, effectiveRange: &effectiveRange)
-        return effectiveRange.length < storage.length
+        let attrs = storage.attributes(at: 0, effectiveRange: &effectiveRange)
+        if effectiveRange.length < storage.length {
+            return true
+        }
+        for (key, value) in attrs {
+            switch key {
+            case .font:
+                if (value as? NSFont) != expectedFont {
+                    return true
+                }
+            case .foregroundColor:
+                if (value as? NSColor) != NSColor.textColor {
+                    return true
+                }
+            case .paragraphStyle:
+                if let style = value as? NSParagraphStyle, style != NSParagraphStyle.default {
+                    return true
+                }
+            default:
+                return true
+            }
+        }
+        return false
     }
 
     public func makeNSView(context: Context) -> NSScrollView {

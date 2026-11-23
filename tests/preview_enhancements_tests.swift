@@ -130,6 +130,59 @@ struct PreviewEnhancementsTestRunner {
         assertEqual(viewState.isFormattedMode, false, "resetForNewItem should restore default")
         assertEqual(ImagePreviewService.shared.maxPixelSize, 3840, "ImagePreviewService should support 4K zoom clarity")
 
+        // 10. NativeTextPreviewView: Returning from Formatted (uniform backgroundColor / paragraphStyle / mixed RTF) to Original
+        do {
+            let plainText = "Uniform rich text snippet"
+            let originalView = NativeTextPreviewView(text: plainText)
+            let scrollView = originalView.makeScrollView()
+            guard let textView = scrollView.documentView as? NSTextView else {
+                assertTrue(false, "Document view should be NSTextView")
+                return
+            }
+
+            // Switch to Formatted view with uniform backgroundColor + foregroundColor + paragraphStyle
+            let customStyle = NSMutableParagraphStyle()
+            customStyle.lineSpacing = 6
+            let uniformRichAttr = NSAttributedString(
+                string: plainText,
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 12),
+                    .foregroundColor: NSColor.systemRed,
+                    .backgroundColor: NSColor.systemYellow,
+                    .paragraphStyle: customStyle,
+                    .underlineStyle: NSUnderlineStyle.single.rawValue
+                ]
+            )
+            let formattedView = NativeTextPreviewView(text: plainText, attributedText: uniformRichAttr)
+            formattedView.updateScrollView(scrollView)
+
+            let formattedBg = textView.textStorage?.attribute(.backgroundColor, at: 0, effectiveRange: nil) as? NSColor
+            assertTrue(formattedBg == NSColor.systemYellow, "Formatted view should apply uniform background color")
+
+            // Return to Original view (attributedText == nil, same string)
+            originalView.updateScrollView(scrollView)
+
+            let storage = textView.textStorage!
+            var effectiveRange = NSRange(location: 0, length: 0)
+            let restoredAttrs = storage.attributes(at: 0, effectiveRange: &effectiveRange)
+            assertEqual(effectiveRange.length, storage.length, "Restored original view should have uniform plain attributes")
+            assertTrue(restoredAttrs[.backgroundColor] == nil, "Returning to Original view must clear uniform backgroundColor")
+            assertTrue(restoredAttrs[.underlineStyle] == nil, "Returning to Original view must clear underlineStyle")
+            assertTrue((restoredAttrs[.foregroundColor] as? NSColor) == NSColor.textColor, "Returning to Original view must restore NSColor.textColor")
+            assertTrue((restoredAttrs[.font] as? NSFont) == NSFont.systemFont(ofSize: 12), "Returning to Original view must restore default font")
+            assertTrue(restoredAttrs[.paragraphStyle] == nil, "Returning to Original view must clear custom paragraphStyle")
+
+            // Also test HTML formatted -> Original (uniform 12.5pt + labelColor + custom lineSpacing)
+            let htmlAttr = RichTextAttributedRenderer.renderHtml("<p>Uniform rich text snippet</p>")
+            let htmlFormattedView = NativeTextPreviewView(text: plainText, attributedText: htmlAttr)
+            htmlFormattedView.updateScrollView(scrollView)
+            originalView.updateScrollView(scrollView)
+
+            let afterHtmlAttrs = storage.attributes(at: 0, effectiveRange: nil)
+            assertTrue((afterHtmlAttrs[.font] as? NSFont) == NSFont.systemFont(ofSize: 12), "Returning from HTML formatted view must restore 12pt font")
+            assertTrue(afterHtmlAttrs[.paragraphStyle] == nil, "Returning from HTML formatted view must clear HTML paragraphStyle")
+        }
+
         print("✅ All Preview Window Enhancements Tests PASSED!")
     }
 }
