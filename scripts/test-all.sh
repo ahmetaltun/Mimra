@@ -17,6 +17,11 @@ PREVIEW_SOURCES=(
     "$PROJECT_ROOT/Mimra/UI/Preview/PreviewBoundsCalculator.swift"
     "$PROJECT_ROOT/Mimra/UI/Preview/PreviewPanel.swift"
     "$PROJECT_ROOT/Mimra/UI/Preview/NativeTextPreviewView.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/TextFormatDetector.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/TextFormatters.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/PreviewInspectorCards.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/FilePreviewView.swift"
+    "$PROJECT_ROOT/Mimra/UI/Preview/InteractiveImageCanvasView.swift"
     "$PROJECT_ROOT/Mimra/UI/Preview/ImagePreviewService.swift"
     "$PROJECT_ROOT/Mimra/UI/Preview/ImagePreviewView.swift"
     "$PROJECT_ROOT/Mimra/UI/Preview/PreviewContainerView.swift"
@@ -1020,6 +1025,8 @@ swiftc -module-cache-path /tmp/swift-module-cache \
     "$PROJECT_ROOT/Mimra/macOS/ClipboardTypeConfiguration.swift" \
     "$PROJECT_ROOT/Mimra/macOS/PrivacyFilter.swift" \
     "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Preview/NativeTextPreviewView.swift" \
+    "$PROJECT_ROOT/Mimra/UI/Preview/InteractiveImageCanvasView.swift" \
     "$PROJECT_ROOT/Mimra/UI/Preview/ImagePreviewService.swift" \
     "$PROJECT_ROOT/Mimra/UI/Preview/ImagePreviewView.swift" \
     "$PROJECT_ROOT/tests/ocr_results_tests.swift" \
@@ -1447,6 +1454,28 @@ swiftc -module-cache-path /tmp/swift-module-cache \
 
 /tmp/mimra_retention_2000_test_runner
 rm -f /tmp/mimra_retention_2000_test_runner
+
+echo -e "\n=== 65b. Running Preview Window Enhancements Tests ==="
+swiftc -module-cache-path /tmp/swift-module-cache \
+    -strict-concurrency=complete \
+    -warnings-as-errors \
+    -import-objc-header "$PROJECT_ROOT/Generated/mimra_coreFFI.h" \
+    -I "$PROJECT_ROOT/Generated" \
+    -L "$PROJECT_ROOT/RustCore/target/aarch64-apple-darwin/debug" \
+    -lmimra_core \
+    "$PROJECT_ROOT/Generated/mimra_core.swift" \
+    "$PROJECT_ROOT/Mimra/Bridge/CoreClient.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ClipboardProvenance.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/OCRService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/ImageThumbnailService.swift" \
+    "$PROJECT_ROOT/Mimra/macOS/AppIconService.swift" \
+    "${PREVIEW_SOURCES[@]}" \
+    "$PROJECT_ROOT/Mimra/UI/Panel/ColorAndUrlPreview.swift" \
+    "$PROJECT_ROOT/tests/preview_enhancements_tests.swift" \
+    -o /tmp/mimra_preview_enhancements_runner
+
+/tmp/mimra_preview_enhancements_runner
+rm -f /tmp/mimra_preview_enhancements_runner
 
 echo -e "\n=== 66. Building Native macOS App (Mimra.app) via Xcode ==="
 cd "$PROJECT_ROOT"

@@ -181,6 +181,18 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             let p = self.getOrCreatePanel()
             self.previewCoordinator.handleSelectionChanged(item: item, parent: p)
         }
+        self.previewCoordinator.onPasteItem = { [weak self] item in
+            self?.handleItemCommit(item: item, mode: .original, forcePaste: nil)
+        }
+        self.previewCoordinator.onPastePlainItem = { [weak self] item in
+            self?.handleItemCommit(item: item, mode: .plainText, forcePaste: nil)
+        }
+        self.previewCoordinator.onEditPinItem = { [weak self] item in
+            guard let self = self, item.isPinned else { return }
+            Task {
+                await self.viewModel.startEditing(item: item)
+            }
+        }
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
@@ -574,6 +586,29 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
                     handleItemCommit(item: matchedItem, mode: mode, forcePaste: forcePaste)
                     return true
                 }
+            }
+        }
+
+        // 16b. Preview Formatter & Image Zoom Shortcuts when preview is visible
+        if previewCoordinator.isPreviewVisible &&
+           event.modifierFlags.contains(.option) &&
+           !event.modifierFlags.contains(.command) &&
+           !event.modifierFlags.contains(.control) {
+            switch event.keyCode {
+            case 3: // Option-F: Toggle Original / Formatted text view
+                previewCoordinator.toggleFormattedMode()
+                return true
+            case 24, 69: // Option-= / Option-+ / Keypad +: Zoom In
+                previewCoordinator.zoomIn()
+                return true
+            case 27, 78: // Option-- / Keypad -: Zoom Out
+                previewCoordinator.zoomOut()
+                return true
+            case 29, 82: // Option-0 / Keypad 0: Reset Zoom (Fit)
+                previewCoordinator.resetZoom()
+                return true
+            default:
+                break
             }
         }
 

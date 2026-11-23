@@ -666,6 +666,7 @@ public struct AppearanceSettingsTab: View {
     @AppStorage("previewDisplayMode") private var previewDisplayModeRaw: String = PreviewDisplayMode.manual.rawValue
     @AppStorage("previewAutoOpenEnabled") private var previewAutoOpenEnabled: Bool = false
     @AppStorage("previewDelayMs") private var previewDelayMs: Int = 400
+    @AppStorage("defaultToFormattedPreview") private var defaultToFormattedPreview: Bool = false
 
     // Mouse hover selection preferences
     @AppStorage("hoverSelectionMode") private var hoverSelectionModeRaw: String = HoverSelectionMode.immediate.rawValue
@@ -841,6 +842,12 @@ public struct AppearanceSettingsTab: View {
                         Text("Slow (1000 ms)").tag(1000)
                     }
                 }
+
+                Toggle("Open structured text in Formatted view by default", isOn: $defaultToFormattedPreview)
+
+                Text("When enabled, Markdown, JSON, and Rich Text items open in Formatted view automatically. You can always switch between Original and Formatted in the preview toolbar (⌥F).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Text("Shortcut: Toggle preview anytime inside history using ⌃Space, ⌥Space, or ⌘Y.")
                     .font(.caption)
@@ -1488,6 +1495,7 @@ public struct SettingsView: View {
     @AppStorage("previewDisplayMode") private var previewDisplayModeRaw: String = PreviewDisplayMode.manual.rawValue
     @AppStorage("previewAutoOpenEnabled") private var previewAutoOpenEnabled: Bool = false
     @AppStorage("previewDelayMs") private var previewDelayMs: Int = 400
+    @AppStorage("defaultToFormattedPreview") private var defaultToFormattedPreview: Bool = false
 
     // Search and sorting preferences (P4-04 / F-019, F-024, F-050, F-054)
     @AppStorage("searchHighlightStyle") private var searchHighlightStyleRaw: String = SearchHighlightStyle.bold.rawValue

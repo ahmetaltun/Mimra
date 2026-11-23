@@ -65,6 +65,11 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		10000043 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000043 /* UpdateService.swift */; };
 		10000044 /* SparkleUpdateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000044 /* SparkleUpdateProvider.swift */; };
 		10000045 /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 20000045 /* Sparkle.framework */; };
+		10000051 /* TextFormatDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000051 /* TextFormatDetector.swift */; };
+		10000052 /* TextFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000052 /* TextFormatters.swift */; };
+		10000053 /* PreviewInspectorCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000053 /* PreviewInspectorCards.swift */; };
+		10000054 /* FilePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000054 /* FilePreviewView.swift */; };
+		10000055 /* InteractiveImageCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000055 /* InteractiveImageCanvasView.swift */; };
 		10000046 /* Sparkle.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 20000045 /* Sparkle.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -115,6 +120,11 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 		20000043 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		20000044 /* SparkleUpdateProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateProvider.swift; sourceTree = "<group>"; };
 		20000045 /* Sparkle.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Sparkle.framework; path = Frameworks/Sparkle.framework; sourceTree = "<group>"; };
+		20000051 /* TextFormatDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatDetector.swift; sourceTree = "<group>"; };
+		20000052 /* TextFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatters.swift; sourceTree = "<group>"; };
+		20000053 /* PreviewInspectorCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewInspectorCards.swift; sourceTree = "<group>"; };
+		20000054 /* FilePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewView.swift; sourceTree = "<group>"; };
+		20000055 /* InteractiveImageCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractiveImageCanvasView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -306,6 +316,11 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				20000028 /* NativeTextPreviewView.swift */,
 				20000029 /* ImagePreviewService.swift */,
 				20000030 /* ImagePreviewView.swift */,
+				20000051 /* TextFormatDetector.swift */,
+				20000052 /* TextFormatters.swift */,
+				20000053 /* PreviewInspectorCards.swift */,
+				20000054 /* FilePreviewView.swift */,
+				20000055 /* InteractiveImageCanvasView.swift */,
 			);
 			path = Preview;
 			sourceTree = "<group>";
@@ -412,6 +427,11 @@ PBXPROJ_CONTENT = """// !$*UTF8*$!
 				10000037 /* OnboardingView.swift in Sources */,
 				10000043 /* UpdateService.swift in Sources */,
 				10000044 /* SparkleUpdateProvider.swift in Sources */,
+				10000051 /* TextFormatDetector.swift in Sources */,
+				10000052 /* TextFormatters.swift in Sources */,
+				10000053 /* PreviewInspectorCards.swift in Sources */,
+				10000054 /* FilePreviewView.swift in Sources */,
+				10000055 /* InteractiveImageCanvasView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

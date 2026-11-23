@@ -160,6 +160,7 @@ public final class AppearanceConfiguration: ObservableObject {
     public static let previewWidthKey = "previewWidth"
     public static let hoverSelectionModeKey = "hoverSelectionMode"
     public static let hoverSelectionDelayMsKey = "hoverSelectionDelayMs"
+    public static let defaultToFormattedPreviewKey = "defaultToFormattedPreview"
     public static let lastSavedOriginXKey = "lastSavedOriginX"
     public static let lastSavedOriginYKey = "lastSavedOriginY"
 
@@ -306,6 +307,16 @@ public final class AppearanceConfiguration: ObservableObject {
         }
         set {
             userDefaults.set(newValue, forKey: Self.hoverSelectionDelayMsKey)
+            notifyChange()
+        }
+    }
+
+    /// Whether structured text (Markdown, JSON, Rich Text) opens in Formatted view by default.
+    /// Defaults to false (Original view).
+    public var defaultToFormattedPreview: Bool {
+        get { userDefaults.bool(forKey: Self.defaultToFormattedPreviewKey) }
+        set {
+            userDefaults.set(newValue, forKey: Self.defaultToFormattedPreviewKey)
             notifyChange()
         }
     }

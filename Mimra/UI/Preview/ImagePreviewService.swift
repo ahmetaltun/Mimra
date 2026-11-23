@@ -103,7 +103,7 @@ public actor ImagePreviewService {
     private var inFlightTasks: [String: Task<ImagePreviewPayload?, Never>] = [:]
 
     public init(
-        maxPixelSize: Int = 1600,
+        maxPixelSize: Int = 3840,
         countLimit: Int = 60,
         totalCostLimitBytes: Int = 128 * 1024 * 1024 // 128 MB
     ) {

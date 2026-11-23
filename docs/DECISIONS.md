@@ -2695,3 +2695,28 @@ Root cause analysis and WindowServer z-order inspection (`CGWindowListCopyWindow
 ### Consequences
 * **Positive:** Clicking the bottom-right settings icon (or pressing `⌘,` or `Option-Shift-Click` on the menu bar item) always presents the Settings window in front of all other application windows; switching to another app afterwards still allows that app to come in front of Settings normally.
 * **Negative:** None.
+
+---
+
+## ADR-073: Preview Window Interactive Image Navigation, Zero-WebView Formatters, and Inspector Cards
+
+* **Status:** Accepted  
+* **Date:** 2026-11-23  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+The slideout preview panel (`PreviewContainerView`, `ImagePreviewView`, `NativeTextPreviewView`) rendered images statically without zoom/pan navigation, displayed all text (including Markdown, JSON, RTF, and HTML) as raw plain text, and fell back to generic metadata for color codes, URLs, and file references.
+
+### Decision
+1. **Interactive Image Canvas (`InteractiveImageCanvasView.swift`, `ImagePreviewService.swift`, `ImagePreviewView.swift`):**
+   - Wrapped AppKit `NSScrollView` (`allowsMagnification = true`, `minMagnification = 0.15`, `maxMagnification = 8.0`) with a `CenteringClipView` and `PannableImageDocumentView` so trackpad pinch-to-zoom, click-and-drag panning, double-click Fit/1:1 toggle, and `Option+Scroll` work smoothly even when `PreviewPanel` is non-key (`canBecomeKey = false`).
+   - Added floating Zoom HUD controls (`-`, `%`, `+`, `Fit`, `1:1`), keyboard shortcuts (`⌥+`/`⌥-`/`⌥0`), 4K `maxPixelSize = 3840` preview decoding, and an OCR view mode switcher (`Split`, `Image`, `OCR Text`).
+2. **Zero-WebView Format Detection & Native Formatters (`TextFormatDetector.swift`, `TextFormatters.swift`, `NativeTextPreviewView.swift`):**
+   - Implemented deterministic, offline format detection (`DetectedTextFormat`: `.plain`, `.markdown`, `.json`, `.rtf`, `.html`) and native `NSAttributedString` renderers (`MarkdownAttributedRenderer`, `JsonTextFormatter`, `RichTextAttributedRenderer`) with zero `WKWebView` usage and zero network requests.
+   - Preview defaults to **Original** view (`AppearanceConfiguration.defaultToFormattedPreview = false`), configurable in `SettingsView` -> `Appearance` -> `Slideout Preview`, with an **Original | Formatted** switch (`⌥F`) and a **Copy** choice menu (`Copy Formatted` vs. `Copy Original Text`) when in Formatted mode.
+3. **Color, URL & File Inspector Cards + Action Footer (`PreviewInspectorCards.swift`, `FilePreviewView.swift`, `PreviewContainerView.swift`, `PreviewCoordinator.swift`, `FloatingPanel.swift`):**
+   - Added `ColorInspectorCard` (large swatch, WCAG AA/AAA contrast badges, one-click HEX/RGB/HSL/SwiftUI/NSColor copy pills), `UrlInspectorCard` (parsed query parameters + Copy Without Query), `FilePreviewView` (Finder icon, existence badge, Reveal in Finder, Copy Path, bounded inline preview), and footer quick actions (`Paste`, `Plain`, `Edit`, `Save As…`).
+
+### Consequences
+* **Positive:** Rich, keyboard-first inspection for images, Markdown, JSON, RTF/HTML, colors, URLs, and files while strictly preserving Mimra's zero-WebView, zero-network, and non-activating panel guarantees.
+* **Negative:** None.

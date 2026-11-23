@@ -82,8 +82,12 @@ public final class PreviewCoordinator: NSObject {
     public private(set) var currentItem: HistoryItemSummaryDto?
     public private(set) weak var parentPanel: FloatingPanel?
     public let coreClient: CoreClient?
+    public let viewState = PreviewViewState()
 
     public var onVisibilityChanged: ((Bool) -> Void)?
+    public var onPasteItem: ((HistoryItemSummaryDto) -> Void)?
+    public var onPastePlainItem: ((HistoryItemSummaryDto) -> Void)?
+    public var onEditPinItem: ((HistoryItemSummaryDto) -> Void)?
 
     public init(coreClient: CoreClient? = nil) {
         self.coreClient = coreClient
@@ -130,11 +134,24 @@ public final class PreviewCoordinator: NSObject {
         let rootView = PreviewContainerView(
             item: currentItem,
             coreClient: coreClient,
+            viewState: viewState,
             onClose: { [weak self] in
                 self?.hide()
             },
             onFullTextLoaded: { [weak self] fullText in
                 self?.handleFullTextLoaded(fullText)
+            },
+            onPaste: { [weak self] in
+                guard let self = self, let item = self.currentItem else { return }
+                self.onPasteItem?(item)
+            },
+            onPastePlain: { [weak self] in
+                guard let self = self, let item = self.currentItem else { return }
+                self.onPastePlainItem?(item)
+            },
+            onEditPin: { [weak self] in
+                guard let self = self, let item = self.currentItem else { return }
+                self.onEditPinItem?(item)
             }
         )
         panel.contentView = NSHostingView(rootView: rootView)
@@ -348,6 +365,26 @@ public final class PreviewCoordinator: NSObject {
         return nil
     }
 
+    public func toggleFormattedMode() {
+        guard isPreviewVisible else { return }
+        viewState.toggleFormattedMode()
+    }
+
+    public func zoomIn() {
+        guard isPreviewVisible else { return }
+        viewState.zoomController.zoomIn()
+    }
+
+    public func zoomOut() {
+        guard isPreviewVisible else { return }
+        viewState.zoomController.zoomOut()
+    }
+
+    public func resetZoom() {
+        guard isPreviewVisible else { return }
+        viewState.zoomController.resetToFit()
+    }
+
     private func updateHostingContent(item: HistoryItemSummaryDto?) {
         guard let panel = previewPanel,
               let hostingView = panel.contentView as? NSHostingView<PreviewContainerView> else {
@@ -356,11 +393,24 @@ public final class PreviewCoordinator: NSObject {
         hostingView.rootView = PreviewContainerView(
             item: item,
             coreClient: coreClient,
+            viewState: viewState,
             onClose: { [weak self] in
                 self?.hide()
             },
             onFullTextLoaded: { [weak self] fullText in
                 self?.handleFullTextLoaded(fullText)
+            },
+            onPaste: { [weak self] in
+                guard let self = self, let item = self.currentItem else { return }
+                self.onPasteItem?(item)
+            },
+            onPastePlain: { [weak self] in
+                guard let self = self, let item = self.currentItem else { return }
+                self.onPastePlainItem?(item)
+            },
+            onEditPin: { [weak self] in
+                guard let self = self, let item = self.currentItem else { return }
+                self.onEditPinItem?(item)
             }
         )
     }

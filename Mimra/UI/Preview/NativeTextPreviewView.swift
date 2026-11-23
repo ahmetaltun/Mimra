@@ -13,11 +13,18 @@ import SwiftUI
 /// 60/120 fps scrolling for large documents (<= 1 MB) without main thread blockages.
 public struct NativeTextPreviewView: NSViewRepresentable {
     public let text: String
+    public var attributedText: NSAttributedString?
     public var isMonospaced: Bool
     public var fontSize: CGFloat
 
-    public init(text: String, isMonospaced: Bool = false, fontSize: CGFloat = 12) {
+    public init(
+        text: String,
+        attributedText: NSAttributedString? = nil,
+        isMonospaced: Bool = false,
+        fontSize: CGFloat = 12
+    ) {
         self.text = text
+        self.attributedText = attributedText
         self.isMonospaced = isMonospaced
         self.fontSize = fontSize
     }
@@ -65,7 +72,11 @@ public struct NativeTextPreviewView: NSViewRepresentable {
             : NSFont.systemFont(ofSize: fontSize)
         textView.font = font
 
-        textView.string = text
+        if let attr = attributedText {
+            textView.textStorage?.setAttributedString(attr)
+        } else {
+            textView.string = text
+        }
         scrollView.documentView = textView
         textView.sizeToFit()
 
@@ -82,22 +93,49 @@ public struct NativeTextPreviewView: NSViewRepresentable {
             textView.sizeToFit()
         }
 
-        if textView.string != text {
-            textView.string = text
-            textView.sizeToFit()
-            // Reset scroll position to top when switching items
-            scrollView.contentView.scroll(to: .zero)
-            scrollView.reflectScrolledClipView(scrollView.contentView)
-        }
+        if let attr = attributedText {
+            let currentAttr = textView.attributedString()
+            if !currentAttr.isEqual(to: attr) {
+                let textChanged = textView.string != attr.string
+                textView.textStorage?.setAttributedString(attr)
+                textView.sizeToFit()
+                if textChanged {
+                    scrollView.contentView.scroll(to: .zero)
+                    scrollView.reflectScrolledClipView(scrollView.contentView)
+                }
+            }
+        } else {
+            let targetFont = isMonospaced
+                ? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+                : NSFont.systemFont(ofSize: fontSize)
 
-        let targetFont = isMonospaced
-            ? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-            : NSFont.systemFont(ofSize: fontSize)
-
-        if textView.font != targetFont {
-            textView.font = targetFont
-            textView.sizeToFit()
+            let textChanged = textView.string != text
+            if textChanged || textView.typingAttributes[.backgroundColor] != nil || hasMixedAttributes(textView) {
+                textView.textStorage?.setAttributedString(NSAttributedString(
+                    string: text,
+                    attributes: [
+                        .font: targetFont,
+                        .foregroundColor: NSColor.textColor
+                    ]
+                ))
+                textView.font = targetFont
+                textView.sizeToFit()
+                if textChanged {
+                    scrollView.contentView.scroll(to: .zero)
+                    scrollView.reflectScrolledClipView(scrollView.contentView)
+                }
+            } else if textView.font != targetFont {
+                textView.font = targetFont
+                textView.sizeToFit()
+            }
         }
+    }
+
+    private func hasMixedAttributes(_ textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage, storage.length > 0 else { return false }
+        var effectiveRange = NSRange(location: 0, length: 0)
+        _ = storage.attributes(at: 0, effectiveRange: &effectiveRange)
+        return effectiveRange.length < storage.length
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
