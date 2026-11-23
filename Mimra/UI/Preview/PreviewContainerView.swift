@@ -27,6 +27,10 @@ public final class PreviewViewState: ObservableObject {
 }
 
 /// Main content view hosted inside `PreviewPanel`.
+private struct AttributedStringBox: @unchecked Sendable {
+    let attributedString: NSAttributedString?
+}
+
 @MainActor
 public struct PreviewContainerView: View {
     public let item: HistoryItemSummaryDto?
@@ -135,23 +139,29 @@ public struct PreviewContainerView: View {
     // MARK: - Content Loading & Format Detection
 
     private func loadItemContent() async {
+        // Clear stale state immediately when switching items
+        fullText = nil
+        rtfData = nil
+        htmlData = nil
+        detectedFormat = .plain
+        formattedAttributedText = nil
+        formattedPlainCopyText = nil
+
         guard let client = coreClient, let item = item else {
-            fullText = nil
-            rtfData = nil
-            htmlData = nil
-            detectedFormat = .plain
-            formattedAttributedText = nil
-            formattedPlainCopyText = nil
             return
         }
 
-        guard let reps = try? await client.getItemRepresentations(itemId: item.id) else {
-            if !Task.isCancelled {
-                fullText = nil
-                detectedFormat = .plain
-                formattedAttributedText = nil
-                formattedPlainCopyText = nil
-            }
+        // Image and file previews load their own representations/files directly; avoid duplicate SQLite reads.
+        if isImageItem || (isFileItem && !isTextItem) {
+            return
+        }
+
+        // Debounce heavy SQLite + formatting work during fast key-repeat scrubbing
+        try? await Task.sleep(nanoseconds: 70_000_000)
+        if Task.isCancelled { return }
+
+        guard let reps = try? await client.getItemRepresentations(itemId: item.id),
+              !Task.isCancelled else {
             return
         }
 
@@ -167,41 +177,52 @@ public struct PreviewContainerView: View {
         let decodedText = textRep.flatMap { String(data: $0.payload, encoding: .utf8) }
         let rawRtf = rtfRep?.payload
         let rawHtml = htmlRep?.payload
+        let snippet = item.snippet
+        let availableUtis = item.availableUtis
 
-        let format = TextFormatDetector.detect(
-            text: decodedText ?? item.snippet,
-            availableUtis: item.availableUtis,
-            hasRtfData: rawRtf != nil,
-            hasHtmlData: rawHtml != nil
-        )
+        // Run format detection and non-HTML formatting off @MainActor
+        let (format, bgAttrBox, bgPrettyPlain) = await Task.detached(priority: .userInitiated) {
+            let detected = TextFormatDetector.detect(
+                text: decodedText ?? snippet,
+                availableUtis: availableUtis,
+                hasRtfData: rawRtf != nil,
+                hasHtmlData: rawHtml != nil
+            )
 
-        var attr: NSAttributedString? = nil
-        var prettyPlain: String? = nil
+            var attr: NSAttributedString? = nil
+            var prettyPlain: String? = nil
 
-        switch format {
-        case .json:
-            if let src = decodedText ?? (item.snippet.isEmpty ? nil : item.snippet),
-               let pretty = JsonTextFormatter.prettyPrint(src) {
-                attr = JsonTextFormatter.attributedHighlight(pretty, fontSize: 12)
-                prettyPlain = pretty
+            switch detected {
+            case .json:
+                if let src = decodedText ?? (snippet.isEmpty ? nil : snippet),
+                   let pretty = JsonTextFormatter.prettyPrint(src) {
+                    attr = JsonTextFormatter.attributedHighlight(pretty, fontSize: 12)
+                    prettyPlain = pretty
+                }
+            case .markdown:
+                if let src = decodedText ?? (snippet.isEmpty ? nil : snippet) {
+                    attr = MarkdownAttributedRenderer.render(src, baseFontSize: 12.5)
+                    prettyPlain = attr?.string
+                }
+            case .rtf:
+                if let data = rawRtf {
+                    attr = RichTextAttributedRenderer.renderRtf(data)
+                    prettyPlain = attr?.string
+                }
+            case .html, .plain:
+                break
             }
-        case .markdown:
-            if let src = decodedText ?? (item.snippet.isEmpty ? nil : item.snippet) {
-                attr = MarkdownAttributedRenderer.render(src, baseFontSize: 12.5)
-                prettyPlain = attr?.string
-            }
-        case .rtf:
-            if let data = rawRtf {
-                attr = RichTextAttributedRenderer.renderRtf(data)
-                prettyPlain = attr?.string
-            }
-        case .html:
-            if let data = rawHtml, let htmlStr = String(data: data, encoding: .utf8) {
-                attr = RichTextAttributedRenderer.renderHtml(htmlStr, baseFontSize: 12.5)
-                prettyPlain = attr?.string
-            }
-        case .plain:
-            break
+
+            return (detected, AttributedStringBox(attributedString: attr), prettyPlain)
+        }.value
+
+        if Task.isCancelled { return }
+
+        var attr = bgAttrBox.attributedString
+        var prettyPlain = bgPrettyPlain
+        if format == .html, let data = rawHtml, let htmlStr = String(data: data, encoding: .utf8) {
+            attr = RichTextAttributedRenderer.renderHtml(htmlStr, baseFontSize: 12.5)
+            prettyPlain = attr?.string
         }
 
         if !Task.isCancelled {

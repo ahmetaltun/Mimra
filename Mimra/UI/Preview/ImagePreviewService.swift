@@ -141,10 +141,12 @@ public actor ImagePreviewService {
 
         // 3. Launch background decoding task
         let maxPixel = self.maxPixelSize
-        let task = Task<ImagePreviewPayload?, Never> {
+        let task = Task.detached(priority: .userInitiated) { () -> ImagePreviewPayload? in
+            if Task.isCancelled { return nil }
             guard let rawData = try? await fetchPayload(), !rawData.isEmpty else {
                 return nil
             }
+            if Task.isCancelled { return nil }
             return Self.decodePreview(from: rawData, maxPixelSize: maxPixel, utiHint: utiHint)
         }
 

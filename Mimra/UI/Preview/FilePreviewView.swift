@@ -177,12 +177,18 @@ public struct FilePreviewView: View {
     }
 
     private func loadFileEntries() async {
+        entries = []
         inlineImage = nil
         inlineText = nil
+
+        // Debounce SQLite + disk I/O during fast key-repeat scrubbing
+        try? await Task.sleep(nanoseconds: 70_000_000)
+        if Task.isCancelled { return }
 
         var rawLines: [String] = []
         if let client = coreClient,
            let reps = try? await client.getItemRepresentations(itemId: item.id) {
+            if Task.isCancelled { return }
             let fileReps = reps.filter { $0.uti == "public.file-url" }
             for rep in fileReps {
                 if let str = String(data: rep.payload, encoding: .utf8) {
@@ -194,77 +200,87 @@ public struct FilePreviewView: View {
             rawLines = item.snippet.components(separatedBy: .newlines)
         }
 
-        var parsed: [PreviewFileEntry] = []
-        var seenPaths = Set<String>()
+        let linesSnapshot = rawLines
+        let (parsed, loadedImage, loadedText) = await Task.detached(priority: .userInitiated) { () -> ([PreviewFileEntry], NSImage?, String?) in
+            var parsed: [PreviewFileEntry] = []
+            var seenPaths = Set<String>()
 
-        for raw in rawLines {
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
+            for raw in linesSnapshot {
+                if Task.isCancelled { return ([], nil, nil) }
+                let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { continue }
 
-            let resolvedUrl: URL?
-            if trimmed.hasPrefix("file://") {
-                if let u = URL(string: trimmed) {
-                    resolvedUrl = (u as NSURL).filePathURL ?? u
+                let resolvedUrl: URL?
+                if trimmed.hasPrefix("file://") {
+                    if let u = URL(string: trimmed) {
+                        resolvedUrl = (u as NSURL).filePathURL ?? u
+                    } else {
+                        resolvedUrl = nil
+                    }
+                } else if trimmed.hasPrefix("/") {
+                    resolvedUrl = URL(fileURLWithPath: trimmed)
                 } else {
                     resolvedUrl = nil
                 }
-            } else if trimmed.hasPrefix("/") {
-                resolvedUrl = URL(fileURLWithPath: trimmed)
-            } else {
-                resolvedUrl = nil
+
+                guard let url = resolvedUrl else { continue }
+                let path = url.path
+                guard !seenPaths.contains(path) else { continue }
+                seenPaths.insert(path)
+
+                var isDir: ObjCBool = false
+                let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
+                var size: Int64? = nil
+                var modDate: Date? = nil
+                if exists, let attrs = try? FileManager.default.attributesOfItem(atPath: path) {
+                    size = (attrs[.size] as? NSNumber)?.int64Value
+                    modDate = attrs[.modificationDate] as? Date
+                }
+
+                parsed.append(PreviewFileEntry(
+                    id: path,
+                    url: url,
+                    path: path,
+                    name: url.lastPathComponent.isEmpty ? path : url.lastPathComponent,
+                    exists: exists,
+                    isDirectory: isDir.boolValue,
+                    fileSize: size,
+                    modifiedAt: modDate
+                ))
             }
 
-            guard let url = resolvedUrl else { continue }
-            let path = url.path
-            guard !seenPaths.contains(path) else { continue }
-            seenPaths.insert(path)
+            if Task.isCancelled { return (parsed, nil, nil) }
 
-            var isDir: ObjCBool = false
-            let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
-            var size: Int64? = nil
-            var modDate: Date? = nil
-            if exists, let attrs = try? FileManager.default.attributesOfItem(atPath: path) {
-                size = (attrs[.size] as? NSNumber)?.int64Value
-                modDate = attrs[.modificationDate] as? Date
+            var inlineImg: NSImage? = nil
+            var inlineTxt: String? = nil
+
+            // Inline preview for single existing file (bounded size)
+            if parsed.count == 1, let first = parsed.first, first.exists, !first.isDirectory {
+                let ext = first.url.pathExtension.lowercased()
+                let imageExts = Set(["png", "jpg", "jpeg", "heic", "tiff", "tif", "gif", "webp"])
+                let textExts = Set(["txt", "md", "markdown", "json", "yaml", "yml", "swift", "rs", "py", "ts", "js", "log", "csv"])
+                let size = first.fileSize ?? 0
+
+                if imageExts.contains(ext), size <= 10 * 1024 * 1024 {
+                    if let data = try? Data(contentsOf: first.url),
+                       !Task.isCancelled,
+                       let decoded = ImagePreviewService.decodePreview(from: data, maxPixelSize: 1200) {
+                        inlineImg = decoded.image
+                    }
+                } else if textExts.contains(ext), size <= 128 * 1024 {
+                    if let content = try? String(contentsOf: first.url, encoding: .utf8) {
+                        inlineTxt = String(content.prefix(4000))
+                    }
+                }
             }
 
-            parsed.append(PreviewFileEntry(
-                id: path,
-                url: url,
-                path: path,
-                name: url.lastPathComponent.isEmpty ? path : url.lastPathComponent,
-                exists: exists,
-                isDirectory: isDir.boolValue,
-                fileSize: size,
-                modifiedAt: modDate
-            ))
-        }
+            return (parsed, inlineImg, inlineTxt)
+        }.value
 
         if Task.isCancelled { return }
         self.entries = parsed
-
-        // Inline preview for single existing file (bounded size)
-        if parsed.count == 1, let first = parsed.first, first.exists, !first.isDirectory {
-            let ext = first.url.pathExtension.lowercased()
-            let imageExts = Set(["png", "jpg", "jpeg", "heic", "tiff", "tif", "gif", "webp"])
-            let textExts = Set(["txt", "md", "markdown", "json", "yaml", "yml", "swift", "rs", "py", "ts", "js", "log", "csv"])
-            let size = first.fileSize ?? 0
-
-            if imageExts.contains(ext), size <= 10 * 1024 * 1024 {
-                if let data = try? Data(contentsOf: first.url),
-                   let decoded = ImagePreviewService.decodePreview(from: data, maxPixelSize: 1200) {
-                    if !Task.isCancelled {
-                        self.inlineImage = decoded.image
-                    }
-                }
-            } else if textExts.contains(ext), size <= 128 * 1024 {
-                if let content = try? String(contentsOf: first.url, encoding: .utf8) {
-                    if !Task.isCancelled {
-                        self.inlineText = String(content.prefix(4000))
-                    }
-                }
-            }
-        }
+        self.inlineImage = loadedImage
+        self.inlineText = loadedText
     }
 
     private func copyPath(_ path: String, id: String) {

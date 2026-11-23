@@ -465,15 +465,21 @@ public struct ImagePreviewView: View {
     }
 
     private func loadPreview() async {
-        isLoading = true
         hasError = false
 
-        // Check synchronous cache first
+        // Check synchronous cache first for instant display
         if let cached = ImagePreviewService.shared.cachedPreview(for: item.id) {
             self.previewPayload = cached
             self.isLoading = false
             return
         }
+
+        self.previewPayload = nil
+        self.isLoading = true
+
+        // Debounce uncached SQLite + ImageIO decode during fast key-repeat scrubbing
+        try? await Task.sleep(nanoseconds: 70_000_000)
+        if Task.isCancelled { return }
 
         guard let client = coreClient else {
             self.isLoading = false
@@ -489,7 +495,8 @@ public struct ImagePreviewView: View {
             for: item.id,
             utiHint: primaryUti
         ) {
-            guard let reps = try? await client.getItemRepresentations(itemId: item.id) else {
+            guard !Task.isCancelled,
+                  let reps = try? await client.getItemRepresentations(itemId: item.id) else {
                 return nil
             }
             let imageRep = reps.first(where: {
@@ -515,6 +522,10 @@ public struct ImagePreviewView: View {
             return
         }
 
+        // Wait for user to pause on an image before querying/running heavy Vision OCR
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        if Task.isCancelled { return }
+
         self.ocrState = .loading
 
         // Check if OCR text is already stored in the database
@@ -532,8 +543,11 @@ public struct ImagePreviewView: View {
             // Ignore query error and fall back to on-demand OCR
         }
 
+        if Task.isCancelled { return }
+
         // Otherwise retrieve image payload and perform on-device Vision recognition on-demand
         guard let reps = try? await client.getItemRepresentations(itemId: item.id),
+              !Task.isCancelled,
               let imageRep = reps.first(where: {
                   $0.uti == "public.png" ||
                   $0.uti == "public.heic" ||
@@ -546,12 +560,19 @@ public struct ImagePreviewView: View {
             return
         }
 
+        let currentItemId = item.id
         do {
-            let extracted = try await OCRService.shared.recognizeAndIndex(
-                itemId: item.id,
-                imageData: imageRep.payload,
-                coreClient: client
-            )
+            let extracted = try await withTaskCancellationHandler {
+                try await OCRService.shared.recognizeAndIndex(
+                    itemId: currentItemId,
+                    imageData: imageRep.payload,
+                    coreClient: client
+                )
+            } onCancel: {
+                Task {
+                    await OCRService.shared.cancel(itemId: currentItemId)
+                }
+            }
             if !Task.isCancelled {
                 if extracted.isEmpty {
                     self.ocrState = .noTextDetected

@@ -240,6 +240,7 @@ public struct InteractiveImageCanvasView: NSViewRepresentable {
         imageView.layer?.shadowOpacity = 0.18
         imageView.layer?.shadowRadius = 6
         imageView.layer?.shadowOffset = CGSize(width: 0, height: -3)
+        imageView.layer?.shadowPath = CGPath(rect: imageView.bounds, transform: nil)
         imageView.controller = controller
 
         scrollView.documentView = imageView
@@ -261,6 +262,7 @@ public struct InteractiveImageCanvasView: NSViewRepresentable {
         if imageView.image !== image {
             imageView.image = image
             imageView.frame = NSRect(origin: .zero, size: image.size)
+            imageView.layer?.shadowPath = CGPath(rect: imageView.bounds, transform: nil)
             controller.imageSize = image.size
             controller.isFitMode = true
             DispatchQueue.main.async {
