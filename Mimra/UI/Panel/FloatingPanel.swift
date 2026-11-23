@@ -132,6 +132,7 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
     public let previewCoordinator: PreviewCoordinator
     public private(set) var panel: FloatingPanel?
     public var targetApp: NSRunningApplication?
+    public var onTargetAppActivated: ((NSRunningApplication) -> Void)?
     public var onSettingsRequested: (() -> Void)?
     public var onPasteRequested: ((HistoryItemSummaryDto) -> Void)?
     public var onItemCommitted: ((HistoryItemSummaryDto, PasteMode, Bool?) -> Void)?
@@ -156,6 +157,7 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
     public var statusItemFrame: CGRect? = nil
 
     private let keyMonitorState = KeyMonitorState()
+    private var isHiding: Bool = false
 
     public init(coreClient: CoreClient, pasteCoordinator: PasteCoordinator? = nil, previewCoordinator: PreviewCoordinator? = nil) {
         self.coreClient = coreClient
@@ -700,6 +702,11 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
     /// Hides the floating panel without losing state.
     /// - Parameter restoringFocus: If true, reactivates the previous application. Pass false when navigating to internal windows like Settings.
     public func hide(restoringFocus: Bool = true) {
+        guard !isHiding else { return }
+        isHiding = true
+        defer { isHiding = false }
+
+        let wasVisible = panel?.isVisible ?? false
         cancelCycle()
         viewModel.cancelHoverDwell()
         previewCoordinator.hide()
@@ -708,8 +715,9 @@ public final class PanelCoordinator: NSObject, NSWindowDelegate {
             viewModel.searchText = ""
         }
         // VoiceOver & system focus restoration: reactivate target application (P7-09 / F-029, T-UI-06)
-        if restoringFocus, let target = targetApp, !target.isTerminated {
+        if restoringFocus, wasVisible, let target = targetApp, !target.isTerminated {
             target.activate()
+            onTargetAppActivated?(target)
         }
     }
 

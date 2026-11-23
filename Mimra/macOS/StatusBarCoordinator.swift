@@ -295,9 +295,14 @@ final class StatusBarCoordinator: NSObject, NSWindowDelegate {
     }
 
     @objc public func openSettings() {
+        if panelCoordinator.panel?.isVisible == true {
+            panelCoordinator.hide(restoringFocus: false)
+        }
+
         if let existing = settingsWindow {
-            existing.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            existing.makeKeyAndOrderFront(nil)
+            existing.orderFrontRegardless()
             return
         }
 
@@ -312,9 +317,10 @@ final class StatusBarCoordinator: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.contentView = NSHostingView(rootView: SettingsView(coreClient: coreClient))
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
         self.settingsWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
     }
 
     public func windowWillClose(_ notification: Notification) {

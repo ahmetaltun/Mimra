@@ -17,6 +17,11 @@ public struct FloatingPanelView: View {
     @AppStorage("showSearchField") private var showSearchField: Bool = true
     @AppStorage("showTitle") private var showTitle: Bool = false
     @AppStorage("showFooter") private var showFooter: Bool = true
+    @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
+    @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
+    @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
+    @AppStorage("searchHighlightStyle") private var searchHighlightStyleRaw: String = SearchHighlightStyle.bold.rawValue
+    @AppStorage("historyRowStyle") private var rowStyleRaw: String = "standard"
 
     public init(viewModel: PanelViewModel, accessibilityService: AccessibilityService? = nil) {
         self.viewModel = viewModel
@@ -99,13 +104,21 @@ public struct FloatingPanelView: View {
                         subtitle: "No clipboard items match '\(viewModel.searchText)'."
                     )
                 } else {
+                    let filtered = viewModel.filteredItems
+                    let mixedSections = viewModel.hasMixedPinnedAndUnpinned
+                    let dividerAfterIndex = viewModel.sectionDividerAfterIndex
+                    let pinArr = viewModel.pinArrangement
+                    let selectedIdx = viewModel.selectedIndex
+                    let isCompactRow = (rowStyleRaw == "compact")
+                    let activeHighlightStyle = SearchHighlightStyle(rawValue: searchHighlightStyleRaw) ?? .bold
+
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(spacing: 2) {
-                                ForEach(Array(viewModel.filteredItems.enumerated()), id: \.element.id) { index, item in
+                                ForEach(Array(filtered.enumerated()), id: \.element.id) { index, item in
                                     // Section Header for top section when mixed pinned & unpinned items exist (P5-07 / F-036, T-UI-10)
-                                    if index == 0 && viewModel.hasMixedPinnedAndUnpinned {
-                                        if viewModel.pinArrangement == .top && item.isPinned {
+                                    if index == 0 && mixedSections {
+                                        if pinArr == .top && item.isPinned {
                                             HStack {
                                                 Text("PINNED")
                                                     .font(.system(size: 9, weight: .bold))
@@ -115,7 +128,7 @@ public struct FloatingPanelView: View {
                                             }
                                             .padding(.top, 2)
                                             .padding(.bottom, 2)
-                                        } else if viewModel.pinArrangement == .bottom && !item.isPinned {
+                                        } else if pinArr == .bottom && !item.isPinned {
                                             HStack {
                                                 Text("HISTORY")
                                                     .font(.system(size: 9, weight: .bold))
@@ -131,7 +144,12 @@ public struct FloatingPanelView: View {
                                     PanelItemRow(
                                         item: item,
                                         shortcutIndex: index < 9 ? (index + 1) : nil,
-                                        isSelected: index == viewModel.selectedIndex,
+                                        isSelected: index == selectedIdx,
+                                        showColorSwatches: showColorSwatches,
+                                        showUrlPreviews: showUrlPreviews,
+                                        showSourceAppIcon: showSourceAppIcon,
+                                        highlightStyle: activeHighlightStyle,
+                                        isCompact: isCompactRow,
                                         coreClient: viewModel.coreClient,
                                         onTogglePin: {
                                             Task {
@@ -168,8 +186,17 @@ public struct FloatingPanelView: View {
                                             }
                                         }
                                     )
+                                    .equatable()
                                     .id(item.id)
-                                    .modifier(PinDragAndDropModifier(item: item, viewModel: viewModel))
+                                    .modifier(PinDragAndDropModifier(
+                                        itemId: item.id,
+                                        isPinned: item.isPinned,
+                                        onMovePin: { sourceId, targetId in
+                                            Task { @MainActor in
+                                                _ = await viewModel.movePin(sourceId: sourceId, targetId: targetId)
+                                            }
+                                        }
+                                    ))
                                     .onHover { isHovered in
                                         viewModel.handleItemHover(index: index, isHovered: isHovered)
                                     }
@@ -179,23 +206,9 @@ public struct FloatingPanelView: View {
                                     }
 
                                     // Stable section divider separating pinned items from history (P5-01 / F-036)
-                                    if viewModel.pinArrangement == .top && item.isPinned && (index + 1 < viewModel.filteredItems.count) && !viewModel.filteredItems[index + 1].isPinned {
+                                    if index == dividerAfterIndex {
                                         HStack {
-                                            Text("HISTORY")
-                                                .font(.system(size: 9, weight: .bold))
-                                                .foregroundColor(.secondary.opacity(0.65))
-                                                .padding(.leading, 8)
-                                            Spacer()
-                                        }
-                                        .padding(.top, 4)
-                                        .padding(.bottom, 2)
-                                        Divider()
-                                            .opacity(0.25)
-                                            .padding(.horizontal, 6)
-                                            .padding(.bottom, 2)
-                                    } else if viewModel.pinArrangement == .bottom && !item.isPinned && (index + 1 < viewModel.filteredItems.count) && viewModel.filteredItems[index + 1].isPinned {
-                                        HStack {
-                                            Text("PINNED")
+                                            Text(pinArr == .top ? "HISTORY" : "PINNED")
                                                 .font(.system(size: 9, weight: .bold))
                                                 .foregroundColor(.secondary.opacity(0.65))
                                                 .padding(.leading, 8)
@@ -213,11 +226,14 @@ public struct FloatingPanelView: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
                         }
-                        .onChange(of: viewModel.selectedIndex) { _, newIndex in
-                            if newIndex >= 0 && newIndex < viewModel.filteredItems.count {
-                                let targetId = viewModel.filteredItems[newIndex].id
-                                withAnimation(.easeInOut(duration: 0.1)) {
-                                    proxy.scrollTo(targetId, anchor: .center)
+                        .onChange(of: viewModel.keyboardScrollGeneration) { _, _ in
+                            let list = viewModel.filteredItems
+                            if viewModel.selectedIndex >= 0 && viewModel.selectedIndex < list.count {
+                                let targetId = list[viewModel.selectedIndex].id
+                                var transaction = Transaction()
+                                transaction.disablesAnimations = true
+                                withTransaction(transaction) {
+                                    proxy.scrollTo(targetId)
                                 }
                             }
                         }
@@ -419,21 +435,24 @@ struct PinEditorOverlay: View {
 // MARK: - Pin Drag and Drop Reordering Modifier (P5-03 / F-046)
 
 struct PinDragAndDropModifier: ViewModifier {
-    let item: HistoryItemSummaryDto
-    @ObservedObject var viewModel: PanelViewModel
+    let itemId: String
+    let isPinned: Bool
+    let onMovePin: @MainActor @Sendable (String, String) -> Void
 
     func body(content: Content) -> some View {
-        if item.isPinned {
+        if isPinned {
             content
                 .onDrag {
-                    NSItemProvider(object: item.id as NSString)
+                    NSItemProvider(object: itemId as NSString)
                 }
                 .onDrop(of: [UTType.text], isTargeted: nil) { providers in
                     guard let provider = providers.first else { return false }
+                    let targetId = itemId
+                    let callback = onMovePin
                     _ = provider.loadObject(ofClass: NSString.self) { string, _ in
                         if let sourceId = string as? String {
                             Task { @MainActor in
-                                _ = await viewModel.movePin(sourceId: sourceId, targetId: item.id)
+                                callback(sourceId, targetId)
                             }
                         }
                     }
@@ -447,10 +466,15 @@ struct PinDragAndDropModifier: ViewModifier {
 
 // MARK: - History Item Row Component
 
-struct PanelItemRow: View {
+struct PanelItemRow: View, Equatable {
     let item: HistoryItemSummaryDto
     let shortcutIndex: Int?
     let isSelected: Bool
+    let showColorSwatches: Bool
+    let showUrlPreviews: Bool
+    let showSourceAppIcon: Bool
+    let highlightStyle: SearchHighlightStyle
+    let isCompact: Bool
     var coreClient: CoreClient? = nil
     var onTogglePin: (() -> Void)? = nil
     var onSetPinKey: ((String?) -> Void)? = nil
@@ -460,27 +484,78 @@ struct PanelItemRow: View {
     var onCommit: ((PasteMode, Bool?) -> Void)? = nil
     var onDelete: (() -> Void)? = nil
 
-    @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
-    @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
-    @AppStorage("showSourceAppIcon") private var showSourceAppIcon: Bool = true
-    @AppStorage("searchHighlightStyle") private var searchHighlightStyleRaw: String = SearchHighlightStyle.bold.rawValue
-    @AppStorage("historyRowStyle") private var rowStyleRaw: String = "standard"
+    // Precomputed per-item display metadata to avoid repeated string/URL/color/disk evaluation during render passes
+    private let parsedColor: HexColorInfo?
+    private let parsedUrl: UrlInfo?
+    private let displayTitle: String
+    private let displaySnippet: String
+    private let isMissingOnDisk: Bool
+
     @State private var isHovered: Bool = false
 
-    private var isCompact: Bool {
-        rowStyleRaw == "compact"
+    init(
+        item: HistoryItemSummaryDto,
+        shortcutIndex: Int?,
+        isSelected: Bool,
+        showColorSwatches: Bool? = nil,
+        showUrlPreviews: Bool? = nil,
+        showSourceAppIcon: Bool? = nil,
+        highlightStyle: SearchHighlightStyle? = nil,
+        isCompact: Bool? = nil,
+        coreClient: CoreClient? = nil,
+        onTogglePin: (() -> Void)? = nil,
+        onSetPinKey: ((String?) -> Void)? = nil,
+        onMovePinUp: (() -> Void)? = nil,
+        onMovePinDown: (() -> Void)? = nil,
+        onEditPin: (() -> Void)? = nil,
+        onCommit: ((PasteMode, Bool?) -> Void)? = nil,
+        onDelete: (() -> Void)? = nil
+    ) {
+        self.item = item
+        self.shortcutIndex = shortcutIndex
+        self.isSelected = isSelected
+        let defaults = UserDefaults.standard
+        let resolvedSwatches = showColorSwatches ?? (defaults.object(forKey: "showColorSwatches") as? Bool ?? true)
+        let resolvedUrls = showUrlPreviews ?? (defaults.object(forKey: "showUrlPreviews") as? Bool ?? true)
+        self.showColorSwatches = resolvedSwatches
+        self.showUrlPreviews = resolvedUrls
+        self.showSourceAppIcon = showSourceAppIcon ?? (defaults.object(forKey: "showSourceAppIcon") as? Bool ?? true)
+        self.highlightStyle = highlightStyle ?? (SearchHighlightStyle(rawValue: defaults.string(forKey: "searchHighlightStyle") ?? "") ?? .bold)
+        self.isCompact = isCompact ?? ((defaults.string(forKey: "historyRowStyle") ?? "standard") == "compact")
+        self.coreClient = coreClient
+        self.onTogglePin = onTogglePin
+        self.onSetPinKey = onSetPinKey
+        self.onMovePinUp = onMovePinUp
+        self.onMovePinDown = onMovePinDown
+        self.onEditPin = onEditPin
+        self.onCommit = onCommit
+        self.onDelete = onDelete
+
+        self.parsedColor = resolvedSwatches ? ColorDetector.detect(in: item.title) : nil
+        self.parsedUrl = resolvedUrls ? UrlDetector.detect(in: item.title) : nil
+        self.displayTitle = Self.computeDisplayTitle(for: item)
+        self.displaySnippet = Self.computeDisplaySnippet(for: item)
+        self.isMissingOnDisk = item.contentKind == "file_urls" && Self.isFileVanished(path: item.snippet)
     }
 
-    private var highlightStyle: SearchHighlightStyle {
-        SearchHighlightStyle(rawValue: searchHighlightStyleRaw) ?? .bold
+    nonisolated static func == (lhs: PanelItemRow, rhs: PanelItemRow) -> Bool {
+        lhs.isSelected == rhs.isSelected &&
+        lhs.shortcutIndex == rhs.shortcutIndex &&
+        lhs.item == rhs.item &&
+        lhs.showColorSwatches == rhs.showColorSwatches &&
+        lhs.showUrlPreviews == rhs.showUrlPreviews &&
+        lhs.showSourceAppIcon == rhs.showSourceAppIcon &&
+        lhs.highlightStyle == rhs.highlightStyle &&
+        lhs.isCompact == rhs.isCompact &&
+        lhs.isMissingOnDisk == rhs.isMissingOnDisk
     }
 
     private var detectedColor: HexColorInfo? {
-        showColorSwatches ? ColorDetector.detect(in: item.title) : nil
+        parsedColor
     }
 
     private var detectedUrl: UrlInfo? {
-        showUrlPreviews ? UrlDetector.detect(in: item.title) : nil
+        parsedUrl
     }
 
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
@@ -546,8 +621,9 @@ struct PanelItemRow: View {
             ItemThumbnailView(
                 itemId: item.id,
                 contentKind: item.contentKind,
-                title: item.title,
                 availableUtis: item.availableUtis,
+                detectedColor: detectedColor,
+                hasDetectedUrl: detectedUrl != nil,
                 isSelected: isSelected,
                 coreClient: coreClient,
                 size: 16
@@ -594,7 +670,7 @@ struct PanelItemRow: View {
                 .help("Pin item (⌥P)")
             }
 
-            if item.contentKind == "file_urls" && isFileVanished(path: item.snippet) {
+            if isMissingOnDisk {
                 Text("missing")
                     .font(.system(size: 8, weight: .semibold))
                     .padding(.horizontal, 3)
@@ -666,8 +742,9 @@ struct PanelItemRow: View {
             ItemThumbnailView(
                 itemId: item.id,
                 contentKind: item.contentKind,
-                title: item.title,
                 availableUtis: item.availableUtis,
+                detectedColor: detectedColor,
+                hasDetectedUrl: detectedUrl != nil,
                 isSelected: isSelected,
                 coreClient: coreClient,
                 size: 22
@@ -715,7 +792,7 @@ struct PanelItemRow: View {
                         .help("Pin item (⌥P)")
                     }
 
-                    if item.contentKind == "file_urls" && isFileVanished(path: item.snippet) {
+                    if isMissingOnDisk {
                         Text("missing")
                             .font(.system(size: 9, weight: .semibold))
                             .padding(.horizontal, 4)
@@ -881,7 +958,7 @@ struct PanelItemRow: View {
             values.append("copied \(item.copyCount) times")
         }
 
-        if item.contentKind == "file_urls" && isFileVanished(path: item.snippet) {
+        if isMissingOnDisk {
             values.append("missing on disk")
         }
 
@@ -905,7 +982,7 @@ struct PanelItemRow: View {
         return hints.joined(separator: ", ")
     }
 
-    private var displayTitle: String {
+    private static func computeDisplayTitle(for item: HistoryItemSummaryDto) -> String {
         if item.contentKind == "file_urls" {
             if item.title.hasPrefix("id=") || item.title.contains("/.file/id=") {
                 let firstLine = item.snippet.components(separatedBy: .newlines).first ?? item.snippet
@@ -918,7 +995,7 @@ struct PanelItemRow: View {
         return item.title.isEmpty ? "Untitled" : item.title
     }
 
-    private var displaySnippet: String {
+    private static func computeDisplaySnippet(for item: HistoryItemSummaryDto) -> String {
         guard item.contentKind == "file_urls" else { return item.snippet }
         let lines = item.snippet.components(separatedBy: .newlines).map { line -> String in
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -937,7 +1014,7 @@ struct PanelItemRow: View {
         return lines.joined(separator: "\n")
     }
 
-    private func isFileVanished(path: String) -> Bool {
+    private static func isFileVanished(path: String) -> Bool {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
         let firstLine = trimmed.components(separatedBy: .newlines).first ?? trimmed
@@ -999,21 +1076,25 @@ private struct RowAccessibilityModifier: ViewModifier {
 struct ItemThumbnailView: View {
     let itemId: String
     let contentKind: String
-    var title: String = ""
     var availableUtis: [String] = []
+    var detectedColor: HexColorInfo? = nil
+    var hasDetectedUrl: Bool = false
     let isSelected: Bool
     let coreClient: CoreClient?
     var size: CGFloat = 22
 
-    @AppStorage("showColorSwatches") private var showColorSwatches: Bool = true
-    @AppStorage("showUrlPreviews") private var showUrlPreviews: Bool = true
-
     @State private var thumbnail: NSImage?
     @State private var hasAttemptedLoad = false
 
+    private var isImageItem: Bool {
+        contentKind == "image" ||
+        availableUtis.contains(where: { $0 == "public.png" || $0 == "public.tiff" || $0 == "public.jpeg" || $0 == "public.heic" })
+    }
+
     var body: some View {
+        let resolvedImage = thumbnail ?? (isImageItem ? ImageThumbnailService.shared.cachedThumbnail(for: itemId) : nil)
         Group {
-            if let image = thumbnail {
+            if let image = resolvedImage {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -1023,7 +1104,7 @@ struct ItemThumbnailView: View {
                         RoundedRectangle(cornerRadius: size <= 18 ? 3 : 4, style: .continuous)
                             .stroke(isSelected ? Color.white.opacity(0.3) : Color.primary.opacity(0.1), lineWidth: 0.5)
                     )
-            } else if showColorSwatches, let color = ColorDetector.detect(in: title) {
+            } else if let color = detectedColor {
                 ColorSwatchView(colorInfo: color, size: size, cornerRadius: size <= 18 ? 3 : 4)
             } else {
                 Image(systemName: iconForKind(contentKind))
@@ -1033,12 +1114,9 @@ struct ItemThumbnailView: View {
             }
         }
         .task(id: itemId) {
-            let isImageItem = contentKind == "image" ||
-                              availableUtis.contains(where: { ["public.png", "public.tiff", "public.jpeg", "public.heic"].contains($0) })
             guard isImageItem, !hasAttemptedLoad, let client = coreClient else { return }
             hasAttemptedLoad = true
-            if let cached = ImageThumbnailService.shared.cachedThumbnail(for: itemId) {
-                self.thumbnail = cached
+            if ImageThumbnailService.shared.cachedThumbnail(for: itemId) != nil {
                 return
             }
             let loaded = await ImageThumbnailService.shared.thumbnail(for: itemId) {
@@ -1056,7 +1134,7 @@ struct ItemThumbnailView: View {
     }
 
     private func iconForKind(_ kind: String) -> String {
-        if showUrlPreviews && (UrlDetector.detect(in: title) != nil || availableUtis.contains("public.url")) {
+        if hasDetectedUrl || availableUtis.contains("public.url") {
             return "link"
         }
         switch kind {
@@ -1069,7 +1147,7 @@ struct ItemThumbnailView: View {
         case "file_urls":
             return "folder"
         default:
-            if availableUtis.contains(where: { ["public.png", "public.tiff", "public.jpeg", "public.heic"].contains($0) }) {
+            if isImageItem {
                 return "photo"
             }
             return "square.stack.3d.down.right"

@@ -2627,3 +2627,71 @@ To package these milestones into an official production release, project metadat
 ### Consequences
 * **Positive:** Versioning is strictly aligned across Swift, Rust, Xcode, and CI/CD; automated test harness confirms zero regressions; release artifacts, appcast feeds, and changelogs are prepared and protected against silent packaging mismatches.
 * **Negative:** None.
+
+---
+
+## ADR-071: Natural Viewport Scroll Anchoring, Animation Elimination, and O(1) Equatable Row Rendering for High Item Counts
+
+* **Status:** Accepted  
+* **Date:** 2026-11-23  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+Users navigating large clipboard histories (up to 2,000 items) reported two major UX and performance issues (`F-018`, `F-019`, `T-UI-03`, `T-KEY-03`):
+1. **Forced Center Scroll Anchoring & Bottom Truncation:** `FloatingPanelView` observed `.onChange(of: viewModel.selectedIndex)` and invoked `withAnimation(.easeInOut(duration: 0.1)) { proxy.scrollTo(targetId, anchor: .center) }`. Pinning the scroll anchor to `.center` forced the list to scroll immediately after the midpoint of the window rather than allowing the highlight to move naturally within the visible viewport. Furthermore, overlapping 100ms scroll animations during rapid key-repeat (`↑`/`↓` at 30–60 Hz) conflicted with `LazyVStack` layout estimation and prevented reaching the last item smoothly. Additionally, mouse hover selection changes also triggered `scrollTo`, causing the list to scroll underneath the cursor.
+2. **High-Item-Count UI Lag (`O(N²)` Per-Keystroke Invalidations):**
+   - `PinDragAndDropModifier` was attached to every row and held `@ObservedObject var viewModel: PanelViewModel`, causing every materialized row in the `LazyVStack` to re-render whenever `selectedIndex` or `hoveredRowIndex` changed.
+   - `hoveredRowIndex` was marked `@Published` on `PanelViewModel`, invalidating the entire panel view on every mouse movement across rows.
+   - `viewModel.filteredItems` and `viewModel.hasMixedPinnedAndUnpinned` were computed properties evaluated inside the `ForEach` per-row closure, creating `O(N²)` array scans per render pass.
+   - `PanelItemRow` subscribed to 5 `@AppStorage` keys per row (plus 2 more in `ItemThumbnailView`), re-ran `ColorDetector.detect` and `UrlDetector.detect` multiple times per render, and waited for asynchronous `.task(id:)` scheduling before reading already-cached `AppIconService` / `ImageThumbnailService` images.
+
+### Decision
+1. **Natural Viewport Scrolling & Animation Removal (`PanelViewModel.swift`, `FloatingPanelView.swift`):**
+   - Added `@Published public private(set) var keyboardScrollGeneration: UInt64 = 0` on `PanelViewModel`, incremented exclusively on keyboard navigation actions (`selectNext`, `selectPrevious`, `selectPageUp`, `selectPageDown`, `selectFirst`, `selectLast`) and never on mouse hover selection.
+   - Replaced `.onChange(of: viewModel.selectedIndex)` with `.onChange(of: viewModel.keyboardScrollGeneration)` calling `proxy.scrollTo(targetId)` (default `anchor: nil`) inside a `Transaction` with `disablesAnimations = true`. The scroll view now moves only when the selected item exits the visible viewport and reaches the first and last items instantaneously without animation lag.
+2. **`Equatable` Row Isolation & `@ObservedObject` Removal (`FloatingPanelView.swift`):**
+   - Removed `@ObservedObject var viewModel` from `PinDragAndDropModifier`, replacing it with a `@MainActor @Sendable` closure and primitive `itemId`/`isPinned` inputs.
+   - Conformed `PanelItemRow` to `Equatable` and applied `.equatable()` in `ForEach`, ensuring SwiftUI only re-evaluates the 2 rows whose `isSelected` state changed on arrow navigation.
+   - Hoisted `@AppStorage` display preferences (`showColorSwatches`, `showUrlPreviews`, `showSourceAppIcon`, `searchHighlightStyle`, `historyRowStyle`) to `FloatingPanelView` and precomputed `parsedColor`, `parsedUrl`, `displayTitle`, `displaySnippet`, and `isMissingOnDisk` once in `PanelItemRow.init`.
+3. **O(1) Cached Filtered List & Section Boundary Metadata (`PanelViewModel.swift`):**
+   - Cached `cachedFilteredItems`, `cachedHasPinnedItems`, `cachedHasUnpinnedItems`, and `sectionDividerAfterIndex` on `PanelViewModel`, rebuilt only when `items`, `searchText`, `lastSearchQuery`, or `pinArrangement` changes.
+   - Removed `@Published` from `hoveredRowIndex` on `PanelViewModel` since each `PanelItemRow` manages its own local `@State private var isHovered`.
+4. **Synchronous First-Pass Icon & Thumbnail Cache Lookup & Preview Layout Guard (`AppIconService.swift`, `FloatingPanelView.swift`, `PreviewCoordinator.swift`):**
+   - Updated `SourceAppIconView` and `ItemThumbnailView` to read `AppIconService.shared.cachedIcon(for:)` and `ImageThumbnailService.shared.cachedThumbnail(for:)` synchronously during `body` evaluation, eliminating two-pass flicker during fast scrolling.
+   - Guarded `PreviewCoordinator.updateItemIfVisible` and `updateLayout` to skip redundant `panel.setFrame(..., display: true)` calls when the preview frame has not changed.
+
+### Consequences
+* **Positive:** Up/Down arrow navigation moves naturally within the visible window and scrolls cleanly all the way to the last item; mouse hover never scrolls the list under the cursor; per-keypress row re-renders drop from `O(N)` to `O(1)` (2 rows); smooth 60/120 Hz navigation even with 2,000 items in history.
+* **Negative:** None.
+
+---
+
+## ADR-072: Non-Reentrant `FloatingPanel` Focus Restoration and Settings Window Foreground Z-Order Enforcement
+
+* **Status:** Accepted  
+* **Date:** 2026-11-23  
+* **Deciders:** Mimra Core Engineering  
+
+### Context
+When clicking the bottom-right settings icon (`gearshape` in `PanelFooterBar`) on the floating history panel (`FloatingPanel`), the Settings window (`Mimra Settings`) appeared behind other application windows (`F-018`, `F-027`, `T-UI-01`, `T-UI-06`).
+
+Root cause analysis and WindowServer z-order inspection (`CGWindowListCopyWindowInfo`) revealed a synchronous re-entrancy defect in `PanelCoordinator.hide(restoringFocus:)`:
+1. Clicking the bottom-right settings icon invoked `viewModel.onOpenSettings`, which called `self?.hide(restoringFocus: false)` followed by `self?.onSettingsRequested?()`.
+2. Inside `hide(restoringFocus: false)`, `panel?.orderOut(nil)` was executed while `panel` (`FloatingPanel`) was the active `keyWindow`.
+3. In AppKit, ordering out the current `keyWindow` synchronously invokes `panel.resignKey()` before `orderOut(nil)` returns.
+4. `FloatingPanel.resignKey()` invoked `onResignKey?()`, which called `self?.hide()` with the default parameter `restoringFocus: Bool = true`.
+5. Because `hide(restoringFocus:)` lacked a re-entrancy guard (`isHiding`), the nested `hide(restoringFocus: true)` call executed `target.activate()`, instructing macOS WindowServer to reactivate the external `targetApp` (e.g., Finder, Brave Browser, or IDE) and bring its `.normal`-level windows to the front, burying `settingsWindow` behind the previously active application's windows.
+
+### Decision
+1. **Re-Entrancy Guard & Visibility Check in `PanelCoordinator.hide(restoringFocus:)` (`FloatingPanel.swift`):**
+   - Added `private var isHiding: Bool = false` on `PanelCoordinator` with `guard !isHiding else { return }` and `defer { isHiding = false }`.
+   - Captured `let wasVisible = panel?.isVisible ?? false` prior to `panel?.orderOut(nil)` and gated `target.activate()` on `if restoringFocus, wasVisible, let target = targetApp, !target.isTerminated`.
+   - When `panel?.orderOut(nil)` synchronously triggers `panel.resignKey()`, `onResignKey`'s nested `hide(restoringFocus: true)` call exits immediately without reactivating `targetApp`.
+   - Added `public var onTargetAppActivated: ((NSRunningApplication) -> Void)?` callback hook for deterministic automated test verification.
+2. **Foreground Window Ordering in `StatusBarCoordinator.openSettings()` & `OnboardingWindowController.show()` (`StatusBarCoordinator.swift`, `OnboardingView.swift`):**
+   - Ensured `StatusBarCoordinator.openSettings()` explicitly dismisses `panelCoordinator` with `hide(restoringFocus: false)` if the floating panel is still visible (e.g. when opened via menu bar `Option-Shift-Click`).
+   - Activated `NSApp.activate(ignoringOtherApps: true)` and invoked both `window.makeKeyAndOrderFront(nil)` and `window.orderFrontRegardless()` while keeping `window.level = .normal`, guaranteeing that WindowServer places the Settings window at the top of the `.normal` window layer immediately upon opening while allowing it to yield naturally when the user later switches to other applications.
+
+### Consequences
+* **Positive:** Clicking the bottom-right settings icon (or pressing `⌘,` or `Option-Shift-Click` on the menu bar item) always presents the Settings window in front of all other application windows; switching to another app afterwards still allows that app to come in front of Settings normally.
+* **Negative:** None.

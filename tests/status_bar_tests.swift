@@ -78,17 +78,41 @@ struct StatusBarTests {
         assert(!coordinator.isPaused, "FAIL: Second Option-click should resume capture")
         print("✓ T-PRIV-06: Option-click toggles capture pause/resume state and updates visual icon")
 
-        // 4. Test Option-Shift-Click: Opens Settings Directly (F-027)
-        coordinator.handleStatusItemClick(isRightClick: false, modifierFlags: [.option, .shift])
+        // 4. Test Option-Shift-Click & Footer Gear Button: Opens Settings Directly in Front (F-027)
+        panelCoordinator.show()
+        panelCoordinator.targetApp = NSRunningApplication.current
+        var targetActivatedDuringSettings = false
+        panelCoordinator.onTargetAppActivated = { _ in
+            targetActivatedDuringSettings = true
+        }
+
+        // Trigger Settings from the floating panel bottom-right footer button callback
+        panelCoordinator.viewModel.onOpenSettings?()
+        assert(!targetActivatedDuringSettings,
+               "FAIL: Clicking Settings icon in floating panel footer must NOT reactivate previous targetApp")
+        assert(!panel.isVisible, "FAIL: Floating panel must be ordered out when Settings window opens")
+
         guard let win = coordinator.settingsWindow else {
             fatalError("FAIL: Settings window was not created")
         }
+        assert(win.isVisible, "FAIL: Settings window must be visible")
+        assert(win.isKeyWindow, "FAIL: Settings window must be key window after opening from panel footer")
         let contentRect = win.contentRect(forFrameRect: win.frame)
         assert(contentRect.width == 720, "FAIL: Settings window content width must be 720, got \(contentRect.width)")
         assert(contentRect.height == 530, "FAIL: Settings window content height must be 530, got \(contentRect.height)")
         assert(win.level == .normal, "FAIL: Settings window level must be .normal, got \(win.level)")
         assert(SettingsCategory.allCases.count == 7, "FAIL: SettingsCategory must have 7 categories")
-        print("✓ T-UI-01 / F-027: Option-Shift-click successfully opens Settings window at 720x530 with .normal level")
+
+        // Also verify Option-Shift-Click while panel is visible hides panel without activating targetApp
+        panelCoordinator.show()
+        panelCoordinator.targetApp = NSRunningApplication.current
+        coordinator.handleStatusItemClick(isRightClick: false, modifierFlags: [.option, .shift])
+        assert(!targetActivatedDuringSettings,
+               "FAIL: Option-Shift-click to open Settings while panel is open must NOT reactivate targetApp")
+        assert(!panel.isVisible, "FAIL: Floating panel must be hidden when Option-Shift-clicking status item")
+        assert(win.isVisible && win.isKeyWindow, "FAIL: Existing Settings window must remain visible and key")
+        panelCoordinator.onTargetAppActivated = nil
+        print("✓ T-UI-01 / F-027: Footer settings icon and Option-Shift-click open Settings window in front at 720x530 (.normal level) without targetApp focus theft")
 
         // 5. Test Ignore Next Copy Action (F-026)
         assert(!monitor.privacyFilter.ignoreNextCopy, "FAIL: ignoreNextCopy should be false initially")

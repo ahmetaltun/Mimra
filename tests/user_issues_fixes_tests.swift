@@ -159,17 +159,42 @@ struct UserIssuesFixesTests {
         print("  -> Passed preview shortcuts verification.")
 
         // ---------------------------------------------------------------------
-        // Test 3: Settings Button on Footer Triggers onSettingsRequested
+        // Test 3: Settings Button on Footer Triggers onSettingsRequested Without Focus Theft
         // ---------------------------------------------------------------------
-        print("\n[Test 3] Settings button on footer triggers onSettingsRequested...")
+        print("\n[Test 3] Settings button on footer triggers onSettingsRequested without activating targetApp...")
         var settingsOpened = false
+        var targetAppActivationCount = 0
+        coordinator.targetApp = NSRunningApplication.current
+        coordinator.onTargetAppActivated = { _ in
+            targetAppActivationCount += 1
+        }
         coordinator.onSettingsRequested = {
             settingsOpened = true
         }
 
+        // Ensure panel is visible and key so orderOut triggers resignKey()
+        coordinator.show()
+        coordinator.targetApp = NSRunningApplication.current
+        assert(coordinator.panel?.isVisible == true, "FAIL: Panel must be visible before clicking Settings icon")
+        assert(coordinator.panel?.isKeyWindow == true, "FAIL: Panel must be key window before clicking Settings icon")
+
         vm.onOpenSettings?()
         assert(settingsOpened, "FAIL: onOpenSettings must trigger coordinator.onSettingsRequested")
-        print("  -> Passed Settings button callback verification.")
+        assert(coordinator.panel?.isVisible == false, "FAIL: Panel must be hidden when opening Settings")
+        assert(targetAppActivationCount == 0,
+               "FAIL: Opening Settings from footer must NOT reactivate targetApp via resignKey (got \(targetAppActivationCount) activations)")
+
+        // Verify normal dismissal DOES restore focus once, and redundant hide() does not re-trigger
+        coordinator.show()
+        coordinator.targetApp = NSRunningApplication.current
+        coordinator.hide(restoringFocus: true)
+        assert(targetAppActivationCount == 1,
+               "FAIL: Normal hide(restoringFocus: true) must activate targetApp exactly once, got \(targetAppActivationCount)")
+        coordinator.hide(restoringFocus: true)
+        assert(targetAppActivationCount == 1,
+               "FAIL: Redundant hide() when already hidden must not re-activate targetApp")
+        coordinator.onTargetAppActivated = nil
+        print("  -> Passed Settings button callback and non-reentrant resignKey focus verification.")
 
         // ---------------------------------------------------------------------
         // Test 4: Maximum History Item Limit & Settings Configuration
@@ -255,7 +280,57 @@ struct UserIssuesFixesTests {
 
         print("  -> Passed Option+Backspace vs Command+Backspace verification.")
 
+        // ---------------------------------------------------------------------
+        // Test 6: Keyboard Navigation Scroll Isolation, Equatable Rows & Section Cache
+        // ---------------------------------------------------------------------
+        print("\n[Test 6] Keyboard navigation scroll generation isolation & row equatability...")
+
+        for i in 1...15 {
+            let cap = RawCapture(
+                timestampMs: Int64(Date().timeIntervalSince1970 * 1000) + Int64(100 + i * 10),
+                sourceBundleId: "com.apple.Terminal",
+                representations: [
+                    RawRepresentation(groupIndex: 0, uti: "public.utf8-plain-text", payload: "NavPerfItem \(i)".data(using: .utf8)!)
+                ]
+            )
+            _ = try! await core.ingest(capture: cap)
+        }
+        await vm.loadData()
+        let totalNavCount = vm.filteredItems.count
+        assert(totalNavCount >= 15, "FAIL: Expected at least 15 items for navigation test")
+
+        vm.selectFirst()
+        assert(vm.selectedIndex == 0, "FAIL: selectFirst must select index 0")
+        let genAtStart = vm.keyboardScrollGeneration
+
+        // Navigate all the way down to the last item via selectNext()
+        for step in 1..<totalNavCount {
+            vm.selectNext()
+            assert(vm.selectedIndex == step, "FAIL: Expected selectedIndex == \(step), got \(vm.selectedIndex)")
+        }
+        assert(vm.selectedIndex == totalNavCount - 1, "FAIL: Down navigation must reach the very last item")
+        assert(vm.keyboardScrollGeneration == genAtStart + UInt64(totalNavCount - 1),
+               "FAIL: Each keyboard navigation step must increment keyboardScrollGeneration")
+
+        // Hover selection after keyboard guard expires must NOT increment keyboardScrollGeneration
+        try! await Task.sleep(nanoseconds: 270_000_000)
+        let genBeforeHover = vm.keyboardScrollGeneration
+        vm.selectIndex(2, fromHover: true)
+        assert(vm.selectedIndex == 2, "FAIL: Hover selection should select index 2 after 250ms guard")
+        assert(vm.keyboardScrollGeneration == genBeforeHover,
+               "FAIL: Hover selection must NOT increment keyboardScrollGeneration (prevents unwanted list scrolling)")
+
+        // Verify PanelItemRow Equatable skips unchanged rows and detects selection changes
+        let sampleItem = vm.filteredItems[0]
+        let rowUnselectedA = PanelItemRow(item: sampleItem, shortcutIndex: 1, isSelected: false)
+        let rowUnselectedB = PanelItemRow(item: sampleItem, shortcutIndex: 1, isSelected: false)
+        let rowSelected = PanelItemRow(item: sampleItem, shortcutIndex: 1, isSelected: true)
+        assert(rowUnselectedA == rowUnselectedB, "FAIL: Identical unselected rows must compare equal")
+        assert(rowUnselectedA != rowSelected, "FAIL: Changing isSelected must mark row unequal")
+
+        print("  -> Passed keyboard scroll isolation and equatable row verification.")
+
         coordinator.hide()
-        print("\n=== ALL 5 USER ISSUES VERIFICATION TESTS PASSED! ===")
+        print("\n=== ALL 6 USER ISSUES VERIFICATION TESTS PASSED! ===")
     }
 }

@@ -231,8 +231,9 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     public func show() {
         if let existing = window {
-            existing.makeKeyAndOrderFront(nil)
             NSApplication.shared.activate(ignoringOtherApps: true)
+            existing.makeKeyAndOrderFront(nil)
+            existing.orderFrontRegardless()
             return
         }
 
@@ -259,8 +260,9 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
         newWindow.contentView = NSHostingView(rootView: view)
 
         self.window = newWindow
-        newWindow.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
+        newWindow.makeKeyAndOrderFront(nil)
+        newWindow.orderFrontRegardless()
     }
 
     public func close() {

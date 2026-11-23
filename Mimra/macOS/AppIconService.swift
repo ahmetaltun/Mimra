@@ -167,8 +167,9 @@ public struct SourceAppIconView: View {
     }
 
     public var body: some View {
+        let resolvedIcon = icon ?? AppIconService.shared.cachedIcon(for: bundleId)
         Group {
-            if let image = icon {
+            if let image = resolvedIcon {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
@@ -181,8 +182,7 @@ public struct SourceAppIconView: View {
         }
         .task(id: bundleId) {
             // Check zero-latency synchronous cache first
-            if let cached = AppIconService.shared.cachedIcon(for: bundleId) {
-                self.icon = cached
+            if AppIconService.shared.cachedIcon(for: bundleId) != nil {
                 return
             }
 

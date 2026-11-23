@@ -1,7 +1,7 @@
 # Mimra — Project Status & Roadmap Tracker
 
 > **Active Milestone:** Phase 9 (Packaging & CI) Completed — v0.2.0 Release Prepared  
-> **Last Updated:** 2026-11-13  
+> **Last Updated:** 2026-11-23  
 > **Target Environment:** macOS 15.0+ (`aarch64-apple-darwin`), Apple Silicon only
 
 ---
@@ -190,6 +190,8 @@
 | **Fix 17** | Dimension sliders live value reactivity, reset to defaults action, dynamic window & preview frame resizing, and settings window quit action | Completed | `Mimra/macOS/AppearanceConfiguration.swift`, `SettingsView.swift`, `FloatingPanel.swift`, `FloatingPanelView.swift`, `PreviewCoordinator.swift` (`tests/appearance_settings_tests.swift`, `tests/panel_tests.swift`, ADR-064) |
 | **Fix 18** | Configurable history list hover selection (Immediate, Dwell Delayed, Disabled), decoupled visual hover affordance, and delay presets | Completed | `Mimra/macOS/AppearanceConfiguration.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/UI/Settings/SettingsView.swift` (ADR-065, `F-019`) |
 | **Fix 19** | History retention 2,000 items limit fix: engine startup persistence sync, unified Settings view models, and search candidate limit expansion | Completed | `Mimra/Bridge/CoreClient.swift`, `Mimra/App/AppDelegate.swift`, `Mimra/UI/Settings/SettingsView.swift`, `Mimra/UI/Panel/PanelViewModel.swift`, `RustCore/src/storage/search.rs` (`tests/retention_limit_2000_tests.swift`, ADR-069, `F-025`, `F-052`, `F-055`, `T-HIST-06`) |
+| **Fix 20** | Keyboard navigation scroll anchoring fix (un-centered natural viewport scroll, animation removal, hover scroll isolation) & high-item-count list performance optimizations (`Equatable` rows, O(1) filtered/section cache, synchronous icon/thumbnail lookup) | Completed | `Mimra/UI/Panel/PanelViewModel.swift`, `Mimra/UI/Panel/FloatingPanelView.swift`, `Mimra/macOS/AppIconService.swift`, `Mimra/UI/Preview/PreviewCoordinator.swift` (`tests/user_issues_fixes_tests.swift`, ADR-071, `F-018`, `F-019`, `T-UI-03`, `T-KEY-03`) |
+| **Fix 21** | Settings window foreground presentation fix: prevent re-entrant `resignKey()` from invoking `hide(restoringFocus: true)` and reactivating `targetApp` during `panel.orderOut(nil)`, and enforce `orderFrontRegardless()` in `StatusBarCoordinator.openSettings()` | Completed | `Mimra/UI/Panel/FloatingPanel.swift`, `Mimra/macOS/StatusBarCoordinator.swift`, `Mimra/UI/Onboarding/OnboardingView.swift` (`tests/status_bar_tests.swift`, `tests/user_issues_fixes_tests.swift`, ADR-072, `F-018`, `F-027`, `T-UI-01`, `T-UI-06`) |
 
 ---
 

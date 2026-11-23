@@ -253,9 +253,13 @@ public final class PreviewCoordinator: NSObject {
         self.currentItem = item
         guard isPreviewVisible, let parent = parentPanel else { return }
 
-        self.previewHeight = parent.frame.height
+        let targetHeight = parent.frame.height
+        let heightChanged = abs(self.previewHeight - targetHeight) > 0.5
+        self.previewHeight = targetHeight
         updateHostingContent(item: item)
-        updateLayout()
+        if heightChanged {
+            updateLayout()
+        }
     }
 
     private func handleFullTextLoaded(_ fullText: String) {
@@ -314,7 +318,9 @@ public final class PreviewCoordinator: NSObject {
             preferredSide: preferredSide
         )
 
-        panel.setFrame(placement.frame, display: true)
+        if panel.frame != placement.frame {
+            panel.setFrame(placement.frame, display: true)
+        }
     }
 
     /// Scrolls the preview document content vertically by delta pixels.

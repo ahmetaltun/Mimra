@@ -16,14 +16,21 @@ public final class PanelViewModel: ObservableObject {
     private var searchTask: Task<Void, Never>?
 
     /// Tracks the most recent query string populated into `items` by the Core search engine.
-    @Published public private(set) var lastSearchQuery: String?
+    @Published public private(set) var lastSearchQuery: String? {
+        didSet {
+            if oldValue != lastSearchQuery {
+                rebuildFilteredCache()
+            }
+        }
+    }
 
     @Published public var searchText: String = "" {
         didSet {
             if oldValue != searchText {
                 cancelHoverDwell()
+                rebuildFilteredCache()
                 let targetId = selectedItemId ?? selectedItem?.id
-                let list = filteredItems
+                let list = cachedFilteredItems
                 if let targetId = targetId,
                    let foundIndex = list.firstIndex(where: { $0.id == targetId }) {
                     selectedIndex = foundIndex
@@ -36,7 +43,11 @@ public final class PanelViewModel: ObservableObject {
             }
         }
     }
-    @Published public var items: [HistoryItemSummaryDto] = []
+    @Published public var items: [HistoryItemSummaryDto] = [] {
+        didSet {
+            rebuildFilteredCache()
+        }
+    }
     @Published public var selectedIndex: Int = 0 {
         didSet {
             if oldValue != selectedIndex {
@@ -45,6 +56,10 @@ public final class PanelViewModel: ObservableObject {
         }
     }
     @Published public var selectedItemId: String?
+
+    /// Monotonically increasing counter incremented only on keyboard-initiated selection changes
+    /// so ScrollViewReader scrolls to reveal off-screen selection without jumping on mouse hover.
+    @Published public private(set) var keyboardScrollGeneration: UInt64 = 0
     @Published public var isLoading: Bool = false
     @Published public var stats: StorageStatsDto?
     @Published public var errorMessage: String?
@@ -70,7 +85,13 @@ public final class PanelViewModel: ObservableObject {
     @Published public var sortMode: HistorySortMode = .recency
 
     /// Active pinned items arrangement (top, bottom, or inline).
-    @Published public var pinArrangement: PinArrangement = .top
+    @Published public var pinArrangement: PinArrangement = .top {
+        didSet {
+            if oldValue != pinArrangement {
+                rebuildSectionMetadata()
+            }
+        }
+    }
 
     /// Whether search results are ranked by relevance (true) or recency (false).
     @Published public var searchByRelevance: Bool = true
@@ -84,8 +105,16 @@ public final class PanelViewModel: ObservableObject {
     // Mouse hover selection preferences (P7 / F-019)
     @Published public var hoverSelectionMode: HoverSelectionMode = .immediate
     @Published public var hoverDelayMs: Int = 250
-    @Published public var hoveredRowIndex: Int? = nil
+    /// Tracks the currently hovered row index without triggering whole-panel ObservableObject invalidation on mouse move.
+    public var hoveredRowIndex: Int? = nil
     private var hoverDwellTask: Task<Void, Never>?
+
+    // Cached filtered list & section boundary metadata for O(1) row rendering
+    private var cachedFilteredItems: [HistoryItemSummaryDto] = []
+    private var cachedHasPinnedItems: Bool = false
+    private var cachedHasUnpinnedItems: Bool = false
+    /// Index `i` after which the section divider ("HISTORY" or "PINNED") should be drawn, or `nil` if none.
+    public private(set) var sectionDividerAfterIndex: Int? = nil
 
     /// Configured maximum history limit (default 200, bounded between 10 and 2000).
     public var historyLimit: UInt32 {
@@ -195,42 +224,77 @@ public final class PanelViewModel: ObservableObject {
         }
     }
 
-    /// Items filtered in real-time.
+    /// Rebuilds the cached filtered items array and O(1) section metadata whenever items or search state changes.
+    private func rebuildFilteredCache() {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if query.isEmpty {
+            cachedFilteredItems = items
+        } else if let last = lastSearchQuery, last.lowercased() == query {
+            cachedFilteredItems = items
+        } else {
+            cachedFilteredItems = items.filter { item in
+                item.title.lowercased().contains(query) ||
+                item.snippet.lowercased().contains(query)
+            }
+        }
+        rebuildSectionMetadata()
+    }
+
+    /// Recomputes O(1) pinned/unpinned flags and section transition index in a single pass.
+    private func rebuildSectionMetadata() {
+        var hasPin = false
+        var hasUnpin = false
+        var dividerIdx: Int? = nil
+        let count = cachedFilteredItems.count
+
+        for i in 0..<count {
+            let item = cachedFilteredItems[i]
+            if item.isPinned {
+                hasPin = true
+            } else {
+                hasUnpin = true
+            }
+            if dividerIdx == nil && (i + 1 < count) {
+                let nextIsPinned = cachedFilteredItems[i + 1].isPinned
+                if pinArrangement == .top && item.isPinned && !nextIsPinned {
+                    dividerIdx = i
+                } else if pinArrangement == .bottom && !item.isPinned && nextIsPinned {
+                    dividerIdx = i
+                }
+            }
+        }
+
+        cachedHasPinnedItems = hasPin
+        cachedHasUnpinnedItems = hasUnpin
+        sectionDividerAfterIndex = dividerIdx
+    }
+
+    /// Items filtered in real-time (O(1) cached access during SwiftUI list rendering).
     /// When `items` has already been populated by the Core search engine matching the current query,
     /// `items` is returned directly to preserve BM25 relevance scores, deep content matches, and highlighted excerpts.
     /// If an asynchronous search is still in-flight, a synchronous title/snippet fallback filter is applied.
     public var filteredItems: [HistoryItemSummaryDto] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if query.isEmpty {
-            return items
-        }
-        if let last = lastSearchQuery, last.lowercased() == query {
-            return items
-        }
-        return items.filter { item in
-            item.title.lowercased().contains(query) ||
-            item.snippet.lowercased().contains(query)
-        }
+        cachedFilteredItems
     }
 
     /// Returns true if any displayed item is pinned.
     public var hasPinnedItems: Bool {
-        filteredItems.contains(where: { $0.isPinned })
+        cachedHasPinnedItems
     }
 
     /// Returns true if any displayed item is unpinned.
     public var hasUnpinnedItems: Bool {
-        filteredItems.contains(where: { !$0.isPinned })
+        cachedHasUnpinnedItems
     }
 
     /// Returns true if the displayed list contains both pinned and unpinned items (F-036 / T-UI-10).
     public var hasMixedPinnedAndUnpinned: Bool {
-        hasPinnedItems && hasUnpinnedItems
+        cachedHasPinnedItems && cachedHasUnpinnedItems
     }
 
     /// Currently highlighted item in the filtered list.
     public var selectedItem: HistoryItemSummaryDto? {
-        let list = filteredItems
+        let list = cachedFilteredItems
         guard !list.isEmpty, selectedIndex >= 0, selectedIndex < list.count else { return nil }
         return list[selectedIndex]
     }
@@ -241,7 +305,7 @@ public final class PanelViewModel: ObservableObject {
         let previousIndex = selectedIndex
         self.items = newItems
 
-        let list = filteredItems
+        let list = cachedFilteredItems
         if list.isEmpty {
             self.selectedIndex = 0
             self.selectedItemId = nil
@@ -259,17 +323,18 @@ public final class PanelViewModel: ObservableObject {
     /// Move selection down (wraps around when reaching the bottom).
     public func selectNext() {
         cancelHoverDwell()
-        let count = filteredItems.count
+        let count = cachedFilteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
         selectedIndex = (selectedIndex + 1) % count
         selectedItemId = selectedItem?.id
+        keyboardScrollGeneration &+= 1
     }
 
     /// Move selection up (wraps around to the bottom when at index 0).
     public func selectPrevious() {
         cancelHoverDwell()
-        let count = filteredItems.count
+        let count = cachedFilteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
         if selectedIndex <= 0 {
@@ -278,46 +343,51 @@ public final class PanelViewModel: ObservableObject {
             selectedIndex -= 1
         }
         selectedItemId = selectedItem?.id
+        keyboardScrollGeneration &+= 1
     }
 
     /// Move selection up by a page (T-KEY-03).
     public func selectPageUp(pageSize: Int = 10) {
         cancelHoverDwell()
-        let count = filteredItems.count
+        let count = cachedFilteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
         selectedIndex = max(0, selectedIndex - pageSize)
         selectedItemId = selectedItem?.id
+        keyboardScrollGeneration &+= 1
     }
 
     /// Move selection down by a page (T-KEY-03).
     public func selectPageDown(pageSize: Int = 10) {
         cancelHoverDwell()
-        let count = filteredItems.count
+        let count = cachedFilteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
         selectedIndex = min(count - 1, selectedIndex + pageSize)
         selectedItemId = selectedItem?.id
+        keyboardScrollGeneration &+= 1
     }
 
     /// Selects the first item in the list (Home key).
     public func selectFirst() {
         cancelHoverDwell()
-        let count = filteredItems.count
+        let count = cachedFilteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
         selectedIndex = 0
         selectedItemId = selectedItem?.id
+        keyboardScrollGeneration &+= 1
     }
 
     /// Selects the last item in the list (End key).
     public func selectLast() {
         cancelHoverDwell()
-        let count = filteredItems.count
+        let count = cachedFilteredItems.count
         guard count > 0 else { return }
         lastKeyboardNavTime = CACurrentMediaTime()
         selectedIndex = max(0, count - 1)
         selectedItemId = selectedItem?.id
+        keyboardScrollGeneration &+= 1
     }
 
     /// Set selection index directly with optional hover guard.
@@ -329,7 +399,7 @@ public final class PanelViewModel: ObservableObject {
         } else {
             cancelHoverDwell()
         }
-        let count = filteredItems.count
+        let count = cachedFilteredItems.count
         guard index >= 0, index < count else { return }
         selectedIndex = index
         selectedItemId = selectedItem?.id
