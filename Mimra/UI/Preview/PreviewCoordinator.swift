@@ -78,6 +78,8 @@ public final class PreviewCoordinator: NSObject {
     }
 
     private var autoOpenTask: Task<Void, Never>?
+    private var lastSelectionUpdateTime: CFAbsoluteTime?
+    private static let rapidScrubThresholdSeconds: CFTimeInterval = 0.15
 
     public private(set) var currentItem: HistoryItemSummaryDto?
     public private(set) weak var parentPanel: FloatingPanel?
@@ -227,6 +229,8 @@ public final class PreviewCoordinator: NSObject {
         cancelAutoOpenTimer()
         self.parentPanel = parent
         self.currentItem = item
+        self.viewState.shouldDebounceLoad = false
+        self.lastSelectionUpdateTime = CFAbsoluteTimeGetCurrent()
 
         let panel = getOrCreatePreviewPanel()
 
@@ -269,6 +273,14 @@ public final class PreviewCoordinator: NSObject {
     public func updateItemIfVisible(_ item: HistoryItemSummaryDto?) {
         self.currentItem = item
         guard isPreviewVisible, let parent = parentPanel else { return }
+
+        let now = CFAbsoluteTimeGetCurrent()
+        if let last = lastSelectionUpdateTime, (now - last) < Self.rapidScrubThresholdSeconds {
+            viewState.shouldDebounceLoad = true
+        } else {
+            viewState.shouldDebounceLoad = false
+        }
+        lastSelectionUpdateTime = now
 
         let targetHeight = parent.frame.height
         let heightChanged = abs(self.previewHeight - targetHeight) > 0.5

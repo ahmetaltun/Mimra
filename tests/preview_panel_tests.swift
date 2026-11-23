@@ -25,8 +25,9 @@ struct PreviewPanelTestsRunner {
         testMainPanelHideDismissesPreview()
         testScreenParametersNotificationHandling()
         await testPreviewSyncsWhenSelectedItemDeleted()
+        await testAdaptiveDebounceFlag()
 
-        print("=== All Preview Panel Tests PASSED (11/11) ===")
+        print("=== All Preview Panel Tests PASSED (12/12) ===")
     }
 
     // MARK: - Test 1: Geometry Right Placement
@@ -413,5 +414,49 @@ struct PreviewPanelTestsRunner {
         }
 
         print("  -> Passed preview sync on selected item deletion check.")
+    }
+
+    // MARK: - Test 12: Adaptive Debounce Flag
+
+    static func testAdaptiveDebounceFlag() async {
+        print("  [Test 12] Adaptive debounce: 0ms on show/pause, debounced on rapid scrub...")
+
+        let coordinator = PreviewCoordinator()
+        let parent = FloatingPanel(contentRect: NSRect(x: 100, y: 100, width: 440, height: 540))
+        func item(_ id: String, _ title: String) -> HistoryItemSummaryDto {
+            HistoryItemSummaryDto(
+                id: id,
+                contentKind: "text",
+                title: title,
+                snippet: title,
+                isPinned: false,
+                pinOrder: nil,
+                pinKey: nil,
+                sourceBundleId: nil,
+                firstCopiedAtMs: 1_000,
+                lastCopiedAtMs: 1_000,
+                copyCount: 1,
+                byteSize: UInt64(title.utf8.count),
+                availableUtis: ["public.utf8-plain-text"]
+            )
+        }
+        let itemA = item("scrub-a", "Item A")
+        let itemB = item("scrub-b", "Item B")
+        let itemC = item("scrub-c", "Item C")
+
+        coordinator.show(for: itemA, parent: parent)
+        assert(!coordinator.viewState.shouldDebounceLoad, "Intentional show() must not debounce")
+
+        // Rapid back-to-back selection update simulates key-repeat scrubbing
+        coordinator.updateItemIfVisible(itemB)
+        assert(coordinator.viewState.shouldDebounceLoad, "Rapid updateItemIfVisible (<150ms) must enable debounce")
+
+        // After pausing >= 160ms, next selection update must load immediately without debounce
+        try? await Task.sleep(nanoseconds: 170_000_000)
+        coordinator.updateItemIfVisible(itemC)
+        assert(!coordinator.viewState.shouldDebounceLoad, "Single navigation after pause (>=150ms) must not debounce")
+
+        coordinator.hide()
+        print("  -> Passed adaptive debounce flag check.")
     }
 }

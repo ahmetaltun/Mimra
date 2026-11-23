@@ -183,6 +183,58 @@ struct PreviewEnhancementsTestRunner {
             assertTrue(afterHtmlAttrs[.paragraphStyle] == nil, "Returning from HTML formatted view must clear HTML paragraphStyle")
         }
 
+        // 8. PreviewContentCache hit, miss, and automatic invalidation on edit
+        do {
+            let cache = PreviewContentCache(textCountLimit: 8, fileCountLimit: 8)
+            let itemV1 = HistoryItemSummaryDto(
+                id: "cache-test-1",
+                contentKind: "text",
+                title: "Initial",
+                snippet: "{\"a\":1}",
+                isPinned: false,
+                pinOrder: nil,
+                pinKey: nil,
+                sourceBundleId: nil,
+                firstCopiedAtMs: 1_000,
+                lastCopiedAtMs: 1_000,
+                copyCount: 1,
+                byteSize: 7,
+                availableUtis: ["public.utf8-plain-text"]
+            )
+            assertTrue(cache.cachedText(for: itemV1) == nil, "Uncached item should return nil")
+
+            let entry = TextPreviewCacheEntry(
+                fullText: "{\"a\":1}",
+                rtfData: nil,
+                htmlData: nil,
+                detectedFormat: .json,
+                formattedAttributedText: nil,
+                formattedPlainCopyText: nil,
+                detectedColor: nil,
+                detectedUrl: nil
+            )
+            cache.storeText(entry, for: itemV1)
+            assertTrue(cache.cachedText(for: itemV1)?.fullText == "{\"a\":1}", "Stored text preview should hit cache")
+
+            // Edited item with same id but updated snippet/byteSize must miss cache
+            let itemV2 = HistoryItemSummaryDto(
+                id: "cache-test-1",
+                contentKind: "text",
+                title: "Edited",
+                snippet: "{\"a\":2,\"b\":3}",
+                isPinned: false,
+                pinOrder: nil,
+                pinKey: nil,
+                sourceBundleId: nil,
+                firstCopiedAtMs: 1_000,
+                lastCopiedAtMs: 2_000,
+                copyCount: 1,
+                byteSize: 13,
+                availableUtis: ["public.utf8-plain-text"]
+            )
+            assertTrue(cache.cachedText(for: itemV2) == nil, "Edited item with changed snippet/byteSize must invalidate cache key")
+        }
+
         print("✅ All Preview Window Enhancements Tests PASSED!")
     }
 }

@@ -13,6 +13,7 @@ import UniformTypeIdentifiers
 @MainActor
 public final class PreviewViewState: ObservableObject {
     @Published public var isFormattedMode: Bool = AppearanceConfiguration.shared.defaultToFormattedPreview
+    public var shouldDebounceLoad: Bool = false
     public let zoomController = ImageZoomController()
 
     public init() {}
@@ -23,6 +24,87 @@ public final class PreviewViewState: ObservableObject {
 
     public func toggleFormattedMode() {
         isFormattedMode.toggle()
+    }
+}
+
+/// Bounded in-memory LRU cache for decoded text/formatted and file preview payloads.
+public final class TextPreviewCacheEntry: @unchecked Sendable {
+    public let fullText: String?
+    public let rtfData: Data?
+    public let htmlData: Data?
+    public let detectedFormat: DetectedTextFormat
+    public let formattedAttributedText: NSAttributedString?
+    public let formattedPlainCopyText: String?
+    public let detectedColor: HexColorInfo?
+    public let detectedUrl: UrlInfo?
+
+    public init(
+        fullText: String?,
+        rtfData: Data?,
+        htmlData: Data?,
+        detectedFormat: DetectedTextFormat,
+        formattedAttributedText: NSAttributedString?,
+        formattedPlainCopyText: String?,
+        detectedColor: HexColorInfo?,
+        detectedUrl: UrlInfo?
+    ) {
+        self.fullText = fullText
+        self.rtfData = rtfData
+        self.htmlData = htmlData
+        self.detectedFormat = detectedFormat
+        self.formattedAttributedText = formattedAttributedText
+        self.formattedPlainCopyText = formattedPlainCopyText
+        self.detectedColor = detectedColor
+        self.detectedUrl = detectedUrl
+    }
+}
+
+public final class FilePreviewCacheEntry: @unchecked Sendable {
+    public let entries: [PreviewFileEntry]
+    public let inlineImage: NSImage?
+    public let inlineText: String?
+
+    public init(entries: [PreviewFileEntry], inlineImage: NSImage?, inlineText: String?) {
+        self.entries = entries
+        self.inlineImage = inlineImage
+        self.inlineText = inlineText
+    }
+}
+
+public final class PreviewContentCache: @unchecked Sendable {
+    public static let shared = PreviewContentCache()
+
+    private let textCache = NSCache<NSString, TextPreviewCacheEntry>()
+    private let fileCache = NSCache<NSString, FilePreviewCacheEntry>()
+
+    public init(textCountLimit: Int = 40, fileCountLimit: Int = 30) {
+        textCache.countLimit = textCountLimit
+        fileCache.countLimit = fileCountLimit
+    }
+
+    public static func cacheKey(for item: HistoryItemSummaryDto) -> NSString {
+        "\(item.id):\(item.byteSize):\(item.snippet.hashValue)" as NSString
+    }
+
+    public func cachedText(for item: HistoryItemSummaryDto) -> TextPreviewCacheEntry? {
+        textCache.object(forKey: Self.cacheKey(for: item))
+    }
+
+    public func storeText(_ entry: TextPreviewCacheEntry, for item: HistoryItemSummaryDto) {
+        textCache.setObject(entry, forKey: Self.cacheKey(for: item))
+    }
+
+    public func cachedFile(for item: HistoryItemSummaryDto) -> FilePreviewCacheEntry? {
+        fileCache.object(forKey: Self.cacheKey(for: item))
+    }
+
+    public func storeFile(_ entry: FilePreviewCacheEntry, for item: HistoryItemSummaryDto) {
+        fileCache.setObject(entry, forKey: Self.cacheKey(for: item))
+    }
+
+    public func clearAll() {
+        textCache.removeAllObjects()
+        fileCache.removeAllObjects()
     }
 }
 
@@ -48,6 +130,9 @@ public struct PreviewContainerView: View {
     @State private var detectedFormat: DetectedTextFormat = .plain
     @State private var formattedAttributedText: NSAttributedString? = nil
     @State private var formattedPlainCopyText: String? = nil
+    @State private var detectedColor: HexColorInfo? = nil
+    @State private var detectedUrl: UrlInfo? = nil
+    @State private var isLoadingContent: Bool = false
     @State private var isMonospaced: Bool = false
     @State private var copiedKind: String? = nil
 
@@ -104,10 +189,15 @@ public struct PreviewContainerView: View {
                     ImagePreviewView(
                         item: item,
                         coreClient: coreClient,
-                        zoomController: viewState.zoomController
+                        zoomController: viewState.zoomController,
+                        shouldDebounce: viewState.shouldDebounceLoad
                     )
                 } else if isFileItem && !isTextItem {
-                    FilePreviewView(item: item, coreClient: coreClient)
+                    FilePreviewView(
+                        item: item,
+                        coreClient: coreClient,
+                        shouldDebounce: viewState.shouldDebounceLoad
+                    )
                 } else if isTextItem {
                     textItemPreviewView(for: item)
                 } else {
@@ -139,29 +229,55 @@ public struct PreviewContainerView: View {
     // MARK: - Content Loading & Format Detection
 
     private func loadItemContent() async {
-        // Clear stale state immediately when switching items
-        fullText = nil
-        rtfData = nil
-        htmlData = nil
-        detectedFormat = .plain
-        formattedAttributedText = nil
-        formattedPlainCopyText = nil
-
-        guard let client = coreClient, let item = item else {
+        guard let item = item else {
+            clearContentState()
+            isLoadingContent = false
             return
         }
 
         // Image and file previews load their own representations/files directly; avoid duplicate SQLite reads.
         if isImageItem || (isFileItem && !isTextItem) {
+            clearContentState()
+            isLoadingContent = false
             return
         }
 
-        // Debounce heavy SQLite + formatting work during fast key-repeat scrubbing
-        try? await Task.sleep(nanoseconds: 70_000_000)
-        if Task.isCancelled { return }
+        // Check synchronous LRU cache first for instant display with zero flicker
+        if let cached = PreviewContentCache.shared.cachedText(for: item) {
+            self.fullText = cached.fullText
+            self.rtfData = cached.rtfData
+            self.htmlData = cached.htmlData
+            self.detectedFormat = cached.detectedFormat
+            self.formattedAttributedText = cached.formattedAttributedText
+            self.formattedPlainCopyText = cached.formattedPlainCopyText
+            self.detectedColor = cached.detectedColor
+            self.detectedUrl = cached.detectedUrl
+            self.isLoadingContent = false
+            if let decodedText = cached.fullText {
+                self.onFullTextLoaded?(decodedText)
+            }
+            return
+        }
+
+        // Clear stale state immediately when switching to an uncached item
+        clearContentState()
+
+        guard let client = coreClient else {
+            isLoadingContent = false
+            return
+        }
+
+        isLoadingContent = true
+
+        // Only debounce heavy SQLite + formatting work during rapid key-repeat scrubbing
+        if viewState.shouldDebounceLoad {
+            try? await Task.sleep(nanoseconds: 70_000_000)
+            if Task.isCancelled { return }
+        }
 
         guard let reps = try? await client.getItemRepresentations(itemId: item.id),
               !Task.isCancelled else {
+            if !Task.isCancelled { isLoadingContent = false }
             return
         }
 
@@ -178,10 +294,11 @@ public struct PreviewContainerView: View {
         let rawRtf = rtfRep?.payload
         let rawHtml = htmlRep?.payload
         let snippet = item.snippet
+        let title = item.title
         let availableUtis = item.availableUtis
 
-        // Run format detection and non-HTML formatting off @MainActor
-        let (format, bgAttrBox, bgPrettyPlain) = await Task.detached(priority: .userInitiated) {
+        // Run format detection, formatting (including HTML), and Color/URL detection off @MainActor
+        let (format, bgAttrBox, bgPrettyPlain, bgColor, bgUrl) = await Task.detached(priority: .userInitiated) {
             let detected = TextFormatDetector.detect(
                 text: decodedText ?? snippet,
                 availableUtis: availableUtis,
@@ -209,33 +326,60 @@ public struct PreviewContainerView: View {
                     attr = RichTextAttributedRenderer.renderRtf(data)
                     prettyPlain = attr?.string
                 }
-            case .html, .plain:
+            case .html:
+                if let data = rawHtml, let htmlStr = String(data: data, encoding: .utf8) {
+                    attr = RichTextAttributedRenderer.renderHtml(htmlStr, baseFontSize: 12.5)
+                    prettyPlain = attr?.string
+                }
+            case .plain:
                 break
             }
 
-            return (detected, AttributedStringBox(attributedString: attr), prettyPlain)
+            let effectiveText = decodedText ?? (snippet.isEmpty ? title : snippet)
+            let color = ColorDetector.detect(in: effectiveText)
+            let url = color == nil ? UrlDetector.detect(in: effectiveText) : nil
+
+            return (detected, AttributedStringBox(attributedString: attr), prettyPlain, color, url)
         }.value
 
         if Task.isCancelled { return }
 
-        var attr = bgAttrBox.attributedString
-        var prettyPlain = bgPrettyPlain
-        if format == .html, let data = rawHtml, let htmlStr = String(data: data, encoding: .utf8) {
-            attr = RichTextAttributedRenderer.renderHtml(htmlStr, baseFontSize: 12.5)
-            prettyPlain = attr?.string
-        }
+        let attr = bgAttrBox.attributedString
+        let cacheEntry = TextPreviewCacheEntry(
+            fullText: decodedText,
+            rtfData: rawRtf,
+            htmlData: rawHtml,
+            detectedFormat: format,
+            formattedAttributedText: attr,
+            formattedPlainCopyText: bgPrettyPlain,
+            detectedColor: bgColor,
+            detectedUrl: bgUrl
+        )
+        PreviewContentCache.shared.storeText(cacheEntry, for: item)
 
-        if !Task.isCancelled {
-            self.fullText = decodedText
-            self.rtfData = rawRtf
-            self.htmlData = rawHtml
-            self.detectedFormat = format
-            self.formattedAttributedText = attr
-            self.formattedPlainCopyText = prettyPlain
-            if let decodedText = decodedText {
-                self.onFullTextLoaded?(decodedText)
-            }
+        self.fullText = decodedText
+        self.rtfData = rawRtf
+        self.htmlData = rawHtml
+        self.detectedFormat = format
+        self.formattedAttributedText = attr
+        self.formattedPlainCopyText = bgPrettyPlain
+        self.detectedColor = bgColor
+        self.detectedUrl = bgUrl
+        self.isLoadingContent = false
+        if let decodedText = decodedText {
+            self.onFullTextLoaded?(decodedText)
         }
+    }
+
+    private func clearContentState() {
+        fullText = nil
+        rtfData = nil
+        htmlData = nil
+        detectedFormat = .plain
+        formattedAttributedText = nil
+        formattedPlainCopyText = nil
+        detectedColor = nil
+        detectedUrl = nil
     }
 
     // MARK: - Subviews
@@ -306,22 +450,29 @@ public struct PreviewContainerView: View {
     private func textItemPreviewView(for item: HistoryItemSummaryDto) -> some View {
         let displayText = fullText ?? (item.snippet.isEmpty ? item.title : item.snippet)
         let lineCount = displayText.split(separator: "\n", omittingEmptySubsequences: false).count
-        let detectedColor = ColorDetector.detect(in: displayText)
-        let detectedUrl = detectedColor == nil ? UrlDetector.detect(in: displayText) : nil
         let canFormat = detectedFormat.isFormattable && formattedAttributedText != nil
         let showingFormatted = canFormat && viewState.isFormattedMode
 
         return VStack(alignment: .leading, spacing: 0) {
             // Text Toolbar (Stats, Original/Formatted Switch, Monospace Toggle, Copy Choice)
             HStack(spacing: 8) {
-                Text("\(displayText.count) chars")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.secondary)
-                Text("•")
-                    .foregroundColor(.secondary.opacity(0.4))
-                Text("\(lineCount) lines")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.secondary)
+                if isLoadingContent && fullText == nil {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 12, height: 12)
+                    Text("Loading…")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("\(displayText.count) chars")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    Text("•")
+                        .foregroundColor(.secondary.opacity(0.4))
+                    Text("\(lineCount) lines")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
 
                 Spacer()
 

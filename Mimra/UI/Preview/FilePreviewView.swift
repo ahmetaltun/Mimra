@@ -23,24 +23,40 @@ public struct PreviewFileEntry: Identifiable, Sendable {
 public struct FilePreviewView: View {
     public let item: HistoryItemSummaryDto
     public let coreClient: CoreClient?
+    public let shouldDebounce: Bool
 
     @State private var entries: [PreviewFileEntry] = []
     @State private var inlineImage: NSImage? = nil
     @State private var inlineText: String? = nil
+    @State private var isLoading: Bool = false
     @State private var copiedPathId: String? = nil
 
-    public init(item: HistoryItemSummaryDto, coreClient: CoreClient? = nil) {
+    public init(item: HistoryItemSummaryDto, coreClient: CoreClient? = nil, shouldDebounce: Bool = false) {
         self.item = item
         self.coreClient = coreClient
+        self.shouldDebounce = shouldDebounce
     }
 
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if entries.isEmpty {
-                    Text(item.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .textSelection(.enabled)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(item.title)
+                            .font(.system(size: 12, weight: .medium))
+                            .textSelection(.enabled)
+
+                        if isLoading {
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .frame(width: 12, height: 12)
+                                Text("Loading file details…")
+                                    .font(.system(size: 10.5))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
                 } else {
                     ForEach(entries) { entry in
                         fileCard(for: entry)
@@ -177,13 +193,25 @@ public struct FilePreviewView: View {
     }
 
     private func loadFileEntries() async {
+        // Check synchronous LRU cache first for instant display
+        if let cached = PreviewContentCache.shared.cachedFile(for: item) {
+            entries = cached.entries
+            inlineImage = cached.inlineImage
+            inlineText = cached.inlineText
+            isLoading = false
+            return
+        }
+
         entries = []
         inlineImage = nil
         inlineText = nil
+        isLoading = true
 
-        // Debounce SQLite + disk I/O during fast key-repeat scrubbing
-        try? await Task.sleep(nanoseconds: 70_000_000)
-        if Task.isCancelled { return }
+        // Debounce SQLite + disk I/O only during fast key-repeat scrubbing
+        if shouldDebounce {
+            try? await Task.sleep(nanoseconds: 70_000_000)
+            if Task.isCancelled { return }
+        }
 
         var rawLines: [String] = []
         if let client = coreClient,
@@ -278,9 +306,17 @@ public struct FilePreviewView: View {
         }.value
 
         if Task.isCancelled { return }
+        let cacheEntry = FilePreviewCacheEntry(
+            entries: parsed,
+            inlineImage: loadedImage,
+            inlineText: loadedText
+        )
+        PreviewContentCache.shared.storeFile(cacheEntry, for: item)
+
         self.entries = parsed
         self.inlineImage = loadedImage
         self.inlineText = loadedText
+        self.isLoading = false
     }
 
     private func copyPath(_ path: String, id: String) {

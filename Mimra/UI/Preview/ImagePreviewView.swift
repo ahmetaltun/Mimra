@@ -57,6 +57,7 @@ public struct ImagePreviewView: View {
     public let item: HistoryItemSummaryDto
     public let coreClient: CoreClient?
     @ObservedObject public var zoomController: ImageZoomController
+    public let shouldDebounce: Bool
 
     @State private var previewPayload: ImagePreviewPayload? = nil
     @State private var isLoading: Bool = true
@@ -69,22 +70,35 @@ public struct ImagePreviewView: View {
     public init(
         item: HistoryItemSummaryDto,
         coreClient: CoreClient? = nil,
-        zoomController: ImageZoomController? = nil
+        zoomController: ImageZoomController? = nil,
+        shouldDebounce: Bool = false
     ) {
         self.item = item
         self.coreClient = coreClient
         self._zoomController = ObservedObject(wrappedValue: zoomController ?? ImageZoomController())
+        self.shouldDebounce = shouldDebounce
+    }
+
+    private var activeOcrText: String? {
+        if case .success(let text) = ocrState, !text.isEmpty {
+            return text
+        }
+        return nil
+    }
+
+    private var hasOcrText: Bool {
+        activeOcrText != nil
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Image Details Toolbar (Dimensions, Format, Byte Size, Quick Copy)
+            // Image Details Toolbar (Constant layout: OCR switcher + Copy OCR + Copy Image)
             toolbarBar
 
             Divider().opacity(0.2)
 
             // Main Canvas / OCR Area
-            if case .success(let ocrText) = ocrState, !ocrText.isEmpty, ocrViewMode == .ocrOnly {
+            if let ocrText = activeOcrText, ocrViewMode == .ocrOnly {
                 VStack(alignment: .leading, spacing: 0) {
                     ocrHeaderBar(ocrText: ocrText)
                     Divider().opacity(0.15)
@@ -130,10 +144,10 @@ public struct ImagePreviewView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
 
-                // Optional Recognized Text Drawer in Split mode
-                if case .success(let ocrText) = ocrState, !ocrText.isEmpty, ocrViewMode == .split {
+                // Constant-height Recognized Text Drawer in Split mode (never shifts image canvas)
+                if ocrViewMode != .imageOnly {
                     Divider().opacity(0.2)
-                    ocrTextSection(ocrText: ocrText)
+                    ocrTextSection(ocrText: activeOcrText)
                 }
             }
 
@@ -151,66 +165,39 @@ public struct ImagePreviewView: View {
 
     private var toolbarBar: some View {
         HStack(spacing: 8) {
-            // Left: OCR View Mode Switcher (if OCR text exists) or compact format/dimensions pill
-            if case .success(let ocrText) = ocrState, !ocrText.isEmpty {
-                HStack(spacing: 2) {
-                    ForEach(ImageOCRViewMode.allCases, id: \.self) { mode in
-                        Button(action: { ocrViewMode = mode }) {
-                            Text(mode.rawValue)
-                                .font(.system(size: 10, weight: ocrViewMode == mode ? .semibold : .regular))
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(ocrViewMode == mode ? Color.accentColor.opacity(0.18) : Color.clear)
-                                .foregroundColor(ocrViewMode == mode ? .accentColor : .secondary)
-                                .cornerRadius(4)
-                        }
-                        .buttonStyle(.plain)
+            // Left: Constant OCR View Mode Switcher (disabled until OCR text is available)
+            HStack(spacing: 2) {
+                ForEach(ImageOCRViewMode.allCases, id: \.self) { mode in
+                    Button(action: { ocrViewMode = mode }) {
+                        Text(mode.rawValue)
+                            .font(.system(size: 10, weight: ocrViewMode == mode ? .semibold : .regular))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(ocrViewMode == mode ? Color.accentColor.opacity(0.18) : Color.clear)
+                            .foregroundColor(ocrViewMode == mode ? .accentColor : .secondary)
+                            .cornerRadius(4)
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(2)
-                .background(Color.primary.opacity(0.05))
-                .cornerRadius(5)
-                .fixedSize(horizontal: true, vertical: false)
-            } else if let payload = previewPayload {
-                HStack(spacing: 6) {
-                    Text(payload.metadata.format)
-                        .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Color.primary.opacity(0.06))
-                        .cornerRadius(4)
-                        .foregroundColor(.primary)
-
-                    Text("\(payload.metadata.pixelDimensionsString) px")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-            } else {
-                Text(formattedByteSize(item.byteSize))
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
             }
+            .padding(2)
+            .background(Color.primary.opacity(0.05))
+            .cornerRadius(5)
+            .fixedSize(horizontal: true, vertical: false)
+            .disabled(!hasOcrText)
+            .opacity(hasOcrText ? 1.0 : 0.45)
 
             Spacer(minLength: 4)
 
-            // Right: OCR Status / Copy OCR + Copy Image
+            // Right: Constant Copy OCR (disabled when unavailable) + Copy Image
             HStack(spacing: 8) {
                 ocrToolbarItem
 
-                if case .success(let ocrText) = ocrState, !ocrText.isEmpty {
-                    Divider()
-                        .frame(height: 12)
-                        .opacity(0.3)
-                } else if ocrState == .loading || ocrState == .noTextDetected {
-                    Divider()
-                        .frame(height: 12)
-                        .opacity(0.3)
-                }
+                Divider()
+                    .frame(height: 12)
+                    .opacity(0.3)
 
                 Button(action: copyImageToClipboard) {
                     HStack(spacing: 4) {
@@ -238,65 +225,39 @@ public struct ImagePreviewView: View {
         .background(Color.primary.opacity(0.03))
     }
 
-    @ViewBuilder
     private var ocrToolbarItem: some View {
-        switch ocrState {
-        case .idle:
-            EmptyView()
-        case .loading:
+        Button(action: copyOcrTextToClipboard) {
             HStack(spacing: 4) {
-                ProgressView()
-                    .scaleEffect(0.5)
-                    .frame(width: 10, height: 10)
-                Text("Scanning...")
-                    .font(.system(size: 9.5))
-                    .foregroundColor(.secondary)
+                Image(systemName: isOcrCopiedNotificationShown ? "checkmark" : "text.viewfinder")
+                    .font(.system(size: 10))
+                Text(isOcrCopiedNotificationShown ? "Copied" : "Copy OCR")
+                    .font(.system(size: 10, weight: .medium))
             }
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-        case .success(let ocrText):
-            if !ocrText.isEmpty {
-                Button(action: copyOcrTextToClipboard) {
-                    HStack(spacing: 4) {
-                        Image(systemName: isOcrCopiedNotificationShown ? "checkmark" : "text.viewfinder")
-                            .font(.system(size: 10))
-                        Text(isOcrCopiedNotificationShown ? "Copied" : "Copy OCR")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Color.primary.opacity(0.06))
-                    .cornerRadius(4)
-                    .foregroundColor(isOcrCopiedNotificationShown ? .green : .primary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Copy OCR extracted text to clipboard")
-                .help("Copy extracted OCR text to clipboard")
-            }
-        case .noTextDetected:
-            HStack(spacing: 3) {
-                Image(systemName: "text.viewfinder")
-                    .font(.system(size: 9.5))
-                Text("No text")
-                    .font(.system(size: 9.5))
-            }
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundColor(.secondary.opacity(0.5))
-            .help("On-device Vision scanned this image and found no readable text")
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color.primary.opacity(0.06))
+            .cornerRadius(4)
+            .foregroundColor(isOcrCopiedNotificationShown ? .green : .primary)
+        }
+        .buttonStyle(.plain)
+        .disabled(!hasOcrText)
+        .opacity(hasOcrText ? 1.0 : 0.45)
+        .accessibilityLabel("Copy OCR extracted text to clipboard")
+        .help(ocrHelpText)
+    }
+
+    private var ocrHelpText: String {
+        switch ocrState {
+        case .idle, .loading:
+            return "Scanning image for text..."
+        case .success(let text) where !text.isEmpty:
+            return "Copy extracted OCR text to clipboard"
+        case .success, .noTextDetected:
+            return "On-device Vision scanned this image and found no readable text"
         case .failed(let error):
-            HStack(spacing: 3) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 9.5))
-                Text("OCR error")
-                    .font(.system(size: 9.5))
-            }
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundColor(.secondary.opacity(0.6))
-            .help("OCR extraction failed: \(error)")
+            return "OCR extraction failed: \(error)"
         }
     }
 
@@ -372,7 +333,7 @@ public struct ImagePreviewView: View {
         .background(Color.primary.opacity(0.02))
     }
 
-    private func ocrTextSection(ocrText: String) -> some View {
+    private func ocrTextSection(ocrText: String?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 HStack(spacing: 4) {
@@ -385,26 +346,66 @@ public struct ImagePreviewView: View {
 
                 Spacer()
 
-                Text("\(ocrText.count) chars")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary.opacity(0.6))
+                switch ocrState {
+                case .idle, .loading:
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .scaleEffect(0.45)
+                            .frame(width: 10, height: 10)
+                        Text("Scanning...")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
+                case .success(let text) where !text.isEmpty:
+                    Text("\(text.count) chars")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.6))
+                case .success, .noTextDetected:
+                    Text("No text detected")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary.opacity(0.5))
+                case .failed:
+                    Text("OCR unavailable")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
             }
 
             ScrollView {
-                Text(ocrText)
-                    .font(.system(size: 11))
-                    .foregroundColor(.primary.opacity(0.9))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
+                if let ocrText = ocrText, !ocrText.isEmpty {
+                    Text(ocrText)
+                        .font(.system(size: 11))
+                        .foregroundColor(.primary.opacity(0.9))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(6)
+                } else {
+                    Text(ocrPlaceholderText)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary.opacity(0.55))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(6)
+                }
             }
-            .frame(maxHeight: 75)
+            .frame(height: 72)
             .background(Color.primary.opacity(0.03))
             .cornerRadius(6)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.primary.opacity(0.015))
+        .opacity(hasOcrText ? 1.0 : 0.7)
+    }
+
+    private var ocrPlaceholderText: String {
+        switch ocrState {
+        case .idle, .loading:
+            return "Scanning image for text..."
+        case .success, .noTextDetected:
+            return "No readable text detected in this image."
+        case .failed:
+            return "Unable to extract text from this image."
+        }
     }
 
     private var compactMetadataBar: some View {
@@ -477,9 +478,11 @@ public struct ImagePreviewView: View {
         self.previewPayload = nil
         self.isLoading = true
 
-        // Debounce uncached SQLite + ImageIO decode during fast key-repeat scrubbing
-        try? await Task.sleep(nanoseconds: 70_000_000)
-        if Task.isCancelled { return }
+        // Debounce uncached SQLite + ImageIO decode only during fast key-repeat scrubbing
+        if shouldDebounce {
+            try? await Task.sleep(nanoseconds: 70_000_000)
+            if Task.isCancelled { return }
+        }
 
         guard let client = coreClient else {
             self.isLoading = false
