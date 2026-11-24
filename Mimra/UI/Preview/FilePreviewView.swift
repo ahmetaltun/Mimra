@@ -229,12 +229,12 @@ public struct FilePreviewView: View {
         }
 
         let linesSnapshot = rawLines
-        let (parsed, loadedImage, loadedText) = await Task.detached(priority: .userInitiated) { () -> ([PreviewFileEntry], NSImage?, String?) in
+        let (parsed, loadedImageBox, loadedText) = await Task.detached(priority: .userInitiated) { () -> ([PreviewFileEntry], SendableImage, String?) in
             var parsed: [PreviewFileEntry] = []
             var seenPaths = Set<String>()
 
             for raw in linesSnapshot {
-                if Task.isCancelled { return ([], nil, nil) }
+                if Task.isCancelled { return ([], SendableImage(nil), nil) }
                 let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { continue }
 
@@ -277,7 +277,7 @@ public struct FilePreviewView: View {
                 ))
             }
 
-            if Task.isCancelled { return (parsed, nil, nil) }
+            if Task.isCancelled { return (parsed, SendableImage(nil), nil) }
 
             var inlineImg: NSImage? = nil
             var inlineTxt: String? = nil
@@ -302,10 +302,11 @@ public struct FilePreviewView: View {
                 }
             }
 
-            return (parsed, inlineImg, inlineTxt)
+            return (parsed, SendableImage(inlineImg), inlineTxt)
         }.value
 
         if Task.isCancelled { return }
+        let loadedImage = loadedImageBox.image
         let cacheEntry = FilePreviewCacheEntry(
             entries: parsed,
             inlineImage: loadedImage,
