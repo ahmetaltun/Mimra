@@ -1354,8 +1354,8 @@ public struct UpdatesSettingsTab: View {
     }
 
     private var appVersionString: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "2"
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.3.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "3"
         return "v\(version) (Build \(build))"
     }
 

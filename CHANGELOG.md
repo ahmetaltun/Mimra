@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [0.3.0] - 2026-11-24
+
+### Added
+- **Enhanced Slideout Preview — Interactive Image Canvas, Native Formatters & Rich Inspectors (ADR-073)**:
+  - Interactive image zoom and pan canvas (`InteractiveImageCanvasView`) with high-resolution 4K zoom clarity (`maxPixelSize: 3840`) and Save Image As action.
+  - Automatic text format detection (`TextFormatDetector`) and native formatters (`TextFormatters`) for JSON, Markdown, code, HTML, and RTF previews.
+  - Rich inspector cards (`PreviewInspectorCards`) for color swatches/formats and URL query parameter inspection.
+  - Dedicated file preview (`FilePreviewView`) with Finder metadata, Reveal in Finder, and inline text/image preview.
+  - Contextual preview footer actions (Paste, Paste Plain, Edit Pin, Save Image As).
+
+### Fixed & Improved
+- **Adaptive Preview Debounce & Decoded Payload Caching**:
+  - Gated the 70 ms preview debounce on rapid key-repeat navigation (`< 150 ms`) so intentional opens and single-step moves load immediately while fast scrubbing stays smooth.
+  - Added a bounded `NSCache`-backed `PreviewContentCache` for text, formatted, and file previews keyed by item ID, byte size, and snippet hash for instant revisits and automatic invalidation on edits.
+  - Offloaded HTML rendering, `ColorDetector`, `UrlDetector`, text formatting, Vision OCR (with 300 ms debounce and cancellation), image decoding, and file metadata I/O from `@MainActor` to background tasks.
+  - Added explicit `shadowPath` on the image canvas layer to avoid offscreen alpha shadow passes.
+- **Preview & Search Navigation Fixes**:
+  - Synchronized the slideout preview window when the currently selected item is deleted.
+  - Reset selection to index 0 and scrolled to top whenever the search query changes so users can immediately commit the top match with Return, while preserving selection on same-query background refreshes.
+- **Settings Window Z-Order & History Panel Performance (ADR-071, ADR-072)**:
+  - Fixed an AppKit focus-restoration re-entrancy bug where opening Settings from the floating panel could push `Mimra Settings` behind other application windows.
+  - Replaced forced `.center` animated scrolling with natural un-anchored viewport scrolling (`keyboardScrollGeneration`), conformed `PanelItemRow` to `Equatable`, cached filtered items and section divider indices, and served cached app icons/thumbnails synchronously on first render.
+
 ## [0.2.0] - 2026-11-13
 
 ### Added
@@ -76,5 +99,6 @@ Initial public release of Mimra — a minimal, premium, privacy-first clipboard 
   - Sparkle 2 software update integration with Ed25519 cryptographic feed verification.
   - GitHub Actions CI/CD release workflow with Hardened Runtime and Apple notarization support.
 
+[0.3.0]: https://github.com/ahmetaltun/Mimra/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ahmetaltun/Mimra/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ahmetaltun/Mimra/releases/tag/v0.1.0
