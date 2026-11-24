@@ -6,6 +6,13 @@
     <description>Most recent changes with links to updates for Mimra Clipboard Manager.</description>
     <language>en</language>
     <item>
+      <title>Mimra 0.3.0</title>
+      <pubDate>Tue, 24 Nov 2026 08:55:10 +0000</pubDate>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description>Bug fixes and performance improvements.</description>
+      <enclosure url="https://github.com/ahmetaltun/Mimra/releases/download/v0.3.0/Mimra.dmg" sparkle:version="3" sparkle:shortVersionString="0.3.0" length="8176739" type="application/octet-stream" sparkle:edSignature="JGp735o3Q61OdwxsiItCcCEILz1vHo2sPyiRTsINgBiN4wfy6ZxqofLtfglyFjDz6qADaaUha26jfVpLBxPGAQ==" />
+    </item>
+    <item>
       <title>Mimra 0.2.0</title>
       <pubDate>Fri, 13 Nov 2026 18:01:47 +0000</pubDate>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
